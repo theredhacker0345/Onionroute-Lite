@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    OnionRoute Lite AndroidManifest.xml
+
+    F-Droid compliance notes:
+    - No proprietary dependencies declared
+    - No Google Play Services references
+    - No analytics SDKs
+    - All permissions are functional and justified
+    - BOOT_COMPLETED is optional (auto-start feature)
+    - foregroundServiceType declared for API 28+ compatibility
+    - Network security config restricts cleartext to localhost only
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="org.onionroute.lite">
+
+    <!-- ── Network Permissions ──────────────────────────────── -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- ── Foreground Service ───────────────────────────────── -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- ── Boot Receiver ────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- ── Wake Lock ────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- ── Notification Permission (Android 13+, API 33+) ──────── -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ── Battery Optimization Bypass ────────────────────────── -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OnionRouteLite"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:fullBackupContent="false"
+        tools:targetApi="28">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ── Camouflage Launcher Aliases ──────────────────────── -->
+        <!-- Each alias provides an alternate launcher icon + label
+             to disguise the app. Only one alias is enabled at a time;
+             the PackageManager toggles them via IconSwitcher utility. -->
+
+        <activity-alias
+            android:name=".AliasNote"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_note"
+            android:label="@string/app_name_note"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AliasWeather"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_weather"
+            android:label="@string/app_name_weather"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AliasMusic"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_music"
+            android:label="@string/app_name_music"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AliasCalc"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_calc"
+            android:label="@string/app_name_calc"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <service
+            android:name=".service.TorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Tor VPN proxy service" />
+        </service>
+
+        <service
+            android:name=".service.KindnessService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Snowflake proxy service for helping censored users" />
+        </service>
+
+        <service
+            android:name=".service.TorVpnService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Tor VPN routing service" />
+        </service>
+
+        <service
+            android:name=".service.ConnectTileService"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_onion"
+            android:label="OnionRoute"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".service.RefreshTileService"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_refresh"
+            android:label="New Circuit"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".service.BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

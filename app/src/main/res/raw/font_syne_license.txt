@@ -1,0 +1,4 @@
+Syne Font Family
+Copyright (c) Lucas Descroix
+License: SIL Open Font License v1.1
+Source: https://github.com/AoifeHughes/syne

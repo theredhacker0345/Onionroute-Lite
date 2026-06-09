@@ -1,0 +1,60 @@
+# ══════════════════════════════════════════════════════════════
+# Tor Lite — .gitignore
+# ══════════════════════════════════════════════════════════════
+
+# ── Android ──────────────────────────────────────────────────
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+*.jar
+!gradle-wrapper.jar
+
+# ── Build Outputs ────────────────────────────────────────────
+/build/
+/app/build/
+/out/
+/release/
+/debug/
+
+# ── Gradle ───────────────────────────────────────────────────
+.gradle/
+local.properties
+.gradletasknamecache
+
+# ── IDE ──────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# ── Native Build Artifacts ──────────────────────────────────
+# The actual .so files should NOT be committed to git.
+# They should be built from source during CI/F-Droid build.
+/app/src/main/jniLibs/**/*.so
+
+# Native build working directory (sources downloaded + compiled)
+/build-native/
+
+# ── Keystore (NEVER commit release keystores) ────────────────
+# Debug keystore is committed for F-Droid reproducible builds
+*.jks
+*.keystore
+!app/debug.keystore
+
+# ── Manual Build Artifacts ──────────────────────────────────
+# The build_manual/ directory contains intermediate build files
+# that should NOT be committed to the repository
+/build_manual/
+
+# ── Temp Files ───────────────────────────────────────────────
+*.log
+*.tmp
+*.swp
+*~
+
+# ── OS Files ─────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini

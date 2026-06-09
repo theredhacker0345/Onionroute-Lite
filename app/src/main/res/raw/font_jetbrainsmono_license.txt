@@ -1,0 +1,4 @@
+DM Sans Font Family
+Copyright (c) Colophon Foundry
+License: SIL Open Font License v1.1
+Source: https://github.com/googlefonts/dm-fonts

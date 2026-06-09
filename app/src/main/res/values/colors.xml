@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ── OnionRoute Design System — Color Tokens ───────────── -->
+    <!-- Law 1: OLED or die. Law 2: One accent. -->
+
+    <!-- Primary background — TRUE BLACK for OLED -->
+    <color name="bg_dark">#FF000000</color>
+</resources>

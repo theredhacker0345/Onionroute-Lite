@@ -1,0 +1,228 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'org.onionroute.lite'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.onionroute.lite"
+        minSdk 23          // Android 6.0.1 — Samsung Grand Prime Plus
+        targetSdk 33       // API 33 for F-Droid + POST_NOTIFICATIONS compat
+        versionCode 2
+        versionName "1.1.0"
+
+        // No abiFilters — jniLibs contains all ABIs built by scripts;
+        // the splits block below generates per-ABI APKs instead.
+
+        // Reproducible build: freeze build timestamp
+        buildConfigField "long", "BUILD_TIMESTAMP", "0L"
+    }
+
+    // ── Per-ABI APK splits ────────────────────────────────────────
+    // Generates separate APKs for each ABI plus a universal APK.
+    // Version code offset ensures each ABI gets a unique, ascending
+    // version code for Play Store multi-APK delivery.
+    splits {
+        abi {
+            enable = true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            universalApk = true
+        }
+    }
+
+    // ── Version code offset per ABI ────────────────────────────────
+    // Each ABI gets a version code offset so that Play Store can
+    // differentiate APKs. The base versionCode (from defaultConfig)
+    // is multiplied by 1000 and an ABI-specific offset is added:
+    //   armeabi-v7a: +1, arm64-v8a: +2, x86: +3, x86_64: +4, universal: +0
+    android.applicationVariants.all { variant ->
+        variant.outputs.each { output ->
+            def baseAbiVersionCode = project.ext.abiVersionCodes.get(output.getFilter("ABI")) ?: 0
+            output.versionCodeOverride =
+                (variant.versionCode * 1000) + baseAbiVersionCode
+        }
+    }
+
+    // ── Product Flavors ─────────────────────────────────────────
+    // fdroid: Pure FOSS build — no proprietary deps whatsoever
+    // gplay:  Play Store variant (reserved for future Crashlytics etc.)
+    flavorDimensions = ["distribution"]
+    productFlavors {
+        fdroid {
+            dimension "distribution"
+            buildConfigField "boolean", "FDROID_BUILD", "true"
+            // F-Droid reproducible build: use versionName with -fdroid suffix
+            versionNameSuffix "-fdroid"
+        }
+        gplay {
+            dimension "distribution"
+            buildConfigField "boolean", "FDROID_BUILD", "false"
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'onionroute'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // Use debug keystore for now (F-Droid will re-sign)
+            signingConfig signingConfigs.debug
+        }
+        debug {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    // F-Droid reproducibility: use consistent resource paths
+    // jniLibs contains per-ABI subdirectories populated by build scripts:
+    //   jniLibs/armeabi-v7a/, jniLibs/arm64-v8a/, jniLibs/x86/, jniLibs/x86_64/
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+
+    // ABI version code offsets for per-ABI APKs
+    project.ext.abiVersionCodes = [
+        'armeabi-v7a': 1,
+        'arm64-v8a'  : 2,
+        'x86'        : 3,
+        'x86_64'     : 4
+    ]
+
+    // ── APK Size Optimization ─────────────────────────────────────
+    // Maximum compression + strip all unnecessary files
+    packagingOptions {
+        resources {
+            excludes += [
+                '/META-INF/{AL2.0,LGPL2.1}',
+                '/META-INF/versions/**',
+                '/META-INF/*.version',
+                '/META-INF/*.kotlin_module',
+                '/META-INF/DEPENDENCIES',
+                '/META-INF/LICENSE',
+                '/META-INF/LICENSE.txt',
+                '/META-INF/NOTICE',
+                '/META-INF/NOTICE.txt',
+                'kotlin/**',
+                'DebugProbesKt.bin',
+                '**/attach_hotspot_windows.dll',
+                '**/attach_hotspot_windows.dll.metadata'
+            ]
+        }
+        jniLibs {
+            // Don't compress native libs — Android loads them directly from APK
+            // on API 23+ (our minSdk). This saves ~5% APK size.
+            useLegacyPackaging = false
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds true
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+        // Disable unused features to reduce APK size
+        aidl false
+        renderScript false
+        resValues false
+        shaders false
+    }
+
+    // Compose compiler version must match Kotlin version
+    // Kotlin 1.9.22 → Compose Compiler 1.5.10
+    composeOptions {
+        kotlinCompilerExtensionVersion = '1.5.10'
+    }
+
+    // Reproducible builds: consistent APK structure
+    dependenciesInfo {
+        // F-Droid: exclude DependencyInfoBlock from APK and AAB
+        includeInApk = false
+        includeInBundle = false
+    }
+}
+
+// ── APK Compression Optimization ───────────────────────────────
+// Use maximum compression for resources and assets in the APK
+android.aaptOptions {
+    cruncherEnabled = true
+    noCompress ''  // Let AAPT2 compress everything by default
+}
+
+dependencies {
+    // ═══════════════════════════════════════════════════════
+    // COMPOSE BOM — manages all Compose versions
+    // All Compose libraries are Apache-2.0 (FOSS)
+    // ═══════════════════════════════════════════════════════
+    def composeBom = platform('androidx.compose:compose-bom:2024.12.01')
+    implementation composeBom
+
+    // Core Compose (Apache-2.0)
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-text'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.runtime:runtime'
+
+    // Compose integration with Activity (Apache-2.0)
+    implementation 'androidx.activity:activity-compose:1.8.2'
+
+    // Compose navigation (Apache-2.0) — only used for type safety
+    implementation 'androidx.navigation:navigation-compose:2.7.7'
+
+    // Lifecycle (Apache-2.0) — only what's needed
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-service:2.7.0'
+
+    // Coroutines (Apache-2.0)
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // Core KTX (Apache-2.0)
+    implementation 'androidx.core:core-ktx:1.12.0'
+
+    // Debug tooling — debug only, never in release APK
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
+    // ═══════════════════════════════════════════════════════
+    // EXPLICITLY NOT INCLUDED:
+    //   - Google Play Services (proprietary)
+    //   - Firebase / Crashlytics (proprietary)
+    //   - Google Analytics (proprietary)
+    //   - Facebook SDK (proprietary + tracker)
+    //   - Any proprietary analytics SDK
+    //   - Any ad SDK
+    //   - AppCompat (unnecessary — Compose handles all UI)
+    //   - lifecycle-viewmodel-compose (not used — manual state)
+    // ═══════════════════════════════════════════════════════
+}

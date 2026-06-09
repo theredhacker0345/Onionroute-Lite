@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Spacing and sizing optimized for 540×960 qHD display -->
+    <dimen name="padding_small">8dp</dimen>
+    <dimen name="padding_medium">16dp</dimen>
+    <dimen name="padding_large">24dp</dimen>
+    <dimen name="card_corner_radius">12dp</dimen>
+    <dimen name="connect_button_size">200dp</dimen>
+</resources>

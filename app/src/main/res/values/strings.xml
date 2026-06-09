@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- OnionRoute Design System — String Resources               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <!-- App -->
+    <string name="app_name">OnionRoute Lite</string>
+    <string name="app_subtitle">Lightweight Tor Client</string>
+
+    <!-- Home Screen -->
+    <string name="status_disconnected">Not connected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">CONNECTED</string>
+    <string name="status_error">Connection failed</string>
+    <string name="btn_connect">Connect to Tor</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="vpn_mode">VPN Mode</string>
+    <string name="kill_switch">Kill Switch</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="section_connection">CONNECTION</string>
+    <string name="section_bridges">BRIDGES</string>
+    <string name="section_proxy">PROXY</string>
+    <string name="section_about">ABOUT</string>
+    <string name="vpn_mode_subtitle">Route all traffic through Tor</string>
+    <string name="kill_switch_subtitle">Block traffic if Tor disconnects</string>
+    <string name="auto_start">Auto-start on Boot</string>
+    <string name="auto_start_subtitle">Connect when device starts</string>
+    <string name="bridge_type">Bridge Type</string>
+    <string name="configure_bridges">Configure Bridges</string>
+    <string name="socks5_proxy">SOCKS5 Proxy</string>
+    <string name="http_proxy">HTTP Proxy</string>
+    <string name="version">Version</string>
+    <string name="licenses">Licenses</string>
+    <string name="copied">Copied!</string>
+
+    <!-- Bridge Screen -->
+    <string name="bridge_config_title">Bridge Configuration</string>
+    <string name="tab_snowflake">Snowflake</string>
+    <string name="tab_obfs4">obfs4</string>
+    <string name="tab_custom">Custom</string>
+    <string name="snowflake_active">Snowflake active</string>
+    <string name="snowflake_inactive">Snowflake inactive</string>
+    <string name="broker_url">Broker URL</string>
+    <string name="front_domains">Front Domains</string>
+    <string name="reset_defaults">Reset to defaults</string>
+    <string name="use_default_bridges">Use default bridges</string>
+    <string name="use_custom_bridges">Use custom bridges</string>
+    <string name="save">Save</string>
+    <string name="clear">Clear</string>
+    <string name="import_clipboard">Import from clipboard</string>
+
+    <!-- Bandwidth Screen -->
+    <string name="bandwidth_title">Bandwidth</string>
+    <string name="session">Session</string>
+    <string name="download">Download</string>
+    <string name="upload">Upload</string>
+    <string name="total_downloaded">Total Downloaded</string>
+    <string name="total_uploaded">Total Uploaded</string>
+    <string name="entry_guard">Entry Guard</string>
+    <string name="exit_node">Exit Node</string>
+    <string name="waiting_data">Waiting for data…</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">Tor Service</string>
+    <string name="notification_channel_desc">Shows Tor connection status</string>
+
+    <!-- Camouflage Icon Names -->
+    <string name="app_name_note">Quick Notes</string>
+    <string name="app_name_weather">Weather Now</string>
+    <string name="app_name_music">Beat Player</string>
+    <string name="app_name_calc">Quick Calc</string>
+
+    <!-- Toast Messages -->
+    <string name="toast_vpn_active">VPN mode active — all traffic routed through Tor</string>
+    <string name="toast_vpn_denied">VPN permission denied</string>
+    <string name="toast_connect_tor_first">Connect to Tor first</string>
+    <string name="toast_snowflake_on">Snowflake enabled — restarting Tor…</string>
+    <string name="toast_snowflake_off">Snowflake disabled — restarting Tor…</string>
+    <string name="toast_kill_switch_active">Kill switch triggered — internet blocked</string>
+</resources>

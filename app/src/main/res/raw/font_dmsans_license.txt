@@ -1,0 +1,4 @@
+JetBrains Mono Font Family
+Copyright (c) Philipp Nurullin, JetBrains
+License: SIL Open Font License v1.1
+Source: https://github.com/JetBrains/JetBrainsMono

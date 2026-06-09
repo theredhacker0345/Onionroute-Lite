@@ -1,0 +1,360 @@
+package org.onionroute.lite.ui.screens
+
+import android.graphics.drawable.Drawable
+import android.widget.ImageView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import org.onionroute.lite.service.AppInfo
+import org.onionroute.lite.service.AppSelectionManager
+import org.onionroute.lite.service.RoutingMode
+import org.onionroute.lite.ui.OnionRouteAppState
+import org.onionroute.lite.ui.theme.*
+
+@Composable
+fun AppSelectionScreen(appState: OnionRouteAppState) {
+    val context = LocalContext.current
+    val manager = remember { AppSelectionManager(context) }
+
+    var routingMode by remember { mutableStateOf(manager.getRoutingMode()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var installedApps by remember { mutableStateOf(manager.getInstalledApps()) }
+
+    // Refresh selections when toggling mode — the meaning of "checked" changes
+    LaunchedEffect(routingMode) {
+        installedApps = manager.getInstalledApps()
+    }
+
+    val filteredApps = remember(installedApps, searchQuery) {
+        if (searchQuery.isBlank()) installedApps
+        else installedApps.filter {
+            it.appName.contains(searchQuery, ignoreCase = true) ||
+                    it.packageName.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    val (userApps, systemApps) = remember(filteredApps) {
+        filteredApps.partition { !it.isSystemApp }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(OnionRouteColors.Black)
+    ) {
+        // ── Top Bar ────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 48.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "←",
+                color = OnionRouteColors.TextSecondary,
+                fontSize = 24.sp,
+                fontFamily = SyneFontFamily,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { appState.navigateBack() }
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = "APP ROUTING",
+                style = OnionRouteTypography.HeadlineMedium.copy(color = OnionRouteColors.TextPrimary)
+            )
+        }
+
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            // ── Mode Selector ──────────────────────────────────
+            ModeSelector(
+                currentMode = routingMode,
+                onModeChange = { mode ->
+                    routingMode = mode
+                    manager.setMode(mode)
+                }
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Search Bar ─────────────────────────────────────
+            SearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── App List ───────────────────────────────────────
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // User apps
+                if (userApps.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "APPLICATIONS",
+                            style = OnionRouteTypography.SectionHeader,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    items(userApps, key = { it.packageName }) { app ->
+                        AppRow(
+                            app = app,
+                            isRouted = manager.isAppTorRouted(app.packageName),
+                            onToggle = { routed ->
+                                manager.setAppTorRouted(app.packageName, routed)
+                                // Force recomposition by refreshing the list reference
+                                installedApps = manager.getInstalledApps()
+                            }
+                        )
+                    }
+                }
+
+                // System apps separator
+                if (systemApps.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "SYSTEM APPLICATIONS",
+                            style = OnionRouteTypography.SectionHeader,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    items(systemApps, key = { it.packageName }) { app ->
+                        AppRow(
+                            app = app,
+                            isRouted = manager.isAppTorRouted(app.packageName),
+                            onToggle = { routed ->
+                                manager.setAppTorRouted(app.packageName, routed)
+                                installedApps = manager.getInstalledApps()
+                            }
+                        )
+                    }
+                }
+
+                // Bottom padding for scroll
+                item { Spacer(modifier = Modifier.height(32.dp)) }
+            }
+        }
+    }
+}
+
+// ── Mode Selector ──────────────────────────────────────────────────
+
+@Composable
+private fun ModeSelector(
+    currentMode: RoutingMode,
+    onModeChange: (RoutingMode) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(OnionRouteColors.Surface2)
+            .border(1.dp, OnionRouteColors.BorderSubtle, RoundedCornerShape(10.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        ModeChip(
+            label = "ALL APPS",
+            isSelected = currentMode == RoutingMode.ALL,
+            modifier = Modifier.weight(1f),
+            onClick = { onModeChange(RoutingMode.ALL) }
+        )
+        ModeChip(
+            label = "SELECTED ONLY",
+            isSelected = currentMode == RoutingMode.SELECTED_ONLY,
+            modifier = Modifier.weight(1f),
+            onClick = { onModeChange(RoutingMode.SELECTED_ONLY) }
+        )
+    }
+}
+
+@Composable
+private fun ModeChip(
+    label: String,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isSelected) OnionRouteColors.JadeGlow else Color.Transparent)
+            .border(
+                width = 1.dp,
+                color = if (isSelected) OnionRouteColors.Jade.copy(alpha = 0.4f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = OnionRouteTypography.LabelSmall.copy(
+                fontSize = 12.sp,
+                color = if (isSelected) OnionRouteColors.Jade else OnionRouteColors.TextSecondary
+            )
+        )
+    }
+}
+
+// ── Search Bar ─────────────────────────────────────────────────────
+
+@Composable
+private fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .focusRequester(focusRequester),
+        placeholder = {
+            Text(
+                text = "Search apps…",
+                style = OnionRouteTypography.BodyMedium.copy(color = OnionRouteColors.TextTertiary)
+            )
+        },
+        singleLine = true,
+        textStyle = OnionRouteTypography.BodyMedium.copy(color = OnionRouteColors.TextPrimary),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = OnionRouteColors.Surface2,
+            unfocusedContainerColor = OnionRouteColors.Surface2,
+            cursorColor = OnionRouteColors.Jade,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent
+        ),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { /* dismiss keyboard */ })
+    )
+}
+
+// ── App Row ────────────────────────────────────────────────────────
+
+@Composable
+private fun AppRow(
+    app: AppInfo,
+    isRouted: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isRouted) OnionRouteColors.JadeGlow else OnionRouteColors.Surface2)
+            .border(
+                width = 1.dp,
+                color = if (isRouted) OnionRouteColors.Jade.copy(alpha = 0.4f) else OnionRouteColors.BorderSubtle,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onToggle(!isRouted) }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // App icon or placeholder
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(OnionRouteColors.Surface3),
+            contentAlignment = Alignment.Center
+        ) {
+            if (app.icon != null) {
+                AppIcon(drawable = app.icon)
+            } else {
+                Text(
+                    text = app.appName.take(1).uppercase(),
+                    style = OnionRouteTypography.BodyMedium.copy(
+                        color = OnionRouteColors.TextTertiary
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // App name + package
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = app.appName,
+                style = OnionRouteTypography.BodyMedium.copy(
+                    color = if (isRouted) OnionRouteColors.Jade else OnionRouteColors.TextPrimary
+                ),
+                maxLines = 1
+            )
+            Text(
+                text = app.packageName,
+                style = OnionRouteTypography.LabelSmall.copy(
+                    color = OnionRouteColors.TextTertiary
+                ),
+                maxLines = 1
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Toggle indicator dot
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(if (isRouted) OnionRouteColors.Jade else OnionRouteColors.TextTertiary)
+        )
+    }
+}
+
+@Composable
+private fun AppIcon(drawable: Drawable) {
+    AndroidView(
+        factory = { context ->
+            ImageView(context).apply {
+                setImageDrawable(drawable)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    (36 * resources.displayMetrics.density).toInt(),
+                    (36 * resources.displayMetrics.density).toInt()
+                )
+            }
+        },
+        modifier = Modifier.size(36.dp)
+    )
+}

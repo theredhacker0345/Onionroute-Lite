@@ -1,0 +1,38 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2024-2026 darkmaster0345 and OnionRoute Lite Contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+The full text of the GNU General Public License v3 is available at:
+https://www.gnu.org/licenses/gpl-3.0.txt
+
+This project bundles the following FLOSS components:
+
+1. Tor (BSD-3-Clause) - https://gitlab.torproject.org/tpo/core/tor
+2. obfs4proxy (BSD-3-Clause) - https://gitlab.com/yawning/obfs4
+3. Snowflake (BSD-3-Clause) - https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake
+4. hev-socks5-tunnel (GPL-3.0) - https://github.com/heiher/hev-socks5-tunnel
+
+Font licenses:
+
+5. Syne (Open Font License 1.1) - https://github.com/arnoRobin/syne
+6. JetBrains Mono (OFL 1.1) - https://github.com/JetBrains/JetBrainsMono
+7. DM Sans (OFL 1.1) - https://github.com/googlefonts/dm-sans
+
+All fonts are distributed under the SIL Open Font License v1.1.
+See THIRD-PARTY-LICENSES.md for full license texts.

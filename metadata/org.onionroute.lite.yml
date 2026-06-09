@@ -1,0 +1,129 @@
+# ══════════════════════════════════════════════════════════════
+# F-Droid Metadata for OnionRoute Lite
+# ══════════════════════════════════════════════════════════════
+# This file should be placed in the fdroiddata repository at:
+#   metadata/org.onionroute.lite.yml
+#
+# Reference: https://f-droid.org/en/docs/Build_Metadata_Reference/
+# ══════════════════════════════════════════════════════════════
+
+Categories:
+  - Internet
+  - Security
+
+License: GPL-3.0-or-later
+
+AuthorName: darkmaster0345
+AuthorWebSite: https://github.com/darkmaster0345
+WebSite: https://github.com/darkmaster0345/Onionroute-Lite
+SourceCode: https://github.com/darkmaster0345/Onionroute-Lite
+IssueTracker: https://github.com/darkmaster0345/Onionroute-Lite/issues
+Changelog: https://github.com/darkmaster0345/Onionroute-Lite/releases
+
+Summary: Lightweight Tor client with VPN, Snowflake and per-app routing
+
+Description: |
+  OnionRoute Lite is a minimal, lightweight Tor client for Android that
+  provides VPN mode, SOCKS5/HTTP proxy, and censorship circumvention
+  through Snowflake, obfs4 and WebTunnel bridges.
+
+  Features:
+  * One-tap Tor connect/disconnect
+  * VPN mode: route all device traffic through Tor
+  * Per-app routing: choose which apps go through Tor
+  * SOCKS5 proxy on 127.0.0.1:9050
+  * HTTP CONNECT proxy on 127.0.0.1:8118
+  * Snowflake bridge for WebRTC-based censorship circumvention
+  * obfs4 bridge support with built-in default bridges
+  * WebTunnel bridge support (HTTPS-mimicking transport)
+  * Custom bridge import via QR code scan or paste
+  * .onion site access (automatic via Tor routing)
+  * Real-time bandwidth monitoring with speed graph
+  * Kill switch: block internet if Tor disconnects
+  * Always-on VPN support
+  * Quick Settings tiles for connection toggle and new circuit
+  * Kindness Mode: run Snowflake proxy to help censored users
+  * Camouflage: alternate launcher icons to disguise the app
+  * Auto-start on boot (optional)
+
+  Designed for low-end Android devices with minimal RAM and storage.
+  Optimized for Android 6.0 (Marshmallow) and above. Supports
+  armeabi-v7a, arm64-v8a, x86, and x86_64 devices.
+
+  This app does NOT include:
+  - Built-in browser (use Firefox with your Tor connection)
+  - Root mode or iptables manipulation
+  - Proprietary analytics or tracking
+  - Google Play Services dependency
+
+RepoType: git
+Repo: https://github.com/darkmaster0345/Onionroute-Lite.git
+
+# ── Build Configuration ───────────────────────────────────────
+# IMPORTANT: commit must be a full 40-char SHA hash, NOT a tag.
+# Run: git rev-parse HEAD   to get the current hash.
+# F-Droid will NOT accept tags in the commit field.
+
+Builds:
+  - versionName: '1.1.0'
+    versionCode: 2
+    commit: REPLACE_WITH_FULL_COMMIT_HASH
+    subdir: app
+    gradle:
+      - fdroid
+    ndk: r25c
+    prebuild:
+      - chmod +x ../scripts/build-all.sh
+      - chmod +x ../scripts/build-tor.sh
+      - chmod +x ../scripts/build-obfs4.sh
+      - chmod +x ../scripts/build-snowflake.sh
+      - chmod +x ../scripts/build-tun2socks.sh
+      - cd ..
+      - ./scripts/build-all.sh armeabi-v7a $$NDK$$ app/src/main/jniLibs/armeabi-v7a
+    scanignore:
+      - app/src/main/jniLibs/armeabi-v7a/libtor.so
+      - app/src/main/jniLibs/armeabi-v7a/libobfs4proxy.so
+      - app/src/main/jniLibs/armeabi-v7a/libsnowflake.so
+      - app/src/main/jniLibs/armeabi-v7a/libsnowflake-proxy.so
+      - app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+
+MaintainerNotes: |
+  Native binaries (libtor.so, libobfs4proxy.so, libsnowflake.so,
+  libsnowflake-proxy.so, libtun2socks.so) are built from source during
+  the F-Droid build process using the scripts in the scripts/ directory.
+
+  The scanignore directive tells F-Droid's scanner to skip these
+  pre-built binary paths since they are verified to be built from
+  source during the build step.
+
+  All dependencies are FOSS (Apache-2.0) from Maven Central and
+  Google's Maven repository. No Google Play Services, Firebase,
+  or tracking SDKs are used.
+
+  Bundled fonts under SIL Open Font License 1.1:
+  - Syne (OFL 1.1) by Lucas Descroix
+  - JetBrains Mono (OFL 1.1) by Philipp Nurullin
+  - DM Sans (OFL 1.1) by Colophon Foundry
+
+  The app connects to the Tor network — a free, decentralized
+  network run by volunteers running free software. The Tor network
+  itself is free software infrastructure.
+
+  Snowflake uses FOSS-only STUN servers (stun.antisip.com,
+  stun.bluesip.net, stun.sipnet.cz). Google STUN servers are
+  NOT included by default to avoid NonFreeNet AntiFeature.
+
+  Kindness Mode (Snowflake proxy) uses the same FOSS STUN servers.
+
+  WebTunnel bridges connect to Tor Project infrastructure via HTTPS.
+
+  The app is NOT useless without Tor — it can still function as a
+  local SOCKS5/HTTP proxy client for any SOCKS5 service.
+
+AntiFeatures:
+  - NonFreeNet
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: '1.1.0'
+CurrentVersionCode: 2

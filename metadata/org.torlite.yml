@@ -1,0 +1,103 @@
+# ══════════════════════════════════════════════════════════════
+# F-Droid Metadata for TorLite
+# ══════════════════════════════════════════════════════════════
+# This file should be placed in the fdroiddata repository at:
+#   metadata/org.torlite.yml
+#
+# Reference: https://f-droid.org/en/docs/Build_Metadata_Reference/
+# ══════════════════════════════════════════════════════════════
+
+Categories:
+  - Internet
+  - Security
+
+License: GPL-3.0-or-later
+
+AuthorName: darkmaster0345
+AuthorWebSite: https://github.com/darkmaster0345
+WebSite: https://github.com/darkmaster0345/tor-lite
+SourceCode: https://github.com/darkmaster0345/tor-lite
+IssueTracker: https://github.com/darkmaster0345/tor-lite/issues
+Changelog: https://github.com/darkmaster0345/tor-lite/releases
+Donate: https://github.com/sponsors/darkmaster0345
+
+Summary: Lightweight Tor client with VPN and Snowflake support
+
+Description: |
+  Tor Lite is a minimal, lightweight Tor client for Android that
+  provides VPN mode, SOCKS5/HTTP proxy, and censorship circumvention
+  through Snowflake and obfs4 bridges.
+
+  Features:
+  * One-tap Tor connect/disconnect
+  * VPN mode: route all device traffic through Tor
+  * SOCKS5 proxy on 127.0.0.1:9050
+  * HTTP CONNECT proxy on 127.0.0.1:8118
+  * Snowflake bridge for censorship circumvention
+  * obfs4 bridge support with default bridges
+  * .onion site access (automatic via Tor routing)
+  * Real-time bandwidth monitoring (speed + totals)
+  * Kill switch: block internet if Tor disconnects
+  * Auto-start on boot (optional)
+
+  Designed for low-end Android devices with minimal RAM and storage.
+  Optimized for Android 6.0 (Marshmallow) and above.
+
+  This app does NOT include:
+  - Built-in browser (use Firefox with your Tor connection)
+  - Root mode or iptables manipulation
+  - Hidden service hosting
+  - Proprietary analytics or tracking
+  - Google Play Services dependency
+
+RepoType: git
+Repo: https://github.com/darkmaster0345/tor-lite.git
+
+# ── Build Configuration ───────────────────────────────────────
+
+Builds:
+  - versionName: '1.0.0'
+    versionCode: 1
+    commit: v1.0.0
+    subdir: app
+    gradle:
+      - yes
+    ndk: r25c
+    prebuild:
+      - chmod +x ../scripts/build-all.sh
+      - cd .. && ./scripts/build-all.sh $$NDK$$ app/src/main/jniLibs/armeabi-v7a
+    scanignore:
+      - app/src/main/jniLibs/armeabi-v7a/libtor.so
+      - app/src/main/jniLibs/armeabi-v7a/libobfs4proxy.so
+      - app/src/main/jniLibs/armeabi-v7a/libsnowflake.so
+      - app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+
+MaintainerNotes: |
+  Native binaries (libtor.so, libobfs4proxy.so, libsnowflake.so,
+  libtun2socks.so) are built from source during the F-Droid build
+  process using the scripts in the scripts/ directory.
+
+  The scanignore directive tells F-Droid's scanner to skip these
+  pre-built binary paths since they are verified to be built from
+  source during the build step.
+
+  All dependencies are from Maven Central and Google's Maven repository.
+  No Google Play Services, Firebase, or tracking SDKs are used.
+
+  Tor connects to the Tor network which is a free, decentralized
+  network run by volunteers. This does NOT trigger NonFreeNet or
+  TetheredNet Anti-Features since the Tor network is free software
+  infrastructure that anyone can participate in.
+
+  The app bundles fonts under the SIL Open Font License v1.1:
+  - Syne (OFL 1.1)
+  - JetBrains Mono (OFL 1.1)
+  - DM Sans (OFL 1.1)
+
+AntiFeatures:
+  - NonFreeNet
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: '1.0.0'
+CurrentVersionCode: 1
