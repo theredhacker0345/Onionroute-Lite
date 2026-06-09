@@ -179,15 +179,17 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
 
     # OpenSSL 3.x Configure for Android with Clang toolchain
     # MUST pass CC/AR/RANLIB explicitly — NDK r26d has no GCC
+    # NOTE: OpenSSL 3.x forbids mixing env vars (CFLAGS/LDFLAGS) with
+    # Configure command-line flags for the same variables. Since we
+    # already export CFLAGS/LDFLAGS as env vars, we only pass CC/AR/RANLIB
+    # and the API define via Configure arguments.
     ./Configure "${OPENSSL_TARGET}" \
         --prefix="${DEPS_PREFIX}" \
         no-shared no-tests no-dso \
         -D__ANDROID_API__=${API} \
         CC="${CC}" \
         AR="${AR}" \
-        RANLIB="${RANLIB}" \
-        CFLAGS="${CFLAGS}" \
-        LDFLAGS="${LDFLAGS}"
+        RANLIB="${RANLIB}"
 
     make -j$(nproc)
     make install_sw
