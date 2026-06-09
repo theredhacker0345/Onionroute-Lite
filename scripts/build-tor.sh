@@ -213,7 +213,15 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     echo "DEBUG: PATH=$PATH"
     echo "DEBUG: which arm-linux-androideabi-gcc = $(which arm-linux-androideabi-gcc 2>&1 || echo 'NOT FOUND')"
     echo "DEBUG: arm-linux-androideabi-gcc --version:"
-    arm-linux-androideabi-gcc --version 2>&1 || echo "DEBUG: gcc command failed"
+    arm-linux-androideabi-gcc --version 2>&1 || true
+    echo "DEBUG: direct clang test:"
+    ${CC} --version 2>&1 || true
+    echo "DEBUG: checking if wrapper dir exists:"
+    ls -la "${WRAPPER_DIR}/" 2>&1 || true
+    echo "DEBUG: readlink of symlink:"
+    readlink -f "${WRAPPER_DIR}/arm-linux-androideabi-gcc" 2>&1 || true
+    echo "DEBUG: file type of clang:"
+    file "${CC}" 2>&1 || true
 
     # OpenSSL 3.x Configure for Android with Clang toolchain
     # MUST pass CC/AR/RANLIB explicitly — NDK r26d has no GCC
