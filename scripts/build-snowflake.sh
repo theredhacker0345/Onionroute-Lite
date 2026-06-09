@@ -120,6 +120,7 @@ cd "${BUILD_DIR}"
 echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
 go mod init onionroute-build/snowflake
 go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2@v${SNOWFLAKE_VERSION}
+go mod tidy
 
 # Verify all module checksums
 go mod verify
