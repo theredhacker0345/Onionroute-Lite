@@ -127,10 +127,17 @@ mkdir -p "${BUILD_DIR}"
 # 'arm-linux-androideabi-gcc' (or similar) on PATH.
 # NDK r26d removed GCC entirely (Clang-only). We create
 # symlinks so OpenSSL can find the expected compiler names.
-# Using symlinks (not wrapper scripts) ensures that
-# `--version` and other compiler queries work correctly.
+# Using symlinks directly to the NDK's Clang wrapper scripts.
+#
+# IMPORTANT: The NDK's clang "binary" is actually a shell script
+# that internally calls `clang` from a relative path. So we MUST
+# also add the NDK's bin/ to PATH so the script can find its
+# own `clang` binary.
 WRAPPER_DIR="${BUILD_DIR}/ndk-wrappers"
 mkdir -p "${WRAPPER_DIR}"
+
+# Add NDK toolchain bin to PATH first (so clang scripts can find their own `clang`)
+export PATH="${TOOLCHAIN}/bin:${PATH}"
 
 # Determine the OpenSSL-expected GCC prefix per ABI
 case "${ABI}" in
@@ -140,7 +147,7 @@ case "${ABI}" in
     x86_64)      GCC_PREFIX="x86_64-linux-android" ;;
 esac
 
-# Create symlinks: gcc and g++ point to Clang
+# Create symlinks: gcc and g++ point to NDK's Clang
 ln -sf "${CC}" "${WRAPPER_DIR}/${GCC_PREFIX}-gcc"
 ln -sf "${CXX}" "${WRAPPER_DIR}/${GCC_PREFIX}-g++"
 # Create symlink: ar points to llvm-ar
@@ -151,7 +158,7 @@ ln -sf "${RANLIB}" "${WRAPPER_DIR}/${GCC_PREFIX}-ranlib"
 # Add wrapper dir to PATH so OpenSSL's Configure can find the compilers
 export PATH="${WRAPPER_DIR}:${PATH}"
 echo "Created GCC symlinks for OpenSSL: ${WRAPPER_DIR}"
-ls -la "${WRAPPER_DIR}/"
+echo "Added NDK toolchain bin to PATH: ${TOOLCHAIN}/bin"
 
 if [ ! -d "${BUILD_DIR}/${TOR_DIR}" ]; then
     echo "Downloading Tor ${TOR_VERSION}..."
@@ -208,20 +215,6 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     cd "${OSSL_DIR}"
     # Fully clean previous failed build artifacts
     make distclean 2>/dev/null || true
-
-    # Debug: verify GCC symlink is accessible on PATH
-    echo "DEBUG: PATH=$PATH"
-    echo "DEBUG: which arm-linux-androideabi-gcc = $(which arm-linux-androideabi-gcc 2>&1 || echo 'NOT FOUND')"
-    echo "DEBUG: arm-linux-androideabi-gcc --version:"
-    arm-linux-androideabi-gcc --version 2>&1 || true
-    echo "DEBUG: direct clang test:"
-    ${CC} --version 2>&1 || true
-    echo "DEBUG: checking if wrapper dir exists:"
-    ls -la "${WRAPPER_DIR}/" 2>&1 || true
-    echo "DEBUG: readlink of symlink:"
-    readlink -f "${WRAPPER_DIR}/arm-linux-androideabi-gcc" 2>&1 || true
-    echo "DEBUG: file type of clang:"
-    file "${CC}" 2>&1 || true
 
     # OpenSSL 3.x Configure for Android with Clang toolchain
     # MUST pass CC/AR/RANLIB explicitly — NDK r26d has no GCC
