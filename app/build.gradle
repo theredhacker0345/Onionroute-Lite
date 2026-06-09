@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId "org.onionroute.lite"
         minSdk 23          // Android 6.0.1 — Samsung Grand Prime Plus
-        targetSdk 33       // API 33 for F-Droid + POST_NOTIFICATIONS compat
+        targetSdk 34       // API 34 for foregroundServiceType=specialUse
         versionCode 2
         versionName "1.1.0"
 

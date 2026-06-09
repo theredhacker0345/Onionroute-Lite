@@ -66,6 +66,7 @@ object Constants {
     const val ACTION_STOP_VPN = "org.onionroute.lite.STOP_VPN"
     const val ACTION_TOGGLE_SNOWFLAKE = "org.onionroute.lite.TOGGLE_SNOWFLAKE"
     const val ACTION_TOGGLE_OBFS4 = "org.onionroute.lite.TOGGLE_OBFS4"
+    const val ACTION_TOGGLE_WEBTUNNEL = "org.onionroute.lite.TOGGLE_WEBTUNNEL"
     const val ACTION_START_KINDNESS = "org.onionroute.lite.START_KINDNESS"
     const val ACTION_STOP_KINDNESS = "org.onionroute.lite.STOP_KINDNESS"
     const val ACTION_STATUS_UPDATE = "org.onionroute.lite.STATUS_UPDATE"

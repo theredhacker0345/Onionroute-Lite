@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import org.onionroute.lite.service.KindnessService
 import org.onionroute.lite.service.TorService
 import org.onionroute.lite.service.TorVpnService
 import org.onionroute.lite.tor.BridgeConfig
@@ -87,6 +88,16 @@ class MainActivity : ComponentActivity() {
             val p = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
             p.edit().putBoolean(Constants.PREF_OBFS4_ENABLED, enabled).apply()
             sendCommandToService(Constants.ACTION_TOGGLE_OBFS4)
+        }
+        appState.onWebTunnelToggle = { enabled ->
+            val p = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+            p.edit().putBoolean(Constants.PREF_WEBTUNNEL_ENABLED, enabled).apply()
+            sendCommandToService(Constants.ACTION_TOGGLE_WEBTUNNEL)
+        }
+        appState.onKindnessToggle = { enabled ->
+            val p = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+            p.edit().putBoolean(Constants.PREF_KINDNESS_ENABLED, enabled).apply()
+            if (enabled) KindnessService.start(this) else KindnessService.stop(this)
         }
         appState.onAutoStartToggle = { enabled ->
             val p = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)

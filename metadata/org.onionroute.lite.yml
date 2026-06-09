@@ -71,7 +71,7 @@ Builds:
     subdir: app
     gradle:
       - fdroid
-    ndk: r25c
+    ndk: r26d
     prebuild:
       - chmod +x ../scripts/build-all.sh
       - chmod +x ../scripts/build-tor.sh

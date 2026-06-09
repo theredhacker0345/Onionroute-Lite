@@ -9,4 +9,10 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
     </style>
+
+    <!-- Switch theme with Jade accent for XML-based switches -->
+    <style name="SwitchTheme" parent="android:Theme.DeviceDefault">
+        <item name="android:colorActivated">@color/jade_accent</item>
+        <item name="android:colorForeground">@color/jade_accent</item>
+    </style>
 </resources>
