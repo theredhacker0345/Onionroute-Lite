@@ -183,7 +183,7 @@ if [ ! -f "${DEPS_PREFIX}/lib/libz.a" ]; then
     echo "Building zlib ${ZLIB_VERSION} for ${ABI}..."
     ZLIB_DIR="${BUILD_DIR}/zlib-${ZLIB_VERSION}"
     if [ ! -d "${ZLIB_DIR}" ]; then
-        curl -L --retry 3 "https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz" \
+        curl -L --retry 3 "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" \
             -o "${BUILD_DIR}/zlib.tar.gz"
         tar xzf "${BUILD_DIR}/zlib.tar.gz" -C "${BUILD_DIR}"
         rm "${BUILD_DIR}/zlib.tar.gz"
