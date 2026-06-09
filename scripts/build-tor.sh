@@ -229,17 +229,18 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     # - CC/AR/RANLIB are exported as env vars
     echo "Running OpenSSL Configure ${OPENSSL_TARGET}..."
     ./Configure \
-        no-shared no-tests no-dso no-ssl2 no-ssl3 no-tls1 no-tls1_1 \
+        no-shared no-tests no-dso \
+        no-ssl3 no-tls1 no-tls1_1 \
         no-ocsp no-nextprotoneg no-psk no-srp no-ts \
-        no-cmp no-cms no-ct no-dgram no-dtls no-http \
-        no-quic no-srtp no-argon2 no-aria no-bf \
+        no-cmp no-cms no-ct no-dgram no-dtls \
+        no-srtp no-aria no-bf \
         no-blake2 no-camellia no-cast no-des no-dsa \
         no-gost no-idea no-md2 no-md4 no-mdc2 \
         no-ocb no-rc2 no-rc4 no-rc5 no-rmd160 no-scrypt \
         no-seed no-siphash no-sm2 no-sm3 no-sm4 no-whirlpool \
-        no-ec2m no-ssl-trace no-tls-deprecated-ec \
+        no-ec2m no-ssl-trace \
         no-siv no-padlockeng no-ui-console \
-        no-apps no-async no-comp no-ktls no-legacy no-zlib \
+        no-async no-comp no-ktls no-legacy no-zlib \
         "${OPENSSL_TARGET}" \
         -D__ANDROID_API__=${API} \
         --prefix="${DEPS_PREFIX}" \
