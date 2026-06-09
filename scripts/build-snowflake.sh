@@ -119,7 +119,7 @@ cd "${BUILD_DIR}"
 # Initialize Go module with pinned version
 echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
 go mod init onionroute-build/snowflake
-go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2@v${SNOWFLAKE_VERSION}
+go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2@v${SNOWFLAKE_VERSION}
 
 # Verify all module checksums
 go mod verify
@@ -128,13 +128,13 @@ go mod verify
 echo "Building Snowflake client for ${ABI}..."
 go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
     -o snowflake-client \
-    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/client
+    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/client
 
 # ── Build 2: Snowflake Proxy (Kindness Mode) ────────────────
 echo "Building Snowflake proxy for ${ABI}..."
 go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
     -o snowflake-proxy \
-    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/proxy
+    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/proxy
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"
