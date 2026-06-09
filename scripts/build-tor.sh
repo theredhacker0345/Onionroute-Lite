@@ -95,6 +95,10 @@ export STRIP="${TOOLCHAIN}/bin/llvm-strip"
 export NM="${TOOLCHAIN}/bin/llvm-nm"
 export SYSROOT="${TOOLCHAIN}/sysroot"
 
+# OpenSSL 3.x android targets require ANDROID_NDK_ROOT to find the NDK.
+# Without this, Configure falls back to looking for GCC on PATH and fails.
+export ANDROID_NDK_ROOT="${NDK_PATH}"
+
 # Security hardening flags — ENABLED for F-Droid compliance
 export CFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D__ANDROID_API__=${API}"
 export LDFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -Wl,-z,relro -Wl,-z,now"
@@ -218,23 +222,28 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     make distclean 2>/dev/null || true
 
     # OpenSSL 3.x Configure for Android with Clang toolchain
-    # MUST pass CC/AR/RANLIB explicitly — NDK r26d has no GCC
-    # NOTE: OpenSSL 3.x forbids mixing env vars (CFLAGS/LDFLAGS) with
-    # Configure command-line flags for the same variables. Since we
-    # already export CFLAGS/LDFLAGS as env vars, we only pass CC/AR/RANLIB
-    # and the API define via Configure arguments.
-    echo "Verifying GCC compatibility before OpenSSL Configure..."
-    echo "PATH: $PATH"
-    echo "which arm-linux-androideabi-gcc: $(which arm-linux-androideabi-gcc 2>&1 || echo NOT_FOUND)"
-    arm-linux-androideabi-gcc --version 2>&1 | head -3 || echo "GCC compat test failed"
+    # Following the same approach as tor-android (guardianproject):
+    # - ANDROID_NDK_ROOT is set so OpenSSL can find the NDK
+    # - NDK toolchain bin is on PATH so clang wrapper scripts work
+    # - CFLAGS/LDFLAGS are exported as env vars (not on command line)
+    # - CC/AR/RANLIB are exported as env vars
     echo "Running OpenSSL Configure ${OPENSSL_TARGET}..."
-    ./Configure "${OPENSSL_TARGET}" \
-        --prefix="${DEPS_PREFIX}" \
-        no-shared no-tests no-dso \
+    ./Configure \
+        no-shared no-tests no-dso no-ssl2 no-ssl3 no-tls1 no-tls1_1 \
+        no-ocsp no-nextprotoneg no-psk no-srp no-ts \
+        no-cmp no-cms no-ct no-dgram no-dtls no-http \
+        no-quic no-srtp no-argon2 no-aria no-bf \
+        no-blake2 no-camellia no-cast no-des no-dsa \
+        no-gost no-idea no-md2 no-md4 no-mdc2 \
+        no-ocb no-rc2 no-rc4 no-rc5 no-rmd160 no-scrypt \
+        no-seed no-siphash no-sm2 no-sm3 no-sm4 no-whirlpool \
+        no-ec2m no-ssl-trace no-tls-deprecated-ec \
+        no-siv no-padlockeng no-ui-console \
+        no-apps no-async no-comp no-ktls no-legacy no-zlib \
+        "${OPENSSL_TARGET}" \
         -D__ANDROID_API__=${API} \
-        CC="${CC}" \
-        AR="${AR}" \
-        RANLIB="${RANLIB}" 2>&1 || { echo "OpenSSL Configure FAILED"; exit 1; }
+        --prefix="${DEPS_PREFIX}" \
+        --openssldir="${DEPS_PREFIX}"
 
     make -j$(nproc)
     make install_sw
