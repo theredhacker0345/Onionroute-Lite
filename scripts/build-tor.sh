@@ -122,12 +122,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build-native/tor/${ABI}"
 mkdir -p "${BUILD_DIR}"
 
-# ── Create GCC wrapper scripts for OpenSSL ──────────────────
+# ── Create GCC symlinks for OpenSSL ─────────────────────────
 # OpenSSL's android targets hardcode a lookup for
 # 'arm-linux-androideabi-gcc' (or similar) on PATH.
 # NDK r26d removed GCC entirely (Clang-only). We create
-# wrapper scripts so OpenSSL can find its expected compiler
-# name, but they all delegate to Clang.
+# symlinks so OpenSSL can find the expected compiler names.
+# Using symlinks (not wrapper scripts) ensures that
+# `--version` and other compiler queries work correctly.
 WRAPPER_DIR="${BUILD_DIR}/ndk-wrappers"
 mkdir -p "${WRAPPER_DIR}"
 
@@ -139,29 +140,18 @@ case "${ABI}" in
     x86_64)      GCC_PREFIX="x86_64-linux-android" ;;
 esac
 
-# Create wrapper scripts for gcc and g++ that call Clang
-for tool in gcc g++; do
-    WRAPPER="${WRAPPER_DIR}/${GCC_PREFIX}-${tool}"
-    if [ ! -f "${WRAPPER}" ]; then
-        echo '#!/bin/sh' > "${WRAPPER}"
-        echo "exec ${CC} \"\$@\"" >> "${WRAPPER}"
-        chmod +x "${WRAPPER}"
-        echo "Created wrapper: ${WRAPPER} -> ${CC}"
-    fi
-done
-
-# Create ar wrapper pointing to llvm-ar
-AR_WRAPPER="${WRAPPER_DIR}/${GCC_PREFIX}-ar"
-if [ ! -f "${AR_WRAPPER}" ]; then
-    echo '#!/bin/sh' > "${AR_WRAPPER}"
-    echo "exec ${AR} \"\$@\"" >> "${AR_WRAPPER}"
-    chmod +x "${AR_WRAPPER}"
-    echo "Created wrapper: ${AR_WRAPPER} -> ${AR}"
-fi
+# Create symlinks: gcc and g++ point to Clang
+ln -sf "${CC}" "${WRAPPER_DIR}/${GCC_PREFIX}-gcc"
+ln -sf "${CXX}" "${WRAPPER_DIR}/${GCC_PREFIX}-g++"
+# Create symlink: ar points to llvm-ar
+ln -sf "${AR}" "${WRAPPER_DIR}/${GCC_PREFIX}-ar"
+# Create symlink: ranlib points to llvm-ranlib
+ln -sf "${RANLIB}" "${WRAPPER_DIR}/${GCC_PREFIX}-ranlib"
 
 # Add wrapper dir to PATH so OpenSSL's Configure can find the compilers
 export PATH="${WRAPPER_DIR}:${PATH}"
-echo "Added NDK compiler wrappers to PATH"
+echo "Created GCC symlinks for OpenSSL: ${WRAPPER_DIR}"
+ls -la "${WRAPPER_DIR}/"
 
 if [ ! -d "${BUILD_DIR}/${TOR_DIR}" ]; then
     echo "Downloading Tor ${TOR_VERSION}..."
@@ -216,7 +206,8 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
         rm "${BUILD_DIR}/openssl.tar.gz"
     fi
     cd "${OSSL_DIR}"
-    make clean 2>/dev/null || true
+    # Fully clean previous failed build artifacts
+    make distclean 2>/dev/null || true
 
     # OpenSSL 3.x Configure for Android with Clang toolchain
     # MUST pass CC/AR/RANLIB explicitly — NDK r26d has no GCC
