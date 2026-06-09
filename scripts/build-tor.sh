@@ -209,6 +209,12 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     # Fully clean previous failed build artifacts
     make distclean 2>/dev/null || true
 
+    # Debug: verify GCC symlink is accessible on PATH
+    echo "DEBUG: PATH=$PATH"
+    echo "DEBUG: which arm-linux-androideabi-gcc = $(which arm-linux-androideabi-gcc 2>&1 || echo 'NOT FOUND')"
+    echo "DEBUG: arm-linux-androideabi-gcc --version:"
+    arm-linux-androideabi-gcc --version 2>&1 || echo "DEBUG: gcc command failed"
+
     # OpenSSL 3.x Configure for Android with Clang toolchain
     # MUST pass CC/AR/RANLIB explicitly — NDK r26d has no GCC
     # NOTE: OpenSSL 3.x forbids mixing env vars (CFLAGS/LDFLAGS) with
