@@ -119,7 +119,8 @@ cd "${BUILD_DIR}"
 # Initialize Go module with pinned version
 echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
 go mod init onionroute-build/snowflake
-go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2@v${SNOWFLAKE_VERSION}
+go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/client@v${SNOWFLAKE_VERSION}
+go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/proxy@v${SNOWFLAKE_VERSION}
 go mod tidy
 
 # Verify all module checksums
