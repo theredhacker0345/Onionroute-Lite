@@ -116,7 +116,7 @@ cd "${BUILD_DIR}"
 # Initialize Go module with pinned version
 echo "Downloading obfs4proxy v${OBFS4_VERSION} for ${ABI}..."
 go mod init onionroute-build/obfs4
-go get gitlab.com/yawning/obfs4.git@${OBFS4_TAG}
+go get gitlab.com/yawning/obfs4.git/cmd/obfs4proxy@${OBFS4_TAG}
 
 # Verify all module checksums
 go mod verify
