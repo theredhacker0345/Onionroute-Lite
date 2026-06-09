@@ -199,19 +199,20 @@ fi
 if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     echo "Building OpenSSL ${OPENSSL_VERSION} for ${ABI}..."
     OSSL_DIR="${BUILD_DIR}/openssl-${OPENSSL_VERSION}"
-    if [ ! -d "${OSSL_DIR}" ]; then
-        echo "Downloading OpenSSL ${OPENSSL_VERSION}..."
-        curl -L --retry 3 \
-            "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" \
-            -o "${BUILD_DIR}/openssl.tar.gz"
+    # Always remove cached OpenSSL source to avoid stale config from failed builds
+    rm -rf "${OSSL_DIR}"
+    echo "Downloading OpenSSL ${OPENSSL_VERSION}..."
+    curl -L --retry 3 \
+        "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" \
+        -o "${BUILD_DIR}/openssl.tar.gz"
 
-        # Verify checksum
-        echo "Verifying OpenSSL checksum..."
-        echo "${OPENSSL_SHA256}  ${BUILD_DIR}/openssl.tar.gz" | sha256sum -c -
+    # Verify checksum
+    echo "Verifying OpenSSL checksum..."
+    echo "${OPENSSL_SHA256}  ${BUILD_DIR}/openssl.tar.gz" | sha256sum -c -
 
-        tar xzf "${BUILD_DIR}/openssl.tar.gz" -C "${BUILD_DIR}"
-        rm "${BUILD_DIR}/openssl.tar.gz"
-    fi
+    tar xzf "${BUILD_DIR}/openssl.tar.gz" -C "${BUILD_DIR}"
+    rm "${BUILD_DIR}/openssl.tar.gz"
+
     cd "${OSSL_DIR}"
     # Fully clean previous failed build artifacts
     make distclean 2>/dev/null || true
@@ -222,13 +223,18 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     # Configure command-line flags for the same variables. Since we
     # already export CFLAGS/LDFLAGS as env vars, we only pass CC/AR/RANLIB
     # and the API define via Configure arguments.
+    echo "Verifying GCC compatibility before OpenSSL Configure..."
+    echo "PATH: $PATH"
+    echo "which arm-linux-androideabi-gcc: $(which arm-linux-androideabi-gcc 2>&1 || echo NOT_FOUND)"
+    arm-linux-androideabi-gcc --version 2>&1 | head -3 || echo "GCC compat test failed"
+    echo "Running OpenSSL Configure ${OPENSSL_TARGET}..."
     ./Configure "${OPENSSL_TARGET}" \
         --prefix="${DEPS_PREFIX}" \
         no-shared no-tests no-dso \
         -D__ANDROID_API__=${API} \
         CC="${CC}" \
         AR="${AR}" \
-        RANLIB="${RANLIB}"
+        RANLIB="${RANLIB}" 2>&1 || { echo "OpenSSL Configure FAILED"; exit 1; }
 
     make -j$(nproc)
     make install_sw
