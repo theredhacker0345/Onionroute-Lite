@@ -122,6 +122,47 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build-native/tor/${ABI}"
 mkdir -p "${BUILD_DIR}"
 
+# ── Create GCC wrapper scripts for OpenSSL ──────────────────
+# OpenSSL's android targets hardcode a lookup for
+# 'arm-linux-androideabi-gcc' (or similar) on PATH.
+# NDK r26d removed GCC entirely (Clang-only). We create
+# wrapper scripts so OpenSSL can find its expected compiler
+# name, but they all delegate to Clang.
+WRAPPER_DIR="${BUILD_DIR}/ndk-wrappers"
+mkdir -p "${WRAPPER_DIR}"
+
+# Determine the OpenSSL-expected GCC prefix per ABI
+case "${ABI}" in
+    armeabi-v7a) GCC_PREFIX="arm-linux-androideabi" ;;
+    arm64-v8a)   GCC_PREFIX="aarch64-linux-android" ;;
+    x86)         GCC_PREFIX="i686-linux-android" ;;
+    x86_64)      GCC_PREFIX="x86_64-linux-android" ;;
+esac
+
+# Create wrapper scripts for gcc and g++ that call Clang
+for tool in gcc g++; do
+    WRAPPER="${WRAPPER_DIR}/${GCC_PREFIX}-${tool}"
+    if [ ! -f "${WRAPPER}" ]; then
+        echo '#!/bin/sh' > "${WRAPPER}"
+        echo "exec ${CC} \"\$@\"" >> "${WRAPPER}"
+        chmod +x "${WRAPPER}"
+        echo "Created wrapper: ${WRAPPER} -> ${CC}"
+    fi
+done
+
+# Create ar wrapper pointing to llvm-ar
+AR_WRAPPER="${WRAPPER_DIR}/${GCC_PREFIX}-ar"
+if [ ! -f "${AR_WRAPPER}" ]; then
+    echo '#!/bin/sh' > "${AR_WRAPPER}"
+    echo "exec ${AR} \"\$@\"" >> "${AR_WRAPPER}"
+    chmod +x "${AR_WRAPPER}"
+    echo "Created wrapper: ${AR_WRAPPER} -> ${AR}"
+fi
+
+# Add wrapper dir to PATH so OpenSSL's Configure can find the compilers
+export PATH="${WRAPPER_DIR}:${PATH}"
+echo "Added NDK compiler wrappers to PATH"
+
 if [ ! -d "${BUILD_DIR}/${TOR_DIR}" ]; then
     echo "Downloading Tor ${TOR_VERSION}..."
     curl -L --retry 3 --retry-delay 5 \
