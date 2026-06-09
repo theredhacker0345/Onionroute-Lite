@@ -7,7 +7,7 @@
 #   - Tag push v* (fdroid release APK build + GitHub Release)
 #
 # Native binaries (.so) are built in CI using NDK + Go.
-# The APK is fully functional for armeabi-v7a (primary target).
+# The APK is fully functional for the target ABI.
 # ══════════════════════════════════════════════════════════════
 
 name: Android Build
@@ -26,13 +26,14 @@ env:
   JAVA_VERSION: '17'
   JAVA_DISTRIBUTION: 'temurin'
   GO_VERSION: '1.21'
+  NDK_VERSION: 'r26d'
 
 jobs:
   # ── Build F-Droid Debug APK with native binaries ──────────
   build-debug:
     name: Build F-Droid Debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -49,11 +50,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Setup Android NDK
+      - name: Setup Android NDK ${{ env.NDK_VERSION }}
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r26d
+          ndk-version: ${{ env.NDK_VERSION }}
           add-to-path: true
 
       - name: Setup Gradle
@@ -68,38 +69,52 @@ jobs:
 
       - name: Build native binaries for armeabi-v7a
         run: |
-          echo "Building native binaries for armeabi-v7a..."
           NDK_PATH="${{ steps.setup-ndk.outputs.ndk-path }}"
           if [ -z "$NDK_PATH" ] || [ ! -d "$NDK_PATH" ]; then
             NDK_PATH=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | head -1)
           fi
           if [ -z "$NDK_PATH" ] || [ ! -d "$NDK_PATH" ]; then
-            echo "WARNING: No NDK found — skipping native binary build"
-          else
-            echo "Using NDK at: $NDK_PATH"
-            ./scripts/build-all.sh armeabi-v7a "$NDK_PATH" || true
+            echo "ERROR: No NDK found — cannot build native binaries"
+            exit 1
           fi
+          echo "Using NDK at: $NDK_PATH"
+          ./scripts/build-all.sh armeabi-v7a "$NDK_PATH"
 
-      - name: Ensure native binaries exist
+      - name: Verify native binaries are real (not placeholders)
         run: |
-          # Create placeholder .so files if native build failed
-          mkdir -p app/src/main/jniLibs/armeabi-v7a
+          FAILED=0
           for lib in libtor.so libobfs4proxy.so libsnowflake.so libtun2socks.so libsnowflake-proxy.so; do
-            if [ ! -f "app/src/main/jniLibs/armeabi-v7a/$lib" ]; then
-              echo "Creating placeholder for $lib"
-              echo "Placeholder" > "app/src/main/jniLibs/armeabi-v7a/$lib"
+            FILE="app/src/main/jniLibs/armeabi-v7a/$lib"
+            if [ ! -f "$FILE" ]; then
+              echo "ERROR: $lib not found!"
+              FAILED=1
+              continue
+            fi
+            SIZE=$(stat -c%s "$FILE" 2>/dev/null || echo "0")
+            if [ "$SIZE" -lt 1000 ]; then
+              echo "ERROR: $lib is only ${SIZE} bytes (placeholder?)!"
+              FAILED=1
             else
-              SIZE=$(stat -c%s "app/src/main/jniLibs/armeabi-v7a/$lib" 2>/dev/null || echo "0")
-              if [ "$SIZE" -lt 100 ]; then
-                echo "WARNING: $lib is a placeholder ($SIZE bytes)"
-              else
-                echo "OK: $lib ($SIZE bytes)"
-              fi
+              echo "OK: $lib ($SIZE bytes)"
             fi
           done
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "Native binary build FAILED — cannot create functional APK"
+            exit 1
+          fi
+          echo ""
+          echo "All native binaries verified successfully!"
 
       - name: Build F-Droid Debug APK
         run: ./gradlew assembleFdroidDebug --no-daemon --stacktrace
+
+      - name: Report APK size
+        run: |
+          find app/build/outputs/apk -name "*.apk" -exec sh -c '
+            SIZE=$(stat -c%s "$1" 2>/dev/null || stat -f%z "$1" 2>/dev/null)
+            echo "APK: $1 — Size: $SIZE bytes ($(echo "scale=1; $SIZE / 1048576" | bc) MB)"
+          ' _ {} \;
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -143,11 +158,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Setup Android NDK
+      - name: Setup Android NDK ${{ env.NDK_VERSION }}
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r26d
+          ndk-version: ${{ env.NDK_VERSION }}
           add-to-path: true
 
       - name: Setup Gradle
@@ -242,14 +257,6 @@ jobs:
           # Validate License is valid SPDX
           LICENSE=$(yq eval ".License" metadata/org.onionroute.lite.yml)
           echo "  License SPDX: $LICENSE"
-
-          # Validate prebuild uses list format not chained &&
-          PREBUILD=$(yq eval ".Builds[0].prebuild" metadata/org.onionroute.lite.yml)
-          if echo "$PREBUILD" | grep -q '&&'; then
-            echo "WARNING: prebuild uses && chaining — F-Droid prefers list format"
-          else
-            echo "  prebuild format: OK (list format)"
-          fi
 
           echo ""
           echo "Checking Fastlane metadata..."

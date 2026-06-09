@@ -37,6 +37,7 @@ Description: |
   * obfs4 bridge support with built-in default bridges
   * WebTunnel bridge support (HTTPS-mimicking transport)
   * Custom bridge import via QR code scan or paste
+  * Tor 0.4.9.9 with OpenSSL 3.0.20 LTS
   * .onion site access (automatic via Tor routing)
   * Real-time bandwidth monitoring with speed graph
   * Kill switch: block internet if Tor disconnects

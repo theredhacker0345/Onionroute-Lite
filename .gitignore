@@ -58,3 +58,7 @@ local.properties
 # ── OS Files ─────────────────────────────────────────────────
 Thumbs.db
 Desktop.ini
+
+# ── Environment / Non-project files ──────────────────────────
+.env
+skills/
