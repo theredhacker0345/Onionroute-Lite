@@ -73,6 +73,17 @@
     <string name="app_name_music">Beat Player</string>
     <string name="app_name_calc">Quick Calc</string>
 
+    <!-- Labels for XML resource compatibility -->
+    <string name="snowflake_label">Snowflake</string>
+    <string name="vpn_label">VPN Mode</string>
+    <string name="kill_switch_label">Kill Switch</string>
+    <string name="bandwidth_label">Bandwidth</string>
+    <string name="download_label">↓ Down</string>
+    <string name="upload_label">↑ Up</string>
+    <string name="proxy_info_label">Proxy Info</string>
+    <string name="proxy_socks5">SOCKS5: 127.0.0.1:9050</string>
+    <string name="proxy_http">HTTP: 127.0.0.1:8118</string>
+
     <!-- Toast Messages -->
     <string name="toast_vpn_active">VPN mode active — all traffic routed through Tor</string>
     <string name="toast_vpn_denied">VPN permission denied</string>

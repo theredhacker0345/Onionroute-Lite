@@ -77,6 +77,7 @@ class TorService : Service() {
             Constants.ACTION_STOP_VPN -> handleVpnStop()
             Constants.ACTION_TOGGLE_SNOWFLAKE -> toggleSnowflake()
             Constants.ACTION_TOGGLE_OBFS4 -> toggleObfs4()
+            Constants.ACTION_TOGGLE_WEBTUNNEL -> toggleWebTunnel()
             else -> Log.w(tag, "Unknown action: ${intent?.action}")
         }
 
@@ -191,6 +192,19 @@ class TorService : Service() {
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(Constants.PREF_OBFS4_ENABLED, isObfs4Enabled).apply()
         Log.i(tag, "obfs4 ${if (isObfs4Enabled) "enabled" else "disabled"}")
+
+        // Restart Tor with new bridge config if running
+        if (isTorRunning) {
+            stopTorInternal()
+            startTor()
+        }
+    }
+
+    private fun toggleWebTunnel() {
+        isWebTunnelEnabled = !isWebTunnelEnabled
+        val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+        prefs.edit().putBoolean(Constants.PREF_WEBTUNNEL_ENABLED, isWebTunnelEnabled).apply()
+        Log.i(tag, "WebTunnel ${if (isWebTunnelEnabled) "enabled" else "disabled"}")
 
         // Restart Tor with new bridge config if running
         if (isTorRunning) {
