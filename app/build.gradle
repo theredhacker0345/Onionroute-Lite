@@ -84,21 +84,12 @@ android {
 
             // CRITICAL: Do NOT mark release as debuggable
             debuggable false
-
-            // CRITICAL: Must extract native libs — our .so files are PIE executables
-            // that run as separate processes (tor, obfs4, snowflake). They need to be
-            // extracted to a filesystem path so Runtime.exec() can find and run them.
-            // Without this, the VPN service will fail to start tor.
-            jniLibs.useLegacyPackaging = true
         }
         debug {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.debug
-
-            // Debug builds also need extracted native libs for PIE executables
-            jniLibs.useLegacyPackaging = true
         }
     }
 
