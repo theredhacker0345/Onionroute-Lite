@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Release-specific manifest overlay.
+    These merge rules remove debug/build-only components from release APKs.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Remove Compose PreviewActivity (debug-only, W-01) -->
+    <activity
+        android:name="androidx.compose.ui.tooling.PreviewActivity"
+        tools:node="remove" />
+
+    <!-- Remove ProfileInstallReceiver (build-time optimization, W-03) -->
+    <receiver
+        android:name="androidx.profileinstaller.ProfileInstallReceiver"
+        tools:node="remove" />
+
+</manifest>

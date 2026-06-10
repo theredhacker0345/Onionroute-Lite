@@ -62,3 +62,21 @@ Desktop.ini
 # ── Environment / Non-project files ──────────────────────────
 .env
 skills/
+
+# ── Testing / Development artifacts ──────────────────────────
+node_modules/
+package.json
+package-lock.json
+test-apk.js
+upload-apk.js
+*-signup*.js
+solve-captcha.js
+complete-signup.js
+final-signup*.js
+captcha-*
+signup-*.png
+test-screenshots/
+apk-extracted/
+*.mp3
+*.wav
+appetize-key.txt
