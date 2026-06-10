@@ -26,7 +26,7 @@
 #
 # Prerequisites:
 #   - Go 1.21+
-#   - Android NDK r25c+
+#   - Android NDK r26d+
 #   - Git
 #
 # Usage:
@@ -147,13 +147,13 @@ go mod verify || echo "WARNING: go mod verify had warnings (non-critical)"
 
 # ── Build 1: Snowflake Client ────────────────────────────────
 echo "Building Snowflake client for ${ABI}..."
-go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+go build -trimpath -ldflags="-s -w -buildid= -extldflags '-pie'" -buildvcs=false \
     -o "${BUILD_DIR}/snowflake-client" \
     ./client
 
 # ── Build 2: Snowflake Proxy (Kindness Mode) ────────────────
 echo "Building Snowflake proxy for ${ABI}..."
-go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+go build -trimpath -ldflags="-s -w -buildid= -extldflags '-pie'" -buildvcs=false \
     -o "${BUILD_DIR}/snowflake-proxy" \
     ./proxy
 

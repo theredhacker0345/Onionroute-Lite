@@ -1,1 +1,1 @@
-Lightweight Tor client with VPN, Snowflake and obfs4 bridges
+Lightweight Tor VPN with Snowflake, obfs4, WebTunnel and per-app routing

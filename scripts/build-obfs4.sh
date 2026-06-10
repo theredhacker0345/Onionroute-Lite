@@ -18,7 +18,7 @@
 #
 # Prerequisites:
 #   - Go 1.21+
-#   - Android NDK r25c+
+#   - Android NDK r26d+
 #   - Git
 #
 # Usage:
@@ -153,7 +153,7 @@ else
 fi
 
 echo "Building obfs4proxy for ${ABI} from ${OBFS4_PKG}..."
-go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+go build -trimpath -ldflags="-s -w -buildid= -extldflags '-pie'" -buildvcs=false \
     -o "${BUILD_DIR}/obfs4proxy" \
     "${OBFS4_PKG}"
 

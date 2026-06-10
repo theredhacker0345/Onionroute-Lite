@@ -96,11 +96,10 @@ object Constants {
     const val SNOWFLAKE_BROKER_URL = "https://snowflake-broker.torproject.net/"
     const val SNOWFLAKE_FRONT_DOMAIN = "cdn.sstatic.net"
     // STUN servers for Snowflake WebRTC NAT traversal.
-    // Using FOSS-friendly STUN servers where possible.
-    // stun.l.google.com is excluded from the default list because
-    // it is a non-free network service (Google STUN), which would
-    // trigger F-Droid NonFreeNet AntiFeature. Users can add it
-    // manually in bridge settings if needed.
+    // Using FOSS-friendly STUN servers only. Non-free STUN
+    // servers (e.g. Google's) are excluded to avoid F-Droid
+    // NonFreeNet AntiFeature. Users can add them manually
+    // in bridge settings if needed.
     const val SNOWFLAKE_ICE_SERVERS = "stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478"
 
     // ── Default obfs4 Bridges ─────────────────────────────────

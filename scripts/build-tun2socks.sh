@@ -15,11 +15,11 @@
 # hev-socks5-tunnel uses ndk-build which natively supports
 # multiple ABIs via APP_ABI in Application.mk.
 #
-# License: Apache-2.0 (F-Droid compatible)
+# License: GPL-3.0 (F-Droid compatible)
 # Source: https://github.com/heiher/hev-socks5-tunnel
 #
 # Prerequisites:
-#   - Android NDK r25c+
+#   - Android NDK r26d+
 #   - Git
 #
 # Usage:

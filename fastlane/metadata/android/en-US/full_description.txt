@@ -1,26 +1,30 @@
-OnionRoute Lite is a minimal, lightweight Tor client for Android that provides VPN mode, SOCKS5/HTTP proxy, and censorship circumvention through Snowflake and obfs4 bridges.
+OnionRoute Lite is a minimal, lightweight Tor client for Android that provides VPN mode, SOCKS5/HTTP proxy, and censorship circumvention through Snowflake, obfs4 and WebTunnel bridges.
 
 <b>Features:</b>
 • One-tap Tor connect/disconnect
 • VPN mode: route all device traffic through Tor
+• Per-app routing: choose which apps go through Tor
 • SOCKS5 proxy on 127.0.0.1:9050 for apps that support proxy settings
 • HTTP CONNECT proxy on 127.0.0.1:8118
 • Snowflake bridge for censorship circumvention (WebRTC-based)
 • obfs4 bridge support with built-in default bridges
-• .onion site access (automatic via Tor routing)
+• WebTunnel bridge support (HTTPS-mimicking transport)
+• Custom bridge import via QR code scan or paste
 • Real-time bandwidth monitoring (speed + cumulative totals for upload and download)
 • Kill switch: block all internet if Tor disconnects unexpectedly
+• Quick Settings tiles for connection toggle and new circuit
+• Kindness Mode: run Snowflake proxy to help censored users
+• Camouflage: alternate launcher icons to disguise the app
+• Always-on VPN support
 • Auto-start on boot (optional)
-• Foreground service with persistent notification
 
-<b>Designed for low-end Android devices</b> with minimal RAM and storage. Optimized for Android 6.0 (Marshmallow) and above.
+<b>Designed for low-end Android devices</b> with minimal RAM and storage. Optimized for Android 6.0 (Marshmallow) and above. Supports armeabi-v7a, arm64-v8a, x86, and x86_64.
 
 <b>This app does NOT include:</b>
 • Built-in browser (use Firefox with your Tor connection)
 • Root mode or iptables manipulation
-• Hidden service hosting
 • Proprietary analytics, tracking, or Google Play Services
 
-All native binaries (Tor, obfs4proxy, Snowflake, hev-socks5-tunnel) are built from source during the F-Droid build process. No prebuilt proprietary binaries are included.
+All native binaries (Tor 0.4.9.9, obfs4proxy, Snowflake, hev-socks5-tunnel) are built from source during the F-Droid build process. No prebuilt proprietary binaries are included.
 
 <b>Fonts:</b> Syne, JetBrains Mono, and DM Sans are bundled under the SIL Open Font License v1.1.

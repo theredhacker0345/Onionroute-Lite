@@ -10,13 +10,19 @@ A minimal, lightweight Tor client for Android with VPN mode, Snowflake, and cens
 
 - **One-tap Tor** — Connect/disconnect with a single button
 - **VPN Mode** — Route ALL device traffic through Tor (no root required)
+- **Per-app Routing** — Choose which apps go through Tor and which bypass it
 - **SOCKS5 Proxy** — `127.0.0.1:9050` for apps that support proxy settings
 - **HTTP Proxy** — `127.0.0.1:8118` (Tor's HTTPTunnelPort)
 - **Snowflake Bridge** — Censorship circumvention via WebRTC proxies
 - **obfs4 Bridges** — Built-in default bridges for additional circumvention
+- **WebTunnel Bridge** — HTTPS-mimicking transport for deep packet inspection evasion
+- **QR Bridge Import** — Scan or paste bridge lines from QR codes
 - **.onion Access** — Automatic via Tor routing
-- **Bandwidth Monitor** — Real-time speed + cumulative totals (upload & download)
+- **Bandwidth Monitor** — Real-time speed + cumulative totals (upload & download) with live graph
 - **Kill Switch** — Block all internet if Tor disconnects unexpectedly
+- **Quick Settings Tiles** — Toggle connection and request new circuit from notification shade
+- **Kindness Mode** — Run a Snowflake proxy to help censored users bypass firewalls
+- **Camouflage Icons** — Alternate launcher icons to disguise the app on your device
 - **Auto-start on Boot** — Optional, configurable in app
 
 ## What This Is NOT
@@ -66,6 +72,12 @@ A minimal, lightweight Tor client for Android with VPN mode, Snowflake, and cens
 App → Android VPN (TUN) → hev-socks5-tunnel → Tor SOCKS5 (9050) → Tor Network → Internet
 ```
 
+**Per-app routing:**
+```
+Selected apps → Android VPN (TUN) → hev-socks5-tunnel → Tor SOCKS5 (9050) → Tor Network → Internet
+Other apps → Direct connection (bypassed from VPN)
+```
+
 **Manual Proxy (per-app):**
 ```
 App (configured) → Tor SOCKS5 (9050) / HTTP (8118) → Tor Network → Internet
@@ -78,7 +90,7 @@ App (configured) → Tor SOCKS5 (9050) / HTTP (8118) → Tor Network → Interne
 ### Prerequisites
 
 - **Android SDK** with API 34
-- **Android NDK r25c**
+- **Android NDK r26d**
 - **Go 1.21+** (for obfs4proxy and snowflake)
 - **Gradle 8.5** (included via wrapper)
 - **Linux build host** (tested on Ubuntu 22.04)
@@ -87,21 +99,22 @@ App (configured) → Tor SOCKS5 (9050) / HTTP (8118) → Tor Network → Interne
 
 ```bash
 # Set NDK path
-export ANDROID_NDK_HOME=/path/to/android-ndk-r25c
+export ANDROID_NDK_HOME=/path/to/android-ndk-r26d
 
 # Build all native binaries (tor, obfs4, snowflake, tun2socks)
 chmod +x scripts/*.sh
 ./scripts/build-all.sh
 ```
 
-This produces the following in `app/src/main/jniLibs/armeabi-v7a/`:
+This produces the following in `app/src/main/jniLibs/<ABI>/`:
 
-| Binary | Size (approx) | Source |
-|--------|--------------|--------|
-| libtor.so | ~6MB | tor 0.4.8.13 |
-| libobfs4proxy.so | ~6MB | obfs4proxy 0.0.14 |
-| libsnowflake.so | ~5MB | snowflake 2.10.1 |
-| libtun2socks.so | ~100KB | hev-socks5-tunnel 3.0.5 |
+| Binary | Size (approx) | Source | License |
+|--------|--------------|--------|---------|
+| libtor.so | ~6MB | Tor 0.4.9.9 | BSD-3-Clause |
+| libobfs4proxy.so | ~6MB | obfs4proxy 0.0.14 | BSD-3-Clause |
+| libsnowflake.so | ~5MB | Snowflake 2.10.1 | BSD-3-Clause |
+| libsnowflake-proxy.so | ~4MB | Snowflake 2.10.1 (proxy) | BSD-3-Clause |
+| libtun2socks.so | ~100KB | hev-socks5-tunnel 2.15.0 | GPL-3.0 |
 
 ### Step 2: Build the APK
 
@@ -109,8 +122,8 @@ This produces the following in `app/src/main/jniLibs/armeabi-v7a/`:
 # Debug build
 ./gradlew assembleDebug
 
-# Release build
-./gradlew assembleRelease
+# Release build (F-Droid flavor)
+./gradlew assembleFdroidRelease
 ```
 
 ### Step 3: Install
@@ -131,11 +144,12 @@ This app is designed for F-Droid compliance:
 
 1. **100% FLOSS** — GPL-3.0-or-later, no proprietary dependencies
 2. **No Google Play Services** — No Firebase, no analytics, no tracking
-3. **Reproducible Builds** — Consistent build config, frozen timestamps
+3. **Reproducible Builds** — Deterministic build config, frozen timestamps, reproducibility flags
 4. **Native Binaries Built from Source** — Build scripts in `scripts/` directory
 5. **No Runtime Binary Downloads** — All binaries bundled at build time
 6. **Minimal Dependencies** — Only AndroidX, Material, and Kotlin Coroutines
 7. **Bundled Fonts** — No Google Fonts Provider dependency (OFL 1.1 licensed)
+8. **FOSS-only STUN servers** — No Google STUN servers in default configuration
 
 ### F-Droid Metadata
 
@@ -143,15 +157,17 @@ The F-Droid metadata file is at `metadata/org.onionroute.lite.yml`. To submit:
 
 1. Fork [fdroiddata](https://gitlab.com/fdroid/fdroiddata)
 2. Copy `metadata/org.onionroute.lite.yml` to `metadata/`
-3. Submit a merge request
-4. F-Droid maintainers will review and build
+3. Replace `REPLACE_WITH_FULL_COMMIT_HASH` with the actual commit SHA
+4. Submit a merge request
+5. F-Droid maintainers will review and build
 
 ### Anti-Features
 
 This app declares `NonFreeNet` because:
 - Tor network relies on volunteer-run relays (free software infrastructure)
-- Snowflake connects to STUN servers (Google, etc.) for WebRTC signaling
+- Snowflake connects to STUN servers for WebRTC signaling (FOSS-only servers by default)
 - obfs4 bridges connect to Tor Project-operated relay IPs
+- WebTunnel bridges connect to Tor Project infrastructure via HTTPS
 
 The Tor network itself is free software, but F-Droid's scanner may flag
 network connections to non-user-controlled servers.
@@ -207,15 +223,20 @@ onionroute-lite/
 │       ├── java/org/onionroute/lite/
 │       │   ├── Constants.kt            # All app constants
 │       │   ├── MainActivity.kt         # Main UI
+│       │   ├── KillSwitch.kt           # Kill switch logic
 │       │   ├── service/
 │       │   │   ├── TorService.kt       # Foreground service (core)
 │       │   │   ├── TorVpnService.kt    # VPN routing service
+│       │   │   ├── AppSelectionManager.kt # Per-app routing
+│       │   │   ├── KindnessService.kt  # Snowflake proxy service
+│       │   │   ├── TorQuickTileService.kt # Quick Settings tile
 │       │   │   └── BootReceiver.kt     # Auto-start on boot
 │       │   ├── tor/
 │       │   │   ├── TorProcessManager.kt # Manages tor binary
 │       │   │   ├── TorControlConnection.kt # Control port client
 │       │   │   ├── BandwidthTracker.kt # Bandwidth stats
-│       │   │   └── BridgeConfig.kt     # Bridge configuration
+│       │   │   ├── BridgeConfig.kt     # Bridge configuration
+│       │   │   └── WebTunnelConfig.kt  # WebTunnel configuration
 │       │   └── ui/
 │       │       ├── Navigation.kt       # Screen navigation
 │       │       ├── screens/            # Compose screens
@@ -225,19 +246,20 @@ onionroute-lite/
 │       │   ├── values/{strings,colors,styles}.xml
 │       │   ├── drawable/                # Vector icons
 │       │   └── xml/tor_vpn_config.xml
-│       └── jniLibs/armeabi-v7a/        # Native binaries (built from source)
+│       └── jniLibs/<abi>/             # Native binaries (built from source)
 │           ├── libtor.so
 │           ├── libobfs4proxy.so
 │           ├── libsnowflake.so
+│           ├── libsnowflake-proxy.so
 │           └── libtun2socks.so
 ├── scripts/
 │   ├── build-all.sh                    # Build all native binaries
 │   ├── build-tor.sh                    # Build tor daemon
 │   ├── build-obfs4.sh                  # Build obfs4proxy
-│   ├── build-snowflake.sh              # Build snowflake client
+│   ├── build-snowflake.sh              # Build snowflake client + proxy
 │   └── build-tun2socks.sh              # Build hev-socks5-tunnel
 ├── metadata/
-│   └── org.onionroute.lite.yml                 # F-Droid metadata
+│   └── org.onionroute.lite.yml         # F-Droid metadata
 ├── fastlane/
 │   └── metadata/android/en-US/         # F-Droid store listing
 ├── build.gradle                        # Root build config

@@ -100,8 +100,8 @@ export SYSROOT="${TOOLCHAIN}/sysroot"
 export ANDROID_NDK_ROOT="${NDK_PATH}"
 
 # Security hardening flags — ENABLED for F-Droid compliance
-export CFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D__ANDROID_API__=${API}"
-export LDFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -Wl,-z,relro -Wl,-z,now"
+export CFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D__ANDROID_API__=${API} -ffile-prefix-map=${BUILD_DIR}=."
+export LDFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -Wl,-z,relro -Wl,-z,now -Wl,--build-id=none"
 
 # ── Verify NDK ───────────────────────────────────────────────
 if [ ! -d "${TOOLCHAIN}" ]; then
