@@ -96,6 +96,7 @@ echo "Building for ${ABI}..."
 "${NDK_BUILD}" \
     -j$(nproc) \
     NDK_PROJECT_PATH=. \
+    APP_BUILD_SCRIPT=Android.mk \
     APP_ABI="${ABI}" \
     APP_PLATFORM=android-23 \
     APP_OPTIM=release
