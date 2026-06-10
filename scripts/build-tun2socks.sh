@@ -103,7 +103,8 @@ echo "Building for ${ABI}..."
 
 # ── Copy from correct ABI-specific output ────────────────────
 # ndk-build places outputs in libs/{abi}/ directory
-HEV_OUTPUT="${HEV_DIR}/libs/${ABI}/hev-socks5-tunnel"
+# The output is a shared library: libhev-socks5-tunnel.so
+HEV_OUTPUT="${HEV_DIR}/libs/${ABI}/libhev-socks5-tunnel.so"
 
 if [ ! -f "${HEV_OUTPUT}" ]; then
     echo "ERROR: Built binary not found at ${HEV_OUTPUT}"
