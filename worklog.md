@@ -75,3 +75,30 @@ Stage Summary:
 - All 10 F-Droid compliance issues fixed and verified
 - Code pushed to https://github.com/darkmaster0345/Onionroute-Lite
 - Remaining for F-Droid MR: replace REPLACE_WITH_FULL_COMMIT_HASH with actual SHA at MR time
+
+---
+Task ID: 2
+Agent: main
+Task: Fix CI build failures and APK bugs, iterate until APK builds
+
+Work Log:
+- Fixed build-tor.sh: moved BUILD_DIR definition before CFLAGS (unbound variable error)
+- Removed corrupt PNG files (JPEG data with .png extension) causing AAPT failure
+- Removed unused resource files (bg_card.xml, bg_connect_button.xml, activity_main.xml)
+- Fixed C-01: Set debuggable false in release build type
+- Fixed C-03: Set useLegacyPackaging=true in packagingOptions for PIE executables
+- Fixed W-01: Added release/AndroidManifest.xml to remove PreviewActivity
+- Fixed W-03: Added release/AndroidManifest.xml to remove ProfileInstallReceiver
+- Fixed W-07: Removed unused/malformed tor_vpn_config.xml
+- Fixed W-08: Added ProGuard rules for PreviewActivity and ProfileInstallReceiver
+- Fixed Gradle error: jniLibs.useLegacyPackaging only valid in packagingOptions, not buildTypes
+- Updated .gitignore for testing artifacts
+- Added BUGS.md with full static analysis report
+- CI build passes: APK generated for all 5 ABIs (armeabi-v7a, arm64-v8a, x86, x86_64, universal)
+
+Stage Summary:
+- CI now passes with all bug fixes applied
+- APK is no longer debuggable (C-01 fixed)
+- Native binaries will be extracted correctly (C-03 fixed)
+- Debug components removed from release (W-01, W-03 fixed)
+- Commits: bbbfd58, 36693c4, 67665dc, 9772ae6 (all pushed to main)
