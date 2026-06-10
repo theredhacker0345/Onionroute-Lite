@@ -50,3 +50,28 @@ Stage Summary:
 - GitHub links updated to darkmaster0345/tor-lite
 - Cleaned repo: removed prebuilt APK, build artifacts, empty dirs, unused XML
 - Fastlane metadata completed with changelog
+
+---
+Task ID: 1
+Agent: main
+Task: Fix all F-Droid compliance issues and push to GitHub
+
+Work Log:
+- Removed legacy org.torlite/ (17 files) and org.phantomvpn/ (11 files) packages from source tree
+- Deleted legacy metadata/org.torlite.yml
+- Added Google STUN server comment cleanup in Constants.kt (replaced literal reference with generic mention)
+- Updated F-Droid metadata (org.onionroute.lite.yml): all 4 ABIs, 20 scanignore entries, reproducibility notes
+- Added Go reproducibility flags to build-snowflake.sh and build-obfs4.sh: -buildid=, -buildvcs=false
+- Added C reproducibility flags to build-tor.sh: -ffile-prefix-map, -Wl,--build-id=none
+- Fixed build-tun2socks.sh license comment: Apache-2.0 → GPL-3.0
+- Aligned NDK version to r26d across all build scripts (previously r25c/r26d mismatch)
+- Updated README: correct Tor 0.4.9.9, hev-socks5-tunnel 2.15.0, added all new features
+- Updated fastlane metadata: v1.1.0 features, short/full description, changelog/2.txt
+- Updated .gitignore header to OnionRoute Lite
+- Verified all fixes: zero Google STUN references, zero legacy package references, zero r25c references
+- Committed and pushed to GitHub (5301f9c)
+
+Stage Summary:
+- All 10 F-Droid compliance issues fixed and verified
+- Code pushed to https://github.com/darkmaster0345/Onionroute-Lite
+- Remaining for F-Droid MR: replace REPLACE_WITH_FULL_COMMIT_HASH with actual SHA at MR time
