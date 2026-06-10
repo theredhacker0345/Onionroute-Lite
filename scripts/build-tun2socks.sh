@@ -15,12 +15,12 @@
 # hev-socks5-tunnel uses ndk-build which natively supports
 # multiple ABIs via APP_ABI in Application.mk.
 #
-# License: GPLv3 (F-Droid compatible)
+# License: Apache-2.0 (F-Droid compatible)
 # Source: https://github.com/heiher/hev-socks5-tunnel
 #
 # Prerequisites:
-#   - Android NDK r25c
-#   - Git, Make
+#   - Android NDK r25c+
+#   - Git
 #
 # Usage:
 #   ./build-tun2socks.sh [ABI] [NDK_PATH] [OUTPUT_DIR]
@@ -29,6 +29,7 @@
 #
 # F-Droid notes:
 #   - Source is cloned from git with pinned tag
+#   - Submodules are initialized recursively for third-party deps
 #   - Uses NDK's ndk-build system
 #   - No downloads of prebuilt binaries
 # ══════════════════════════════════════════════════════════════
@@ -39,7 +40,7 @@ set -euo pipefail
 ABI="${1:-armeabi-v7a}"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-/opt/android-ndk}}"
 OUTPUT_DIR="${3:-./app/src/main/jniLibs/${ABI}}"
-HEV_VERSION="3.0.5"
+HEV_VERSION="2.15.0"
 
 # ── Validate ABI ─────────────────────────────────────────────
 case "${ABI}" in
@@ -57,12 +58,19 @@ echo "════════════════════════�
 echo " Building hev-socks5-tunnel ${HEV_VERSION} for Android ${ABI} "
 echo "════════════════════════════════════════════"
 echo "ABI: ${ABI}"
+echo "NDK: ${NDK_PATH}"
 echo "Output: ${OUTPUT_DIR}"
 echo ""
 
 # ── Verify NDK ───────────────────────────────────────────────
 if [ ! -d "${NDK_PATH}" ]; then
     echo "ERROR: NDK not found at ${NDK_PATH}"
+    exit 1
+fi
+
+NDK_BUILD="${NDK_PATH}/ndk-build"
+if [ ! -f "${NDK_BUILD}" ]; then
+    echo "ERROR: ndk-build not found at ${NDK_BUILD}"
     exit 1
 fi
 
@@ -73,8 +81,8 @@ mkdir -p "${BUILD_DIR}"
 
 HEV_DIR="${BUILD_DIR}/hev-socks5-tunnel"
 if [ ! -d "${HEV_DIR}" ]; then
-    echo "Cloning hev-socks5-tunnel v${HEV_VERSION}..."
-    git clone --depth 1 --branch "${HEV_VERSION}" \
+    echo "Cloning hev-socks5-tunnel v${HEV_VERSION} (with submodules)..."
+    git clone --recurse-submodules --depth 1 --branch "${HEV_VERSION}" \
         https://github.com/heiher/hev-socks5-tunnel.git \
         "${HEV_DIR}"
 else
@@ -83,44 +91,31 @@ fi
 
 cd "${HEV_DIR}"
 
-# ── Patch Application.mk for target ABI ──────────────────────
-# hev-socks5-tunnel uses ndk-build which reads APP_ABI from
-# Application.mk. We set it to build only the requested ABI.
-# This avoids building all ABIs when only one is needed.
-
-APP_MK="${HEV_DIR}/app/src/main/jni/Application.mk"
-if [ -f "${APP_MK}" ]; then
-    echo "Patching Application.mk for APP_ABI=${ABI}..."
-    # Backup original if not already backed up
-    if [ ! -f "${APP_MK}.orig" ]; then
-        cp "${APP_MK}" "${APP_MK}.orig"
-    fi
-    # Replace APP_ABI line with our target
-    sed -i "s/^APP_ABI := .*/APP_ABI := ${ABI}/" "${APP_MK}"
-fi
-
-# ── Build with NDK ───────────────────────────────────────────
+# ── Build with ndk-build ────────────────────────────────────
 echo "Building for ${ABI}..."
-export NDK_HOME="${NDK_PATH}"
-make ndk-build
+"${NDK_BUILD}" \
+    -j$(nproc) \
+    NDK_PROJECT_PATH=. \
+    APP_ABI="${ABI}" \
+    APP_PLATFORM=android-23 \
+    APP_OPTIM=release
 
 # ── Copy from correct ABI-specific output ────────────────────
 # ndk-build places outputs in libs/{abi}/ directory
-HEV_OUTPUT="${HEV_DIR}/app/src/main/libs/${ABI}/hev-socks5-tunnel"
+HEV_OUTPUT="${HEV_DIR}/libs/${ABI}/hev-socks5-tunnel"
 
 if [ ! -f "${HEV_OUTPUT}" ]; then
     echo "ERROR: Built binary not found at ${HEV_OUTPUT}"
+    echo "Checking alternative paths..."
+    # Try to find the output
+    find "${HEV_DIR}/libs" -type f -name "hev-socks5-tunnel" 2>/dev/null || true
+    find "${HEV_DIR}" -maxdepth 3 -type f -name "hev-socks5-tunnel" 2>/dev/null || true
     echo "Check ndk-build output for errors"
     exit 1
 fi
 
 mkdir -p "${OUTPUT_DIR}"
 cp "${HEV_OUTPUT}" "${OUTPUT_DIR}/libtun2socks.so"
-
-# Restore original Application.mk if we patched it
-if [ -f "${APP_MK}.orig" ]; then
-    cp "${APP_MK}.orig" "${APP_MK}"
-fi
 
 echo "Built: ${OUTPUT_DIR}/libtun2socks.so"
 ls -lh "${OUTPUT_DIR}/libtun2socks.so"
