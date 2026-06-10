@@ -99,7 +99,12 @@ export SYSROOT="${TOOLCHAIN}/sysroot"
 # Without this, Configure falls back to looking for GCC on PATH and fails.
 export ANDROID_NDK_ROOT="${NDK_PATH}"
 
-# Security hardening flags — ENABLED for F-Droid compliance
+# ── Define build directories early (needed for CFLAGS reproducibility flags) ──
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILD_DIR="${SCRIPT_DIR}/../build-native/tor/${ABI}"
+mkdir -p "${BUILD_DIR}"
+
+# Security hardening + reproducibility flags — ENABLED for F-Droid compliance
 export CFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D__ANDROID_API__=${API} -ffile-prefix-map=${BUILD_DIR}=."
 export LDFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -Wl,-z,relro -Wl,-z,now -Wl,--build-id=none"
 
@@ -120,11 +125,6 @@ echo "AR: ${AR}"
 echo "RANLIB: ${RANLIB}"
 echo "STRIP: ${STRIP}"
 echo ""
-
-# ── Download Tor Source ──────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="${SCRIPT_DIR}/../build-native/tor/${ABI}"
-mkdir -p "${BUILD_DIR}"
 
 # ── Create GCC symlinks for OpenSSL ─────────────────────────
 # OpenSSL's android targets hardcode a lookup for
