@@ -67,7 +67,7 @@ jobs:
           chmod +x gradlew
           chmod +x scripts/*.sh
 
-      - name: Build native binaries for armeabi-v7a
+      - name: Build native binaries for armeabi-v7a (debug — fast CI)
         run: |
           NDK_PATH="${{ steps.setup-ndk.outputs.ndk-path }}"
           if [ -z "$NDK_PATH" ] || [ ! -d "$NDK_PATH" ]; then
@@ -140,7 +140,7 @@ jobs:
     name: Build F-Droid Release APK
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     needs: build-debug
 
     steps:
@@ -173,13 +173,44 @@ jobs:
           chmod +x gradlew
           chmod +x scripts/*.sh
 
-      - name: Build native binaries for armeabi-v7a
+      - name: Build native binaries for ALL ABIs (release — full distribution)
         run: |
           NDK_PATH="${{ steps.setup-ndk.outputs.ndk-path }}"
           if [ -z "$NDK_PATH" ] || [ ! -d "$NDK_PATH" ]; then
             NDK_PATH=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | head -1)
           fi
-          ./scripts/build-all.sh armeabi-v7a "$NDK_PATH"
+          echo "Building all 4 ABIs for release..."
+          ./scripts/build-all.sh all "$NDK_PATH"
+
+      - name: Verify all ABI native binaries
+        run: |
+          FAILED=0
+          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+            echo ""
+            echo "=== Checking $ABI ==="
+            for lib in libtor.so libobfs4proxy.so libsnowflake.so libtun2socks.so libsnowflake-proxy.so; do
+              FILE="app/src/main/jniLibs/$ABI/$lib"
+              if [ ! -f "$FILE" ]; then
+                echo "  ERROR: $ABI/$lib not found!"
+                FAILED=1
+                continue
+              fi
+              SIZE=$(stat -c%s "$FILE" 2>/dev/null || echo "0")
+              if [ "$SIZE" -lt 1000 ]; then
+                echo "  ERROR: $ABI/$lib is only ${SIZE} bytes (placeholder?)!"
+                FAILED=1
+              else
+                echo "  OK: $ABI/$lib ($SIZE bytes)"
+              fi
+            done
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "Native binary build FAILED — some ABIs are incomplete"
+            exit 1
+          fi
+          echo ""
+          echo "All 4 ABIs verified successfully!"
 
       - name: Build F-Droid Release APK
         run: ./gradlew assembleFdroidRelease --no-daemon --stacktrace
@@ -195,16 +226,15 @@ jobs:
             echo "OK: No DependencyInfoBlock in APK"
           fi
 
-      - name: Report APK size
+      - name: Report all APK sizes
         run: |
-          APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
-          if [ -n "$APK" ]; then
-            SIZE=$(stat -c%s "$APK" 2>/dev/null || stat -f%z "$APK" 2>/dev/null)
-            echo "APK: $APK"
-            echo "Size: $SIZE bytes ($(echo "scale=1; $SIZE / 1048576" | bc) MB)"
-          fi
+          echo "=== Per-ABI Release APKs ==="
+          find app/build/outputs/apk -name "*.apk" -exec sh -c '
+            SIZE=$(stat -c%s "$1" 2>/dev/null || stat -f%z "$1" 2>/dev/null)
+            echo "APK: $1 — Size: $SIZE bytes ($(echo "scale=1; $SIZE / 1048576" | bc) MB)"
+          ' _ {} \;
 
-      - name: Upload Release APK
+      - name: Upload Release APKs
         uses: actions/upload-artifact@v4
         with:
           name: onionroute-lite-fdroid-release
@@ -221,6 +251,22 @@ jobs:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: OnionRoute Lite ${{ steps.version.outputs.VERSION }}
           draft: true
+          body: |
+            ## OnionRoute Lite ${{ steps.version.outputs.VERSION }}
+
+            Per-ABI APKs built from source with F-Droid compliance.
+
+            | APK | Architecture | Devices |
+            |-----|-------------|---------|
+            | `*-armeabi-v7a-*` | 32-bit ARM | Legacy devices (Galaxy Grand Prime, etc.) |
+            | `*-arm64-v8a-*` | 64-bit ARM | Modern phones |
+            | `*-x86-*` | 32-bit Intel | Emulators |
+            | `*-x86_64-*` | 64-bit Intel | Emulators |
+            | `*-universal-*` | All | Larger, compatible with everything |
+
+            **Native binaries included:** libtor.so, libobfs4proxy.so, libsnowflake.so, libsnowflake-proxy.so, libtun2socks.so
+
+            Built with NDK r26d, Go ${{ env.GO_VERSION }}, Tor 0.4.9.9
           files: |
             app/build/outputs/apk/fdroid/release/*.apk
         env:
