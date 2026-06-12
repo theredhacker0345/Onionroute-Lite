@@ -37,7 +37,6 @@ Description: |
   * obfs4 bridge support with built-in default bridges
   * WebTunnel bridge support (HTTPS-mimicking transport)
   * Custom bridge import via QR code scan or paste
-  * Tor 0.4.9.9 with OpenSSL 3.0.20 LTS
   * .onion site access (automatic via Tor routing)
   * Real-time bandwidth monitoring with speed graph
   * Kill switch: block internet if Tor disconnects
@@ -64,10 +63,6 @@ Repo: https://github.com/darkmaster0345/Onionroute-Lite.git
 # IMPORTANT: commit must be a full 40-char SHA hash, NOT a tag.
 # Run: git rev-parse HEAD   to get the current hash.
 # F-Droid will NOT accept tags in the commit field.
-#
-# This build uses per-ABI entries with version code offsets
-# matching the app/build.gradle splits configuration:
-#   armeabi-v7a: +0, arm64-v8a: +1, x86: +2, x86_64: +3
 
 Builds:
   - versionName: '1.1.0'
@@ -76,7 +71,7 @@ Builds:
     subdir: app
     gradle:
       - fdroid
-    ndk: r26d
+    ndk: r25c
     prebuild:
       - chmod +x ../scripts/build-all.sh
       - chmod +x ../scripts/build-tor.sh
@@ -85,30 +80,12 @@ Builds:
       - chmod +x ../scripts/build-tun2socks.sh
       - cd ..
       - ./scripts/build-all.sh armeabi-v7a $$NDK$$ app/src/main/jniLibs/armeabi-v7a
-      - ./scripts/build-all.sh arm64-v8a $$NDK$$ app/src/main/jniLibs/arm64-v8a
-      - ./scripts/build-all.sh x86 $$NDK$$ app/src/main/jniLibs/x86
-      - ./scripts/build-all.sh x86_64 $$NDK$$ app/src/main/jniLibs/x86_64
     scanignore:
       - app/src/main/jniLibs/armeabi-v7a/libtor.so
       - app/src/main/jniLibs/armeabi-v7a/libobfs4proxy.so
       - app/src/main/jniLibs/armeabi-v7a/libsnowflake.so
       - app/src/main/jniLibs/armeabi-v7a/libsnowflake-proxy.so
       - app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
-      - app/src/main/jniLibs/arm64-v8a/libtor.so
-      - app/src/main/jniLibs/arm64-v8a/libobfs4proxy.so
-      - app/src/main/jniLibs/arm64-v8a/libsnowflake.so
-      - app/src/main/jniLibs/arm64-v8a/libsnowflake-proxy.so
-      - app/src/main/jniLibs/arm64-v8a/libtun2socks.so
-      - app/src/main/jniLibs/x86/libtor.so
-      - app/src/main/jniLibs/x86/libobfs4proxy.so
-      - app/src/main/jniLibs/x86/libsnowflake.so
-      - app/src/main/jniLibs/x86/libsnowflake-proxy.so
-      - app/src/main/jniLibs/x86/libtun2socks.so
-      - app/src/main/jniLibs/x86_64/libtor.so
-      - app/src/main/jniLibs/x86_64/libobfs4proxy.so
-      - app/src/main/jniLibs/x86_64/libsnowflake.so
-      - app/src/main/jniLibs/x86_64/libsnowflake-proxy.so
-      - app/src/main/jniLibs/x86_64/libtun2socks.so
 
 MaintainerNotes: |
   Native binaries (libtor.so, libobfs4proxy.so, libsnowflake.so,
@@ -122,15 +99,6 @@ MaintainerNotes: |
   All dependencies are FOSS (Apache-2.0) from Maven Central and
   Google's Maven repository. No Google Play Services, Firebase,
   or tracking SDKs are used.
-
-  Native dependency licenses:
-  - Tor 0.4.9.9 (BSD-3-Clause)
-  - OpenSSL 3.0.20 (Apache-2.0)
-  - libevent 2.1.12-stable (BSD-3-Clause)
-  - zlib 1.3.1 (Zlib)
-  - obfs4proxy 0.0.14 (BSD-3-Clause)
-  - Snowflake 2.10.1 (BSD-3-Clause)
-  - hev-socks5-tunnel 2.15.0 (GPL-3.0)
 
   Bundled fonts under SIL Open Font License 1.1:
   - Syne (OFL 1.1) by Lucas Descroix
@@ -151,10 +119,6 @@ MaintainerNotes: |
 
   The app is NOT useless without Tor — it can still function as a
   local SOCKS5/HTTP proxy client for any SOCKS5 service.
-
-  Build scripts use Go reproducibility flags: -trimpath,
-  -ldflags="-buildid=", -buildvcs=false. C builds use
-  -ffile-prefix-map and --build-id=none for reproducibility.
 
 AntiFeatures:
   - NonFreeNet

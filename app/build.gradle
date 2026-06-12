@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId "org.onionroute.lite"
         minSdk 23          // Android 6.0.1 — Samsung Grand Prime Plus
-        targetSdk 34       // API 34 for foregroundServiceType=specialUse
+        targetSdk 33       // API 33 for F-Droid + POST_NOTIFICATIONS compat
         versionCode 2
         versionName "1.1.0"
 
@@ -79,16 +79,11 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 
-            // F-Droid will re-sign with their own key; debug keystore is fine for CI builds
+            // Use debug keystore for now (F-Droid will re-sign)
             signingConfig signingConfigs.debug
-
-            // CRITICAL: Do NOT mark release as debuggable
-            debuggable false
         }
         debug {
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false
             signingConfig signingConfigs.debug
         }
     }
@@ -140,9 +135,11 @@ android {
             ]
         }
         jniLibs {
-            // Must use legacy packaging (extract .so files) because our native
-            // binaries are PIE executables that run as separate processes.
-            // They must be extracted to a filesystem path for Runtime.exec().
+            // MUST use legacy packaging because our native binaries (libtor.so,
+            // libobfs4proxy.so, etc.) are PIE executables run via ProcessBuilder,
+            // not shared libraries loaded via System.loadLibrary(). Android must
+            // extract them to disk so we can exec() them. Combined with
+            // android:extractNativeLibs="true" in the manifest.
             useLegacyPackaging = true
         }
     }

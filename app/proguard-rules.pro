@@ -80,16 +80,6 @@
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
-# ── Remove Compose PreviewActivity from release builds (W-01) ───
--assumenosideeffects class androidx.compose.ui.tooling.PreviewActivity {
-    *;
-}
-
-# ── Remove ProfileInstaller from release builds (W-03) ──────────
--assumenosideeffects class androidx.profileinstaller.ProfileInstallReceiver {
-    *;
-}
-
 # ── Suppress warnings ─────────────────────────────────────────
 -dontwarn org.onionroute.lite.**
 -dontwarn kotlinx.coroutines.**

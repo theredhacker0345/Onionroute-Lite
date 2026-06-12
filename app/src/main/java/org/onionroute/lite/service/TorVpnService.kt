@@ -255,7 +255,16 @@ class TorVpnService : VpnService() {
             return
         }
 
-        val tun2socksPath = "${applicationInfo.dataDir}/${Constants.EXEC_TUN2SOCKS}"
+        // Execute libtun2socks.so directly from nativeLibraryDir.
+        // The app's filesDir is mounted noexec on Android 10+,
+        // so we must execute from nativeLibraryDir which has exec permission.
+        val tun2socksPath = "${applicationInfo.nativeLibraryDir}/${Constants.BINARY_TUN2SOCKS}"
+        val tun2socksFile = java.io.File(tun2socksPath)
+        if (!tun2socksFile.exists()) {
+            Log.e(tag, "libtun2socks.so not found at $tun2socksPath")
+            return
+        }
+
         val socksAddr = "127.0.0.1:${Constants.TOR_SOCKS_PORT}"
         val dnsAddr = "127.0.0.1:${Constants.TOR_DNS_PORT}"
 
@@ -270,7 +279,7 @@ class TorVpnService : VpnService() {
             tun2socksProcess = processBuilder.start()
             Log.i(tag, "tun2socks started — fd=$fd, proxy=$socksAddr, dns=$dnsAddr")
         } catch (e: Exception) {
-            Log.e(tag, "Failed to start tun2socks", e)
+            Log.e(tag, "Failed to start tun2socks from $tun2socksPath", e)
         }
     }
 

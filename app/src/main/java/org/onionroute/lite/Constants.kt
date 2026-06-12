@@ -66,7 +66,6 @@ object Constants {
     const val ACTION_STOP_VPN = "org.onionroute.lite.STOP_VPN"
     const val ACTION_TOGGLE_SNOWFLAKE = "org.onionroute.lite.TOGGLE_SNOWFLAKE"
     const val ACTION_TOGGLE_OBFS4 = "org.onionroute.lite.TOGGLE_OBFS4"
-    const val ACTION_TOGGLE_WEBTUNNEL = "org.onionroute.lite.TOGGLE_WEBTUNNEL"
     const val ACTION_START_KINDNESS = "org.onionroute.lite.START_KINDNESS"
     const val ACTION_STOP_KINDNESS = "org.onionroute.lite.STOP_KINDNESS"
     const val ACTION_STATUS_UPDATE = "org.onionroute.lite.STATUS_UPDATE"
@@ -96,10 +95,11 @@ object Constants {
     const val SNOWFLAKE_BROKER_URL = "https://snowflake-broker.torproject.net/"
     const val SNOWFLAKE_FRONT_DOMAIN = "cdn.sstatic.net"
     // STUN servers for Snowflake WebRTC NAT traversal.
-    // Using FOSS-friendly STUN servers only. Non-free STUN
-    // servers (e.g. Google's) are excluded to avoid F-Droid
-    // NonFreeNet AntiFeature. Users can add them manually
-    // in bridge settings if needed.
+    // Using FOSS-friendly STUN servers where possible.
+    // stun.l.google.com is excluded from the default list because
+    // it is a non-free network service (Google STUN), which would
+    // trigger F-Droid NonFreeNet AntiFeature. Users can add it
+    // manually in bridge settings if needed.
     const val SNOWFLAKE_ICE_SERVERS = "stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478"
 
     // ── Default obfs4 Bridges ─────────────────────────────────

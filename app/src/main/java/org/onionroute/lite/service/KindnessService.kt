@@ -102,10 +102,10 @@ class KindnessService : Service() {
         Log.i(tag, "Starting Snowflake proxy…")
 
         try {
-            // Install the proxy binary from native lib directory
-            val proxyBinary = installProxyBinary()
+            // Execute the proxy binary directly from nativeLibraryDir
+            val proxyBinary = getProxyBinary()
             if (proxyBinary == null) {
-                Log.e(tag, "Failed to install snowflake-proxy binary")
+                Log.e(tag, "Failed to locate snowflake-proxy binary")
                 updateNotification("Snowflake proxy — binary not found")
                 broadcastKindnessStatus(false)
                 return
@@ -171,30 +171,29 @@ class KindnessService : Service() {
     // ── Binary Installation ───────────────────────────────────────
 
     /**
-     * Installs the snowflake-proxy binary from the native library directory
-     * to the app's data directory where it can be executed.
+     * Executes the snowflake-proxy binary directly from nativeLibraryDir.
      *
-     * @return The installed File, or null if the native library was not found
+     * With android:extractNativeLibs="true", Android extracts the .so files
+     * to nativeLibraryDir on install. We execute them directly from there —
+     * no copying to filesDir (which is mounted noexec on Android 10+).
+     *
+     * @return The executable File in nativeLibraryDir, or null if not found
      */
-    private fun installProxyBinary(): File? {
+    private fun getProxyBinary(): File? {
         val nativeLibDir = applicationInfo.nativeLibraryDir
-        val appDataDir = filesDir.absolutePath
+        val binary = File(nativeLibDir, Constants.BINARY_SNOWFLAKE_PROXY)
 
-        val source = File(nativeLibDir, Constants.BINARY_SNOWFLAKE_PROXY)
-        val target = File(appDataDir, Constants.EXEC_SNOWFLAKE_PROXY)
-
-        if (!source.exists()) {
-            Log.w(tag, "Native library not found: ${Constants.BINARY_SNOWFLAKE_PROXY}")
+        if (!binary.exists()) {
+            Log.e(tag, "libsnowflake-proxy.so not found in $nativeLibDir")
             return null
         }
 
-        if (!target.exists() || source.lastModified() > target.lastModified()) {
-            source.copyTo(target, overwrite = true)
-            target.setExecutable(true, false)
-            Log.d(tag, "Installed binary: ${Constants.EXEC_SNOWFLAKE_PROXY}")
+        // Ensure execute permission (should already be set, but be safe)
+        if (!binary.canExecute()) {
+            binary.setExecutable(true, false)
         }
-
-        return target
+        Log.d(tag, "Found snowflake-proxy binary: ${binary.absolutePath}")
+        return binary
     }
 
     // ── Process Monitoring ────────────────────────────────────────

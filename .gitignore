@@ -45,9 +45,27 @@ local.properties
 !app/debug.keystore
 
 # ── Manual Build Artifacts ──────────────────────────────────
-# The build_manual/ directory contains intermediate build files
-# that should NOT be committed to the repository
 /build_manual/
+
+# ── Analysis / Testing Artifacts ────────────────────────────
+/apk-extracted/
+node_modules/
+package.json
+package-lock.json
+captcha-*
+signup-*.png
+solve-captcha.js
+test-apk.js
+upload-apk.js
+appetize-signup*.js
+complete-signup.js
+final-signup*.js
+
+# ── Legacy / Deleted Packages ───────────────────────────────
+# These were deleted for F-Droid compliance (Google STUN refs)
+/app/src/main/java/org/torlite/
+/app/src/main/java/org/phantomvpn/
+/metadata/org.torlite.yml
 
 # ── Temp Files ───────────────────────────────────────────────
 *.log
@@ -58,25 +76,3 @@ local.properties
 # ── OS Files ─────────────────────────────────────────────────
 Thumbs.db
 Desktop.ini
-
-# ── Environment / Non-project files ──────────────────────────
-.env
-skills/
-
-# ── Testing / Development artifacts ──────────────────────────
-node_modules/
-package.json
-package-lock.json
-test-apk.js
-upload-apk.js
-*-signup*.js
-solve-captcha.js
-complete-signup.js
-final-signup*.js
-captcha-*
-signup-*.png
-test-screenshots/
-apk-extracted/
-*.mp3
-*.wav
-appetize-key.txt

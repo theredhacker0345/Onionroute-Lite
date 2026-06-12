@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- VPN service configuration (required by Android) -->
+<vpn-profile xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- This file is a placeholder — actual VPN configuration
+         is done programmatically in TorVpnService.kt -->
+</vpn-profile>

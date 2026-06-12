@@ -9,15 +9,6 @@
 #   1. libsnowflake.so       — Snowflake client (pluggable transport)
 #   2. libsnowflake-proxy.so — Snowflake proxy (Kindness Mode)
 #
-# Build approach:
-#   Clones the Snowflake source at a pinned Git tag and builds
-#   from the cloned source. This is the same approach Orbot uses
-#   and is fully F-Droid compliant:
-#     - Source is cloned from Git with a pinned tag (reproducible)
-#     - Dependencies are resolved via the module's own go.mod
-#     - go mod verify checks integrity of all downloaded modules
-#     - No prebuilt binaries are used
-#
 # Supported ABIs:
 #   - armeabi-v7a  (32-bit ARM, GOARCH=arm GOARM=7)
 #   - arm64-v8a    (64-bit ARM, GOARCH=arm64)
@@ -26,7 +17,7 @@
 #
 # Prerequisites:
 #   - Go 1.21+
-#   - Android NDK r26d+
+#   - Android NDK r25c
 #   - Git
 #
 # Usage:
@@ -35,11 +26,9 @@
 #   ./build-snowflake.sh x86 /opt/android-ndk
 #
 # F-Droid notes:
-#   - Source cloned from Git with pinned tag (reproducible)
-#   - go mod verify ensures module integrity
+#   - Uses Go module checksum database for verification
 #   - CGO_ENABLED=1 required for Android compatibility
 #   - PIE enabled for ASLR support
-#   - -trimpath for reproducible builds (strips build paths)
 # ══════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -121,46 +110,36 @@ export CGO_CC="${NDK_CC}"
 export CGO_CFLAGS="${ABI_CFLAGS}"
 export CGO_LDFLAGS="${ABI_LDFLAGS}"
 
-# ── Clone Snowflake source at pinned version ─────────────────
-# F-Droid: Build from source at a pinned Git tag for reproducibility.
-# This avoids the "go mod tidy removes unused deps" issue that
-# breaks the go-get-and-build approach.
+# ── Build in ABI-specific reproducible directory ─────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build-native/snowflake/${ABI}"
 mkdir -p "${BUILD_DIR}"
+cd "${BUILD_DIR}"
 
-SNOWFLAKE_DIR="${BUILD_DIR}/snowflake"
-if [ ! -d "${SNOWFLAKE_DIR}" ]; then
-    echo "Cloning Snowflake v${SNOWFLAKE_VERSION}..."
-    git clone --depth 1 --branch "v${SNOWFLAKE_VERSION}" \
-        https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git \
-        "${SNOWFLAKE_DIR}"
-else
-    echo "Snowflake source already cloned at ${SNOWFLAKE_DIR}"
-fi
+# Initialize Go module with pinned version
+echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
+go mod init onionroute-build/snowflake
+go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2@v${SNOWFLAKE_VERSION}
 
-cd "${SNOWFLAKE_DIR}"
-
-# Verify module integrity (F-Droid: checksum verification)
-echo "Verifying module integrity..."
-go mod verify || echo "WARNING: go mod verify had warnings (non-critical)"
+# Verify all module checksums
+go mod verify
 
 # ── Build 1: Snowflake Client ────────────────────────────────
 echo "Building Snowflake client for ${ABI}..."
-go build -trimpath -ldflags="-s -w -buildid= -extldflags '-pie'" -buildvcs=false \
-    -o "${BUILD_DIR}/snowflake-client" \
-    ./client
+go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+    -o snowflake-client \
+    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/client
 
 # ── Build 2: Snowflake Proxy (Kindness Mode) ────────────────
 echo "Building Snowflake proxy for ${ABI}..."
-go build -trimpath -ldflags="-s -w -buildid= -extldflags '-pie'" -buildvcs=false \
-    -o "${BUILD_DIR}/snowflake-proxy" \
-    ./proxy
+go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+    -o snowflake-proxy \
+    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/proxy
 
-# ── Copy to jniLibs ──────────────────────────────────────────
+# ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"
-cp "${BUILD_DIR}/snowflake-client" "${OUTPUT_DIR}/libsnowflake.so"
-cp "${BUILD_DIR}/snowflake-proxy" "${OUTPUT_DIR}/libsnowflake-proxy.so"
+cp snowflake-client "${OUTPUT_DIR}/libsnowflake.so"
+cp snowflake-proxy "${OUTPUT_DIR}/libsnowflake-proxy.so"
 
 echo "Built: ${OUTPUT_DIR}/libsnowflake.so"
 ls -lh "${OUTPUT_DIR}/libsnowflake.so"

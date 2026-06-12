@@ -10,10 +10,18 @@ import java.io.FileOutputStream
  * Manages the native Tor process lifecycle.
  *
  * Responsible for:
- * - Installing native binaries (libtor.so, libobfs4proxy.so, libsnowflake.so)
+ * - Locating native binaries in the extracted nativeLibraryDir
  * - Generating the torrc configuration file
  * - Starting and stopping the Tor daemon process
  * - Monitoring the Tor process for unexpected exits
+ *
+ * Binary execution strategy:
+ *   Native binaries (libtor.so, libobfs4proxy.so, etc.) are PIE executables
+ *   that must be run via ProcessBuilder. Android only allows executing files
+ *   from the nativeLibraryDir — the app's filesDir is mounted noexec on
+ *   Android 10+. We require android:extractNativeLibs="true" + useLegacyPackaging
+ *   so that Android extracts the .so files to disk where we can exec() them.
+ *   We execute them directly from nativeLibraryDir without copying.
  */
 class TorProcessManager(private val context: Context) {
 
@@ -48,7 +56,7 @@ class TorProcessManager(private val context: Context) {
         }
 
         return try {
-            installBinaries()
+            verifyBinaries()
             generateTorrc(useSnowflake, useObfs4, useWebTunnel)
             startTorProcess()
         } catch (e: Exception) {
@@ -74,31 +82,56 @@ class TorProcessManager(private val context: Context) {
         }
     }
 
-    // ── Binary Installation ───────────────────────────────────────
+    // ── Binary Verification ───────────────────────────────────────
 
-    private fun installBinaries() {
-        val binaries = mapOf(
-            Constants.BINARY_TOR to Constants.EXEC_TOR,
-            Constants.BINARY_OBFS4PROXY to Constants.EXEC_OBFS4PROXY,
-            Constants.BINARY_SNOWFLAKE to Constants.EXEC_SNOWFLAKE,
-            Constants.BINARY_SNOWFLAKE_PROXY to Constants.EXEC_SNOWFLAKE_PROXY,
-            Constants.BINARY_TUN2SOCKS to Constants.EXEC_TUN2SOCKS
+    /**
+     * Verifies that all required native binaries exist in nativeLibraryDir.
+     *
+     * With android:extractNativeLibs="true" and useLegacyPackaging, Android
+     * extracts .so files from the APK to the nativeLibraryDir on install.
+     * We execute them directly from there — no copying to filesDir needed.
+     *
+     * The nativeLibraryDir is the ONLY directory on Android where exec() is
+     * guaranteed to work. The app's filesDir is mounted noexec on Android 10+.
+     */
+    private fun verifyBinaries() {
+        val requiredBinaries = listOf(
+            Constants.BINARY_TOR,
+            Constants.BINARY_OBFS4PROXY,
+            Constants.BINARY_SNOWFLAKE,
+            Constants.BINARY_SNOWFLAKE_PROXY,
+            Constants.BINARY_TUN2SOCKS
         )
 
-        binaries.forEach { (libName, execName) ->
-            val target = File(appDataDir, execName)
-            val source = File(nativeLibDir, libName)
-
-            if (source.exists()) {
-                if (!target.exists() || source.lastModified() > target.lastModified()) {
-                    source.copyTo(target, overwrite = true)
-                    target.setExecutable(true, false)
-                    Log.d(tag, "Installed binary: $execName")
+        var missingCount = 0
+        for (libName in requiredBinaries) {
+            val file = File(nativeLibDir, libName)
+            if (file.exists()) {
+                // Ensure execute permission (should already be set, but be safe)
+                if (!file.canExecute()) {
+                    file.setExecutable(true, false)
                 }
+                Log.d(tag, "Found native binary: $libName (${file.length()} bytes)")
             } else {
-                Log.w(tag, "Native library not found: $libName")
+                Log.e(tag, "CRITICAL: Native binary NOT FOUND: $libName at $nativeLibDir/$libName")
+                missingCount++
             }
         }
+
+        if (missingCount > 0) {
+            Log.e(tag, "$missingCount native binaries missing! nativeLibraryDir=$nativeLibDir")
+            Log.e(tag, "This usually means android:extractNativeLibs is not set to true, " +
+                "or useLegacyPackaging is false, or the .so files are missing from jniLibs/")
+        }
+    }
+
+    /**
+     * Returns the path to a native binary in nativeLibraryDir.
+     * Returns null if the binary doesn't exist.
+     */
+    private fun getBinaryPath(libName: String): String? {
+        val file = File(nativeLibDir, libName)
+        return if (file.exists()) file.absolutePath else null
     }
 
     // ── torrc Generation ──────────────────────────────────────────
@@ -106,6 +139,10 @@ class TorProcessManager(private val context: Context) {
     private fun generateTorrc(useSnowflake: Boolean, useObfs4: Boolean, useWebTunnel: Boolean) {
         val torDataDir = File(appDataDir, Constants.TOR_DATA_DIR)
         if (!torDataDir.exists()) torDataDir.mkdirs()
+
+        // Resolve executable paths from nativeLibraryDir
+        val snowflakePath = getBinaryPath(Constants.BINARY_SNOWFLAKE)
+        val obfs4Path = getBinaryPath(Constants.BINARY_OBFS4PROXY)
 
         val torrcContent = buildString {
             appendLine("# OnionRoute Lite torrc — auto-generated")
@@ -124,22 +161,29 @@ class TorProcessManager(private val context: Context) {
             appendLine("GeoIPv6File $appDataDir/geoip6")
             appendLine()
 
-            if (useSnowflake) {
+            if (useSnowflake && snowflakePath != null) {
                 appendLine("# Snowflake bridge configuration")
-                appendLine("ClientTransportPlugin snowflake exec $appDataDir/${Constants.EXEC_SNOWFLAKE}")
+                appendLine("ClientTransportPlugin snowflake exec $snowflakePath")
                 appendLine("Bridge snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=${Constants.SNOWFLAKE_BROKER_URL} fronts=${Constants.SNOWFLAKE_FRONT_DOMAIN} ice=${Constants.SNOWFLAKE_ICE_SERVERS}")
                 appendLine("UseBridges 1")
                 appendLine()
+            } else if (useSnowflake && snowflakePath == null) {
+                appendLine("# WARNING: Snowflake requested but libsnowflake.so not found")
+                appendLine("# Falling back to direct connection")
+                Log.e(tag, "Snowflake requested but libsnowflake.so not found in $nativeLibDir")
             }
 
-            if (useObfs4) {
+            if (useObfs4 && obfs4Path != null) {
                 appendLine("# obfs4 bridge configuration")
-                appendLine("ClientTransportPlugin obfs4 exec $appDataDir/${Constants.EXEC_OBFS4PROXY}")
+                appendLine("ClientTransportPlugin obfs4 exec $obfs4Path")
                 Constants.DEFAULT_OBFS4_BRIDGES.forEach { bridge ->
                     appendLine("Bridge $bridge")
                 }
                 appendLine("UseBridges 1")
                 appendLine()
+            } else if (useObfs4 && obfs4Path == null) {
+                appendLine("# WARNING: obfs4 requested but libobfs4proxy.so not found")
+                Log.e(tag, "obfs4 requested but libobfs4proxy.so not found in $nativeLibDir")
             }
 
             if (useWebTunnel) {
@@ -160,9 +204,10 @@ class TorProcessManager(private val context: Context) {
     // ── Process Management ────────────────────────────────────────
 
     private fun startTorProcess(): Boolean {
-        val torExecutable = File(appDataDir, Constants.EXEC_TOR)
-        if (!torExecutable.exists()) {
-            Log.e(tag, "Tor executable not found at ${torExecutable.absolutePath}")
+        // Execute libtor.so directly from nativeLibraryDir
+        val torPath = getBinaryPath(Constants.BINARY_TOR)
+        if (torPath == null) {
+            Log.e(tag, "libtor.so not found in $nativeLibDir — cannot start Tor")
             return false
         }
 
@@ -170,7 +215,7 @@ class TorProcessManager(private val context: Context) {
 
         try {
             val processBuilder = ProcessBuilder(
-                torExecutable.absolutePath,
+                torPath,
                 "-f", torrcPath,
                 "--verify-config"
             )
@@ -182,13 +227,18 @@ class TorProcessManager(private val context: Context) {
 
             if (verifyResult != 0) {
                 Log.e(tag, "Tor config verification failed (exit code $verifyResult)")
+                // Read error output for debugging
+                val errorOutput = verifyProcess.inputStream.bufferedReader().readText()
+                if (errorOutput.isNotBlank()) {
+                    Log.e(tag, "Tor verify output: $errorOutput")
+                }
                 return false
             }
 
-            Log.i(tag, "Tor config verified — launching daemon")
+            Log.i(tag, "Tor config verified — launching daemon from $torPath")
 
             val daemonBuilder = ProcessBuilder(
-                torExecutable.absolutePath,
+                torPath,
                 "-f", torrcPath
             )
             daemonBuilder.environment()["HOME"] = appDataDir
@@ -201,7 +251,7 @@ class TorProcessManager(private val context: Context) {
             return true
 
         } catch (e: Exception) {
-            Log.e(tag, "Failed to start Tor process", e)
+            Log.e(tag, "Failed to start Tor process from $torPath", e)
             return false
         }
     }
