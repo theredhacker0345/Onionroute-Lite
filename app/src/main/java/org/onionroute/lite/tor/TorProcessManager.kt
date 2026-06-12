@@ -10,7 +10,7 @@ import java.io.FileOutputStream
  * Manages the native Tor process lifecycle.
  *
  * Responsible for:
- * - Locating native binaries in the extracted nativeLibraryDir
+ * - Locating and verifying native binaries in the extracted nativeLibraryDir
  * - Generating the torrc configuration file
  * - Starting and stopping the Tor daemon process
  * - Monitoring the Tor process for unexpected exits
@@ -39,6 +39,11 @@ class TorProcessManager(private val context: Context) {
     private val nativeLibDir: String
         get() = context.applicationInfo.nativeLibraryDir
 
+    /** Minimum valid binary size in bytes. Anything smaller is a placeholder/stub. */
+    companion object {
+        private const val MIN_BINARY_SIZE = 1024L
+    }
+
     // ── Public API ────────────────────────────────────────────────
 
     /**
@@ -56,7 +61,10 @@ class TorProcessManager(private val context: Context) {
         }
 
         return try {
-            verifyBinaries()
+            if (!verifyBinaries()) {
+                Log.e(tag, "Native binary verification failed — cannot start Tor")
+                return false
+            }
             generateTorrc(useSnowflake, useObfs4, useWebTunnel)
             startTorProcess()
         } catch (e: Exception) {
@@ -85,7 +93,8 @@ class TorProcessManager(private val context: Context) {
     // ── Binary Verification ───────────────────────────────────────
 
     /**
-     * Verifies that all required native binaries exist in nativeLibraryDir.
+     * Verifies that all required native binaries exist in nativeLibraryDir
+     * and are real compiled binaries (not placeholder stubs).
      *
      * With android:extractNativeLibs="true" and useLegacyPackaging, Android
      * extracts .so files from the APK to the nativeLibraryDir on install.
@@ -93,8 +102,10 @@ class TorProcessManager(private val context: Context) {
      *
      * The nativeLibraryDir is the ONLY directory on Android where exec() is
      * guaranteed to work. The app's filesDir is mounted noexec on Android 10+.
+     *
+     * @return true if the critical Tor binary was found and is valid
      */
-    private fun verifyBinaries() {
+    private fun verifyBinaries(): Boolean {
         val requiredBinaries = listOf(
             Constants.BINARY_TOR,
             Constants.BINARY_OBFS4PROXY,
@@ -103,35 +114,69 @@ class TorProcessManager(private val context: Context) {
             Constants.BINARY_TUN2SOCKS
         )
 
+        var torValid = false
         var missingCount = 0
+        var stubCount = 0
+
         for (libName in requiredBinaries) {
             val file = File(nativeLibDir, libName)
-            if (file.exists()) {
-                // Ensure execute permission (should already be set, but be safe)
-                if (!file.canExecute()) {
-                    file.setExecutable(true, false)
-                }
-                Log.d(tag, "Found native binary: $libName (${file.length()} bytes)")
-            } else {
+            if (!file.exists()) {
                 Log.e(tag, "CRITICAL: Native binary NOT FOUND: $libName at $nativeLibDir/$libName")
                 missingCount++
+                continue
+            }
+
+            // Validate binary is a real compiled binary, not a placeholder stub
+            val size = file.length()
+            if (size < MIN_BINARY_SIZE) {
+                Log.e(tag, "CRITICAL: $libName is only $size bytes — rejecting as placeholder/stub")
+                Log.e(tag, "Real binaries should be at least several hundred KB. " +
+                    "Rebuild with: ./scripts/build-all.sh")
+                stubCount++
+                continue
+            }
+
+            // Ensure execute permission (should already be set, but be safe)
+            if (!file.canExecute()) {
+                val set = file.setExecutable(true, false)
+                Log.d(tag, "Set executable on $libName: $set")
+            }
+
+            // Also chmod as safety net for certain Android versions/filesystems
+            try {
+                Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath)).waitFor()
+            } catch (e: Exception) {
+                Log.w(tag, "chmod fallback failed for ${file.absolutePath}: ${e.message}")
+            }
+
+            Log.d(tag, "Found native binary: $libName ($size bytes, executable=${file.canExecute()})")
+
+            if (libName == Constants.BINARY_TOR) {
+                torValid = true
             }
         }
 
-        if (missingCount > 0) {
-            Log.e(tag, "$missingCount native binaries missing! nativeLibraryDir=$nativeLibDir")
-            Log.e(tag, "This usually means android:extractNativeLibs is not set to true, " +
-                "or useLegacyPackaging is false, or the .so files are missing from jniLibs/")
+        if (missingCount > 0 || stubCount > 0) {
+            Log.e(tag, "$missingCount missing, $stubCount stub binaries. nativeLibraryDir=$nativeLibDir")
+            Log.e(tag, "Ensure android:extractNativeLibs=true, useLegacyPackaging=true, " +
+                "and jniLibs/ contains real compiled .so files (not placeholders)")
         }
+
+        return torValid
     }
 
     /**
      * Returns the path to a native binary in nativeLibraryDir.
-     * Returns null if the binary doesn't exist.
+     * Returns null if the binary doesn't exist or is a placeholder stub.
      */
     private fun getBinaryPath(libName: String): String? {
         val file = File(nativeLibDir, libName)
-        return if (file.exists()) file.absolutePath else null
+        if (!file.exists()) return null
+        if (file.length() < MIN_BINARY_SIZE) {
+            Log.w(tag, "Skipping stub binary: $libName (${file.length()} bytes)")
+            return null
+        }
+        return file.absolutePath
     }
 
     // ── torrc Generation ──────────────────────────────────────────
@@ -157,8 +202,19 @@ class TorProcessManager(private val context: Context) {
             appendLine("StrictNodes 1")
             appendLine("DataDirectory ${torDataDir.absolutePath}")
             appendLine("Log notice stdout")
-            appendLine("GeoIPFile $appDataDir/geoip")
-            appendLine("GeoIPv6File $appDataDir/geoip6")
+
+            // GeoIP files are optional — Tor works without them but logs warnings.
+            // Only include the directives if the files exist to avoid startup errors.
+            val geoipFile = File(appDataDir, "geoip")
+            val geoip6File = File(appDataDir, "geoip6")
+            if (geoipFile.exists()) {
+                appendLine("GeoIPFile ${geoipFile.absolutePath}")
+            } else {
+                Log.w(tag, "GeoIP file not found — country-based routing unavailable")
+            }
+            if (geoip6File.exists()) {
+                appendLine("GeoIPv6File ${geoip6File.absolutePath}")
+            }
             appendLine()
 
             if (useSnowflake && snowflakePath != null) {
@@ -207,36 +263,59 @@ class TorProcessManager(private val context: Context) {
         // Execute libtor.so directly from nativeLibraryDir
         val torPath = getBinaryPath(Constants.BINARY_TOR)
         if (torPath == null) {
-            Log.e(tag, "libtor.so not found in $nativeLibDir — cannot start Tor")
+            Log.e(tag, "libtor.so not found or is a stub in $nativeLibDir — cannot start Tor")
+            return false
+        }
+
+        // Final sanity check on binary size
+        val torFile = File(torPath)
+        if (torFile.length() < MIN_BINARY_SIZE) {
+            Log.e(tag, "Tor binary is only ${torFile.length()} bytes — not a real binary (expected several MB)")
+            return false
+        }
+
+        if (!torFile.canExecute()) {
+            Log.e(tag, "Tor binary at $torPath is not executable")
             return false
         }
 
         val torrcPath = File(appDataDir, Constants.TORRC_FILENAME).absolutePath
 
         try {
-            val processBuilder = ProcessBuilder(
+            // Step 1: Verify config with --verify-config
+            val verifyBuilder = ProcessBuilder(
                 torPath,
                 "-f", torrcPath,
                 "--verify-config"
             )
-            processBuilder.environment()["HOME"] = appDataDir
-            processBuilder.redirectErrorStream(true)
+            verifyBuilder.environment()["HOME"] = appDataDir
+            verifyBuilder.redirectErrorStream(true)
 
-            val verifyProcess = processBuilder.start()
+            val verifyProcess = verifyBuilder.start()
+            val verifyOutput = verifyProcess.inputStream.bufferedReader().readText()
             val verifyResult = verifyProcess.waitFor()
 
             if (verifyResult != 0) {
                 Log.e(tag, "Tor config verification failed (exit code $verifyResult)")
-                // Read error output for debugging
-                val errorOutput = verifyProcess.inputStream.bufferedReader().readText()
-                if (errorOutput.isNotBlank()) {
-                    Log.e(tag, "Tor verify output: $errorOutput")
+                if (verifyOutput.isNotBlank()) {
+                    Log.e(tag, "Tor verify output: $verifyOutput")
                 }
+
+                // Check for common errors in the output
+                if (verifyOutput.contains("Exec format error", ignoreCase = true) ||
+                    verifyOutput.contains("not found", ignoreCase = true) ||
+                    verifyOutput.contains("inaccessible", ignoreCase = true) ||
+                    verifyOutput.contains("Placeholder", ignoreCase = true)) {
+                    Log.e(tag, "HINT: The native binary may be a placeholder stub or wrong architecture. " +
+                        "Ensure ./scripts/build-all.sh ran successfully in CI.")
+                }
+
                 return false
             }
 
             Log.i(tag, "Tor config verified — launching daemon from $torPath")
 
+            // Step 2: Start the Tor daemon
             val daemonBuilder = ProcessBuilder(
                 torPath,
                 "-f", torrcPath
