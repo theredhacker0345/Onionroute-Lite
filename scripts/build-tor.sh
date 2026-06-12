@@ -168,7 +168,14 @@ if [ ! -f "${DEPS_PREFIX}/lib/libz.a" ]; then
     echo "Building zlib ${ZLIB_VERSION} for ${ABI}..."
     ZLIB_DIR="${BUILD_DIR}/zlib-${ZLIB_VERSION}"
     if [ ! -d "${ZLIB_DIR}" ]; then
-        curl -L "https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz" -o "${BUILD_DIR}/zlib.tar.gz"
+        curl -L "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" -o "${BUILD_DIR}/zlib.tar.gz"
+        # Verify it's actually a gzip file (not an HTML error page)
+        if ! gzip -t "${BUILD_DIR}/zlib.tar.gz" 2>/dev/null; then
+            echo "ERROR: Downloaded zlib is not a valid gzip file"
+            echo "  URL may have changed or the file may be corrupted"
+            head -c 200 "${BUILD_DIR}/zlib.tar.gz"
+            exit 1
+        fi
         tar xzf "${BUILD_DIR}/zlib.tar.gz" -C "${BUILD_DIR}"
         rm "${BUILD_DIR}/zlib.tar.gz"
     fi
