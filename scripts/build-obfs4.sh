@@ -33,7 +33,7 @@ set -euo pipefail
 ABI="${1:-armeabi-v7a}"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-/opt/android-ndk}}"
 OUTPUT_DIR="${3:-./app/src/main/jniLibs/${ABI}}"
-OBFS4_VERSION="0.0.14"
+OBFS4_VERSION="v0.0.0-20231012084234-c3e2d44b1033"
 
 # ── ABI-specific Go cross-compilation settings ────────────────
 API=23  # Android 6.0 (Marshmallow) minimum
@@ -115,7 +115,7 @@ cd "${BUILD_DIR}"
 # Initialize Go module with pinned version
 echo "Downloading obfs4proxy v${OBFS4_VERSION} for ${ABI}..."
 go mod init onionroute-build/obfs4
-go get gitlab.com/yawning/obfs4.git@v${OBFS4_VERSION}
+go get gitlab.com/yawning/obfs4.git@${OBFS4_VERSION}
 
 # Verify all module checksums
 go mod verify
