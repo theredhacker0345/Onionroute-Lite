@@ -25,6 +25,9 @@ android {
     // Generates separate APKs for each ABI plus a universal APK.
     // Version code offset ensures each ABI gets a unique, ascending
     // version code for Play Store multi-APK delivery.
+    // NOTE: Splits are disabled for the fdroid flavor (see productFlavors
+    // below) so that F-Droid produces a single universal APK containing
+    // all 4 ABIs. Only the gplay flavor uses per-ABI splits.
     splits {
         abi {
             enable = true
@@ -57,10 +60,16 @@ android {
             buildConfigField "boolean", "FDROID_BUILD", "true"
             // F-Droid reproducible build: use versionName with -fdroid suffix
             versionNameSuffix "-fdroid"
+            // F-Droid: disable ABI splits → produces single universal APK
+            // containing all 4 ABIs (armeabi-v7a, arm64-v8a, x86, x86_64).
+            // F-Droid publishes one APK per versionCode; per-ABI splits
+            // would confuse its infrastructure.
+            splits.abi.enable = false
         }
         gplay {
             dimension "distribution"
             buildConfigField "boolean", "FDROID_BUILD", "false"
+            // Play Store: keep ABI splits enabled for smaller per-device downloads
         }
     }
 

@@ -60,6 +60,10 @@ RepoType: git
 Repo: https://github.com/darkmaster0345/Onionroute-Lite.git
 
 # ── Build Configuration ───────────────────────────────────────
+# F-Droid builds a SINGLE UNIVERSAL APK containing all 4 ABIs.
+# The fdroid flavor disables ABI splits in build.gradle so
+# assembleFdroidRelease produces one universal APK.
+#
 # IMPORTANT: commit must be a full 40-char SHA hash, NOT a tag.
 # Run: git rev-parse HEAD   to get the current hash.
 # F-Droid will NOT accept tags in the commit field.
@@ -71,7 +75,7 @@ Builds:
     subdir: app
     gradle:
       - fdroid
-    ndk: r25c
+    ndk: r26d
     prebuild:
       - chmod +x ../scripts/build-all.sh
       - chmod +x ../scripts/build-tor.sh
@@ -79,13 +83,28 @@ Builds:
       - chmod +x ../scripts/build-snowflake.sh
       - chmod +x ../scripts/build-tun2socks.sh
       - cd ..
-      - ./scripts/build-all.sh armeabi-v7a $$NDK$$ app/src/main/jniLibs/armeabi-v7a
+      - ./scripts/build-all.sh all $$NDK$$
     scanignore:
       - app/src/main/jniLibs/armeabi-v7a/libtor.so
       - app/src/main/jniLibs/armeabi-v7a/libobfs4proxy.so
       - app/src/main/jniLibs/armeabi-v7a/libsnowflake.so
       - app/src/main/jniLibs/armeabi-v7a/libsnowflake-proxy.so
       - app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+      - app/src/main/jniLibs/arm64-v8a/libtor.so
+      - app/src/main/jniLibs/arm64-v8a/libobfs4proxy.so
+      - app/src/main/jniLibs/arm64-v8a/libsnowflake.so
+      - app/src/main/jniLibs/arm64-v8a/libsnowflake-proxy.so
+      - app/src/main/jniLibs/arm64-v8a/libtun2socks.so
+      - app/src/main/jniLibs/x86/libtor.so
+      - app/src/main/jniLibs/x86/libobfs4proxy.so
+      - app/src/main/jniLibs/x86/libsnowflake.so
+      - app/src/main/jniLibs/x86/libsnowflake-proxy.so
+      - app/src/main/jniLibs/x86/libtun2socks.so
+      - app/src/main/jniLibs/x86_64/libtor.so
+      - app/src/main/jniLibs/x86_64/libobfs4proxy.so
+      - app/src/main/jniLibs/x86_64/libsnowflake.so
+      - app/src/main/jniLibs/x86_64/libsnowflake-proxy.so
+      - app/src/main/jniLibs/x86_64/libtun2socks.so
 
 MaintainerNotes: |
   Native binaries (libtor.so, libobfs4proxy.so, libsnowflake.so,
@@ -95,6 +114,12 @@ MaintainerNotes: |
   The scanignore directive tells F-Droid's scanner to skip these
   pre-built binary paths since they are verified to be built from
   source during the build step.
+
+  F-Droid builds a SINGLE UNIVERSAL APK containing all 4 ABIs
+  (armeabi-v7a, arm64-v8a, x86, x86_64). The fdroid product flavor
+  disables ABI splits in build.gradle so that assembleFdroidRelease
+  produces one universal APK instead of per-ABI splits. This ensures
+  the app works on all supported devices from a single F-Droid install.
 
   All dependencies are FOSS (Apache-2.0) from Maven Central and
   Google's Maven repository. No Google Play Services, Firebase,
