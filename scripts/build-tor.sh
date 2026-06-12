@@ -109,6 +109,21 @@ export SYSROOT="${TOOLCHAIN}/sysroot"
 export CFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -fstack-protector-strong -D_FORTIFY_SOURCE=2"
 export LDFLAGS="-Os -fPIE -fPIC ${ABI_CFLAGS} -static-libstdc++ -Wl,-z,relro -Wl,-z,now"
 
+# OpenSSL 1.1.1w's Configure script hardcodes a check for GCC-style
+# compiler names (e.g. arm-linux-androideabi-gcc) which were removed
+# from NDK in r23. We create symlinks from the old GCC names to the
+# new Clang compilers so OpenSSL's Configure can find them.
+# These are created once and persist in the NDK toolchain directory.
+echo "Creating GCC-style symlinks for OpenSSL compatibility..."
+ln -sf "${NDK_COMPILER_PREFIX}-clang" "${TOOLCHAIN}/bin/${LIBEVENT_HOST}-gcc" 2>/dev/null || true
+ln -sf "${NDK_COMPILER_PREFIX}-clang++" "${TOOLCHAIN}/bin/${LIBEVENT_HOST}-g++" 2>/dev/null || true
+ln -sf llvm-ar "${TOOLCHAIN}/bin/${LIBEVENT_HOST}-ar" 2>/dev/null || true
+ln -sf llvm-ranlib "${TOOLCHAIN}/bin/${LIBEVENT_HOST}-ranlib" 2>/dev/null || true
+# Also add the toolchain to PATH so OpenSSL's Configure can find the compiler
+export PATH="${TOOLCHAIN}/bin:${PATH}"
+# Set ANDROID_NDK_HOME so OpenSSL can locate the NDK sysroot
+export ANDROID_NDK_HOME="${NDK_PATH}"
+
 # ── Verify NDK ───────────────────────────────────────────────
 if [ ! -d "${TOOLCHAIN}" ]; then
     echo "ERROR: NDK toolchain not found at ${TOOLCHAIN}"
