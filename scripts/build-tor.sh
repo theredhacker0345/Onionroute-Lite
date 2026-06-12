@@ -160,6 +160,7 @@ if [ ! -f "${DEPS_PREFIX}/lib/libz.a" ]; then
     cd "${ZLIB_DIR}"
     # Clean any previous build artifacts for this ABI
     make clean 2>/dev/null || true
+    CC="${CC}" AR="${AR}" RANLIB="${RANLIB}" \
     ./configure --prefix="${DEPS_PREFIX}" --static
     make -j$(nproc)
     make install
@@ -177,9 +178,16 @@ if [ ! -f "${DEPS_PREFIX}/lib/libssl.a" ]; then
     cd "${OSSL_DIR}"
     # Clean any previous build artifacts for this ABI
     make clean 2>/dev/null || true
+    # NDK r23+ removed GCC; must pass CC/AR/RANLIB explicitly to
+    # OpenSSL's Configure so it uses Clang from the LLVM toolchain.
+    # -D__ANDROID_API__ tells OpenSSL the minimum API level.
     ./Configure "${OPENSSL_TARGET}" \
         --prefix="${DEPS_PREFIX}" \
         no-shared no-tests no-dso \
+        CC="${CC}" \
+        AR="${AR}" \
+        RANLIB="${RANLIB}" \
+        -D__ANDROID_API__=${API} \
         ${ABI_CFLAGS}
     make -j$(nproc)
     make install_sw
