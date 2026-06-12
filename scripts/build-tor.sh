@@ -251,6 +251,7 @@ echo "Configuring Tor for ${ABI}..."
     --disable-lzma \
     --disable-zstd \
     --disable-seccomp \
+    --disable-tool-name-check \
     --enable-static-libevent \
     --enable-static-openssl \
     --enable-static-zlib \
