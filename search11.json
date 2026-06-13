@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=1MIarVwoFlg",
+    "name": "How To Get A Free Cloud Server Forever? - YouTube",
+    "snippet": "It's very easy to host a few virtual machines in a cloud at no cost at all. When you don't have a dedicated home server with proxmox or ...",
+    "host_name": "www.youtube.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.oracle.com/cloud/free",
+    "name": "Oracle Cloud Free Tier",
+    "snippet": "Build, test and deploy applications on the Cloud with always free cloud services and get $300 in credit towards other cloud services.",
+    "host_name": "www.oracle.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/devops/comments/wda5tu/how_to_practice_cloud_for_free_without_a_credit",
+    "name": "How to practice Cloud for free without a credit card? : r/devops - Reddit",
+    "snippet": "Might want to look into Oracle Cloud. Their free tier is quite good. 4 cpus and 24gb of ram. You would still need a card but when you sign up ...\nI want to learn cloud engineering, but Linode, AWS, GC and Azure requires a credit card. I prefer hands-on experience than books.",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://electronics.alibaba.com/question/free-cloud-servers-what%E2%80%99s-truly-free-in-2025",
+    "name": "What Free Cloud Server Options Are Actually Available in 2025?",
+    "snippet": "Oracle Cloud: Allows registration and immediate access to always-free resources using email + phone verification only. No card needed 1 .",
+    "host_name": "electronics.alibaba.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://gist.github.com/rssnyder/51e3cfedd730e7dd5f4a816143b25dbd",
+    "name": "oracle-cloud-free-tier-guide - GitHub Gist",
+    "snippet": "The first step is to create your oracle cloud account here: https://signup.cloud.oracle.com/ You will need a valid credit card for signup,",
+    "host_name": "gist.github.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=p9rClbMwGjE",
+    "name": "Top FREE 2022 VPS service providers WITHOUT CREDIT CARD",
+    "snippet": "... cloud.google.com/free Oracle https://www.oracle.com/cloud/free/#always-free 0:00 Intro 0:47 Glitch.com 2:25 Repl.it 3:06 Heroku 4:36 GCP 5 ...",
+    "host_name": "www.youtube.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.solusvm.com/free-trial",
+    "name": "Free trial - Solus VM",
+    "snippet": "Try SolusVM Free for 30 Days. No risk. No credit card required. Take full control of your VPS hosting with the industry's leading virtualization management ...",
+    "host_name": "www.solusvm.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.websiteplanet.com/blog/best-free-cloud-hosting-services",
+    "name": "11 Best Free Cloud Hosting Trials and Plans in 2026 - Website Planet",
+    "snippet": "No credit card required. You just need to enter your name, email, persona/industry, and monthly hosting spending to register for the free trial.\nCloudways' 3‑day free trial requires no credit card and enforces strict resource caps, preventing unexpected plan upgrades once limits are ...",
+    "host_name": "www.websiteplanet.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://hostadvice.com/vps/free-vps-no-credit-card",
+    "name": "10 Free VPS No Credit Card Jun 2026: 100% Free Trial - HostAdvice",
+    "snippet": "Some hosting providers offer free trial VPS plans or limited‑resource servers that only require an email address or simple verification to sign ...",
+    "host_name": "hostadvice.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://vexxhost.com/blog/cloud-server-7-day-free-trial-no-credit-card-required",
+    "name": "Cloud Server 7-Day Free Trial - No Credit Card Required! - vexxhost",
+    "snippet": "We are offering a 7-day, risk free trial of our cloud server service. We do not even require your credit card information to setup the server!",
+    "host_name": "vexxhost.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

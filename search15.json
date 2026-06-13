@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://docs.github.com/en/rest/codespaces",
+    "name": "REST API endpoints for Codespaces - GitHub Docs",
+    "snippet": "Use the REST API to manage GitHub Codespaces. Create a codespace in a repository. Create a codespace from a pull request. All GitHub docs are open source.\nCreate a codespace from a pull request · List codespaces for the authenticated user · Create a codespace for the authenticated user · Get a codespace for the ...",
+    "host_name": "docs.github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/69641780/is-there-a-way-to-create-codespace-using-cli-or-api",
+    "name": "Is there a way to Create CodeSpace using CLI or API - Stack Overflow",
+    "snippet": "Is there any option to automate the CodeSpace creation flow like CLI (or) API, from which I can create CodeSpace?",
+    "host_name": "stackoverflow.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.github.com/en/rest/codespaces/codespaces?apiVersion=2026-03-10",
+    "name": "REST API endpoints for Codespaces - GitHub Docs",
+    "snippet": "Creates a codespace owned by the authenticated user in the specified repository. OAuth app tokens and personal access tokens (classic) need the ...",
+    "host_name": "docs.github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://hexdocs.pm/oapi_github/GitHub.Codespaces.html",
+    "name": "GitHub.Codespaces — GitHub REST API Client v0.3.3 - Hexdocs",
+    "snippet": "Create a codespace from a pull request. Creates a codespace owned by the authenticated user for the specified pull request. OAuth app tokens and personal ...\nLists the codespaces that a member of an organization has for repositories in that organization. OAuth app tokens and personal access tokens (classic) need the ...",
+    "host_name": "hexdocs.pm",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/google/go-github/issues/3000",
+    "name": "Various Codespace Secrets endpoints failing when using a  - GitHub",
+    "snippet": "Various Codespace Secrets endpoints failing when using a Personal Access Token or GitHub App the Access Token needs the admin:org organization ...\nProviding an incorrect PAT changes the error message to \"Bad credentials\" , so it seems to at least be recognizing that there is a valid token ...",
+    "host_name": "github.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]
