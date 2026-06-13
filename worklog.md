@@ -102,3 +102,37 @@ Stage Summary:
 - Native binaries will be extracted correctly (C-03 fixed)
 - Debug components removed from release (W-01, W-03 fixed)
 - Commits: bbbfd58, 36693c4, 67665dc, 9772ae6 (all pushed to main)
+
+---
+Task ID: codespace-testing
+Agent: Main
+Task: Connect to GitHub Codespace, build APK, run emulator, test, fix bugs, iterate
+
+Work Log:
+- Created GitHub Codespace via API (2 cores, 8GB RAM, 32GB storage, SouthEastAsia)
+- Connected to codespace via paramiko through `gh codespace ssh --stdio` proxy
+- Installed Android SDK (platform-tools, platform-34, build-tools-34, emulator, system-image x86_64)
+- Fixed missing shared libraries for emulator (libpulse, libXi, libxkbfile, etc.)
+- Fixed KVM permissions (sudo chmod 666 /dev/kvm, added codespace to kvm group)
+- Started Android emulator with KVM acceleration — boots in ~55 seconds
+- Built APK with Java 17 (Java 25 incompatible with Gradle 8.5)
+- First test: All 5 native binaries missing (libtor.so, libobfs4proxy.so, libsnowflake.so, libsnowflake-proxy.so, libtun2socks.so)
+- Downloaded CI artifact APK via GitHub API (has libtor.so x86_64 built by CI)
+- SFTP transferred CI APK to codespace, installed on emulator
+- Second test: libtor.so found, Tor started but TorControlConnection race condition — SocketTimeoutException
+- Root cause: listenForEvents() thread and getInfo() both reading from same InputStream simultaneously
+- Fix 1: Rewrote TorControlConnection — single listener thread owns all reads; GETINFO responses routed via CountDownLatch/ConcurrentHashMap
+- Fix 2: Removed redundant BandwidthTracker.pollBandwidth() GETINFO polling (was causing race condition)
+- Fix 3: Downgraded missing optional binaries from CRITICAL to WARNING in TorProcessManager
+- Fixed heredoc escaping issues (\\$, \n, \r character codes)
+- Fixed Kotlin string interpolation ($port, $response, $cookieHex, etc. were escaped as \$)
+- Final test: Tor CONNECTED and AUTHENTICATED successfully, BandwidthTracker working, Status broadcast: CONNECTED
+
+Stage Summary:
+- Codespace testing pipeline working end-to-end
+- Critical bug fixed: TorControlConnection race condition causing SocketTimeoutException
+- Critical bug fixed: BandwidthTracker conflicting read from shared InputStream
+- UX improvement: Optional missing binaries now show WARNING instead of CRITICAL
+- All fixes pushed to GitHub (commits: 278a547, a3fdca0, eeef010)
+- Tor daemon connects and authenticates successfully on x86_64 emulator with KVM
+- Remaining: 4 optional binaries (obfs4, snowflake, snowflake-proxy, tun2socks) not built by CI — only libtor.so is built
