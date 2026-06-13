@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/orgs/community/discussions/162416",
+    "name": "Codespace support in GitHub mobile app #162416",
+    "snippet": "Unfortunately, it's not very usable in a mobile browser. Currently one workaround is to use the Termux app + gh codespace ssh . While this works ...\nEver wondered when to use SSH tunnels vs dev containers vs Codespaces vs CloudIDE ? This below mentioned Github Repo covers them + 7 more ...",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=mBsvSFbcujg",
+    "name": "GitHub Codespaces: Everything you need to know - YouTube",
+    "snippet": "Getting starting on a project takes time. Watch this hands-on-tutorial where Christopher, Chris and Bassem walk you through EVEYRTHING that ...",
+    "host_name": "www.youtube.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/dotnet/runtime/issues/77851",
+    "name": "Consider Android development Codespace · Issue #77851 - GitHub",
+    "snippet": "I've found myself occasionally wishing for a Codespace that was ready-to-go for Android development. Is there an appetite for an Android Codespace?",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/androiddev/comments/11fzzjk/how_android_devs_can_use_github_codespaces",
+    "name": "How android devs can use github codespaces ? : r/androiddev",
+    "snippet": "Install the android SDK, CLI tools and gradle. There are numerous examples of installing the SDK on Linux. Some are conflicting and out of date.",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/features/codespaces",
+    "name": "GitHub Codespaces",
+    "snippet": "GitHub Codespaces gets you up and coding faster with fully configured, secure cloud development environments native to GitHub. Get started for freeContact Sales.\nCodespaces is free for individual use up to 60 hours a month and comes with simple, pay-as-you-go pricing after that.",
+    "host_name": "github.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://duncanlew.medium.com/develop-anywhere-anytime-with-github-codespaces-e43cf212fea8",
+    "name": "Develop Anywhere, Anytime with GitHub Codespaces - Duncan Lew",
+    "snippet": "Anyone with a GitHub account can get started with Codespaces. It is free for individual use for up to 60 hours a month. After you exceed this ...\nAnyone with a GitHub account can get started with Codespaces. It is free for individual use for up to 60 hours a month. After you exceed ...",
+    "host_name": "duncanlew.medium.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=kvJf8s18Vr4",
+    "name": "How to use GitHub Codespaces for Coding and Data Science",
+    "snippet": "In this video, you'll learn how to use GitHub Codespaces for Coding and Data Science. We'll start from scratch by installing prerequisite ...\n... on @GitHub Codespaces. Features of GitHub Codespaces https://github.com/features/codespaces Support my work: Join as Channel Member ...",
+    "host_name": "www.youtube.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.blog/changelog/2022-11-09-codespaces-for-free-and-pro-accounts",
+    "name": "Codespaces for Free and Pro Accounts - GitHub Changelog",
+    "snippet": "GitHub will provide each Free plan account 120 core hours, or 60 hours of run time for a 2 core codespace, plus 15 GB of storage to use each month.",
+    "host_name": "github.blog",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/github/github-codespaces-developing-and-testing-react-native-apps-just-with-expo-and-codespaces-39g",
+    "name": "GitHub Codespaces: Developing and testing React Native apps just",
+    "snippet": "To run a test or do an experiment on a native mobile app, I just need to launch a codespace, run expo and see the changes live on my phone without even cloning ...",
+    "host_name": "dev.to",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/orgs/community/discussions/193854",
+    "name": "why do the code spaces have a time limit #193854 - GitHub",
+    "snippet": "A github codespace stops after a period of inactivity, and by default that idle timeout is 30 minutes. If it is still running but unused, you ...",
+    "host_name": "github.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

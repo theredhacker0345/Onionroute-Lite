@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=fzJqHYjyA90",
+    "name": "Start Android Emulator(AVD) Directly from VS Code [2025] - YouTube",
+    "snippet": "... bit.ly/3LotOnc Cloud Computing Playlist MU: bit.ly/3yctJzM Computer Network Playlist MU: bit.ly/3Y6sAVe LIKE | SHARE | SUBSCRIBE ...",
+    "host_name": "www.youtube.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/79772891/how-to-run-android-apps-on-a-local-emulator-while-building-on-a-remote-linux-ser",
+    "name": "How to run Android apps on a local emulator while building on a",
+    "snippet": "Question: Is there a correct way to make dx serve --platform android on a remote Linux server deploy directly to an Android emulator running ...",
+    "host_name": "stackoverflow.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://blog.devgenius.io/start-coding-on-the-cloud-with-this-free-cloud-ide-from-google-fe9a604ecf4c",
+    "name": "Start coding on the Cloud with this FREE Cloud IDE from Google",
+    "snippet": "It is basically a VS Code on the web, with a linux virtual machine for you to run linux commands. It is entirely free (no credit card required) and all you ...\nIt is basically a VS Code on the web, with a linux virtual machine for you to run linux commands. It is entirely free (no credit card required) ...",
+    "host_name": "blog.devgenius.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=HYmjKdXaTRk",
+    "name": "10 Best Android Emulators For Linux [2025 Edition] – Free & Paid",
+    "snippet": "Or, you can also buy the cloud edition to use its online Android emulator requiring no installation. For pricing information, you can go to ...",
+    "host_name": "www.youtube.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.genymotion.com",
+    "name": "Genymotion - Android Emulator in the Cloud and for PC & Mac",
+    "snippet": "Genymotion is Number One Android Emulator in the Cloud with integrations for testing framework and CI servers. Also available for PC & Mac.",
+    "host_name": "www.genymotion.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developer.android.com/studio/preview/android-studio-cloud",
+    "name": "Android Studio Cloud - Android Developers",
+    "snippet": "Android Studio Cloud, accessed through Firebase Studio, enables developers to conveniently open Android Studio projects anywhere with an internet connection.",
+    "host_name": "developer.android.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://termius.com/index.html",
+    "name": "Termius - Modern SSH Client",
+    "snippet": "Termius is a modern SSH client for Mac, Windows, Linux, iOS and Android. Connect with one click from any device.",
+    "host_name": "termius.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@amitsriv99/setting-up-android-emulator-appium-driver-novnc-on-headless-debian-12-compute-engine-e5811c997310",
+    "name": "Setting-up Android Emulator + Appium Driver + noVNC on Headless",
+    "snippet": "To successfully run Android x86_64 emulators in a cloud environment, provisioning the right Google Cloud Compute Engine (i.e. VM) is critical.\nTo successfully run Android x86_64 emulators in a cloud environment ... SSH into your compute instance (i.e. VM) and do some basic validations.",
+    "host_name": "medium.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://sealos.io/blog/claude-code-on-phone",
+    "name": "Claude Code Mobile: iPhone, Android & SSH (2026) | Sealos Blog",
+    "snippet": "See the best Claude Code mobile setup for iPhone and Android, whether you need quick review, full SSH access, or a zero-setup cloud workspace.",
+    "host_name": "sealos.io",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.testmuai.com/android-emulator-online",
+    "name": "Best Free Android Emulator Online, No Download | TestMu AI",
+    "snippet": "Run a free Android emulator online in the browser. Test apps on Android versions, then validate on real devices. Start free on TestMu AI.",
+    "host_name": "www.testmuai.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

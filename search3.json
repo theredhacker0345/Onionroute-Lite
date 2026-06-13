@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/l0n3m4n/github-vps",
+    "name": "GitHub - l0n3m4n/github-vps: You can get a lifetime of FREE VPS",
+    "snippet": "You can get a lifetime of FREE VPS using GitHub Codespaces with Kali Linux Docker image installed on github workspace terminal.",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/devops/comments/1qu68wh/coder_vs_gitpod_vs_codespaces_vs_just_ssh_into",
+    "name": "Coder vs Gitpod vs Codespaces vs \"just SSH into EC2 instance\"",
+    "snippet": "I've been looking at Coder, Gitpod, Codespaces etc. but part of me wonders if we're overengineering this. Could we just: Spin up a beefy VPS per ...",
+    "host_name": "www.reddit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://blog.okikio.dev/github-codespaces-vs-gitpod-choosing-the-best-online-code-editor",
+    "name": "Github Codespaces vs. Gitpod: Choosing the Best Online Code Editor",
+    "snippet": "Gitpod and Github Codespaces are both Visual Studio Code based online code editors, with attached Linux dev environment servers, for running terminal tasks.",
+    "host_name": "blog.okikio.dev",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/orgs/community/discussions/176741",
+    "name": "How can I run a virtual cloud shell or terminal for free without using a",
+    "snippet": "What: Full browser-based editor, runs, and shell access for many languages. Signup: free account (email or GitHub/etc). No credit-card needed ...",
+    "host_name": "github.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.bunnyshell.com/comparisons/gitpod-alternatives",
+    "name": "Top Gitpod Alternatives in 2026 — Cloud Dev Environments",
+    "snippet": "For a direct dev-environment replacement, GitHub Codespaces is the easiest switch for GitHub teams, and Coder is best for enterprise self-hosted needs. Why are ...",
+    "host_name": "www.bunnyshell.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.freecodecamp.org/news/github-codespaces-vs-gitpod-cloud-based-dev-environments",
+    "name": "GitHub Codespaces vs Gitpod – Full Stack Development Moves to",
+    "snippet": "Gitpod and GitHub Codespaces are cloud based developer environments that allow you to spin-up high-performance, automated dev environments in seconds.",
+    "host_name": "www.freecodecamp.org",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=c0_pTn5whP4",
+    "name": "Get a Free Linux Machine in the Cloud | GitHub Codespaces Step",
+    "snippet": "... free Linux machine to practice shell commands, scripting, and even basic DevOps tools – no need to set up a virtual machine or dual boot ...",
+    "host_name": "www.youtube.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://northflank.com/blog/github-codespaces-alternatives",
+    "name": "4 best GitHub Codespaces alternatives for secure sandboxing | Blog",
+    "snippet": "GitHub Codespaces alternatives include Northflank, Gitpod, Coder, and DevPod. Each platform takes a different approach to cloud development ...",
+    "host_name": "northflank.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/gitpod-io/openvscode-server",
+    "name": "GitHub - gitpod-io/openvscode-server: Run upstream VS Code on a",
+    "snippet": "This project provides a version of VS Code that runs a server on a remote machine and allows access through a modern web browser.",
+    "host_name": "github.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/orgs/community/discussions/60406",
+    "name": "SSH connect not working with Debian image when feature is added",
+    "snippet": "Note that the codespace you are connecting to must have an SSH server pre-installed. If the docker image being used for the codespace does ...",
+    "host_name": "github.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

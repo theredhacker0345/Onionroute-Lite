@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://routr.io/docs/2.0.0/development/development-mode-with-gitpod",
+    "name": "Development with Gitpod | Routr Docs",
+    "snippet": "Once you add your key, find your Gitpod workspace and click the \"More\" button. Then, select \"Connect via SSH.\" https://gitpod.io/workspaces. Gitpod workspace.",
+    "host_name": "routr.io",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://blog.worldline.tech/2023/06/27/android-dev-with-gitpod.html",
+    "name": "Gitpod: Your mobile dev cloud IDE - Worldline Engineering Blog",
+    "snippet": "Gitpod is an open-source service that automates the creation of cloud developer environments, enabling you to instantly code in the browser.",
+    "host_name": "blog.worldline.tech",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://codeburst.io/hands-on-gitpod-io-online-ide-7c86665f0117",
+    "name": "Hands-On Gitpod.io Online IDE. Introduction | by Rajesh Shah",
+    "snippet": "The Gitpod Online IDE is similar to VS Code and it's supporting extensions. Gitpod has concept of “workspaces”, which can easily be created from a Github repo.",
+    "host_name": "codeburst.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://ona.com/docs/classic/user/configure/workspaces/overview",
+    "name": "Workspaces - Gitpod Classic - Ona",
+    "snippet": "Connect to a device over Wi-Fi (Android Developer). Use the exposed adb server from a local Android emulator (e.g. from JetBrains Android Studio). In both ...",
+    "host_name": "ona.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://tianhaoz95.github.io/developer-note/2019/10/08/flutter-and-gitpod.html",
+    "name": "Gitpod + Flutter = productivity on the go for mobile app developers",
+    "snippet": "Gitpod is a cloud/browser based IDE. It runs the workspace in a container and serves the UI to a browser. It's perfect for someone who always work on the go ...",
+    "host_name": "tianhaoz95.github.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

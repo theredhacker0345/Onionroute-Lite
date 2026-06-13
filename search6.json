@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=Nr9C09A9Nl4",
+    "name": "How to Get Started With Firebase Test Lab In Android Studio",
+    "snippet": "... Android app to test your app on various different devices, manufacturers and configurations in the cloud without having to physically ...",
+    "host_name": "www.youtube.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://firebase.google.com/docs/studio",
+    "name": "Firebase Studio - Google",
+    "snippet": "Firebase Studio is an agentic cloud-based development environment that helps you build and ship production-quality full-stack AI apps.",
+    "host_name": "firebase.google.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=hqsDBhOR6Cc",
+    "name": "Generate Whole Apps With Firebase Studio, New Kotlin  - YouTube",
+    "snippet": "In this episode of Android News, I go over lots of crazy changes to the Android and Kotlin ecosystem, such as Firebase Studio, ...",
+    "host_name": "www.youtube.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://newly.app/firebase-studio-for-mobile-apps",
+    "name": "Firebase Studio for Mobile Apps: Complete Guide (2026) — Newly",
+    "snippet": "Firebase Studio is Google's cloud-based development environment for building full-stack, AI-powered applications directly in your browser. It combines a Code ...",
+    "host_name": "newly.app",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Firebase/comments/1l7tc86/how_can_i_convert_my_firebasebuilt_web_app_into_a",
+    "name": "How can I convert my Firebase-built web app into a testable mobile",
+    "snippet": "I want to convert that web app into an installable mobile app (APK) so I can test it on my Android phone and also share it with friends for feedback.",
+    "host_name": "www.reddit.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/73370728/firebase-doesnt-work-on-android-studio-emulator",
+    "name": "Firebase doesn't work on Android Studio Emulator - Stack Overflow",
+    "snippet": "The solution to the problem is disabling Wi-Fi in the emulator and enabling mobile Internet. Although in fact the connection in Windows remains the same.",
+    "host_name": "stackoverflow.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cengiztoru.medium.com/android-studio-in-the-cloud-with-ai-firebase-studio-d9aaf0747b55",
+    "name": "Android Studio in the Cloud with AI — Firebase Studio - Cengiz Toru",
+    "snippet": "Firebase Studio, introduced by Google on April 9, 2025, is a cloud-based development environment designed to streamline the creation of full-stack AI ...",
+    "host_name": "cengiztoru.medium.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://firebase.studio",
+    "name": "Firebase Studio",
+    "snippet": "Firebase Studio accelerates your entire development lifecycle with AI agents. Build backends, front ends, and mobile apps, all in one place.",
+    "host_name": "firebase.studio",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.bitrise.io/t/how-to-run-android-tests-on-firebase-testlab/2192",
+    "name": "How-to run Android tests on Firebase TestLab - Bitrise Discussions",
+    "snippet": "Create a new variable under Env Vars tab. Name it GCP_PROJECT and set its value to the project ID used in Firebase Console and/or in Google ...",
+    "host_name": "discuss.bitrise.io",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developer.android.com/studio/run/android-device-streaming",
+    "name": "Android Device Streaming, powered by Firebase | Android Studio",
+    "snippet": "Android Device Streaming, powered by Firebase, lets you securely connect to remote physical Android devices hosted in Google's secure data centers.",
+    "host_name": "developer.android.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
