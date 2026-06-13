@@ -115,22 +115,24 @@ cd "${BUILD_DIR}"
 # Initialize Go module with pinned version
 echo "Downloading obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
 go mod init onionroute-build/obfs4
+
+# Use a dummy import to force go mod tidy to track the obfs4proxy package.
+# Without this, `go get` adds the module as indirect and the package
+# isn't resolvable at build time.
+echo 'package main; import _ "gitlab.com/yawning/obfs4.git/obfs4proxy"' > dummy.go
 go get gitlab.com/yawning/obfs4.git@${OBFS4_VERSION}
+go mod tidy
+rm -f dummy.go
 
 # Verify all module checksums
 go mod verify
 
 echo "Building obfs4proxy for ${ABI}..."
-# The obfs4proxy binary may be at different paths depending on version.
-# Try the standard path first, then fall back to the root cmd path.
-OBFS4_PKG="gitlab.com/yawning/obfs4.git/cmd/obfs4proxy"
-if ! go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    -o obfs4proxy "${OBFS4_PKG}" 2>/dev/null; then
-    echo "Trying alternate package path..."
-    OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy"
-    go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
-        -o obfs4proxy "${OBFS4_PKG}"
-fi
+# The obfs4proxy package lives at gitlab.com/yawning/obfs4.git/obfs4proxy
+# (not cmd/obfs4proxy — that was the old path for older versions)
+OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy"
+go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+    -o obfs4proxy "${OBFS4_PKG}"
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"

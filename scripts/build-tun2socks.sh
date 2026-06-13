@@ -39,7 +39,7 @@ set -euo pipefail
 ABI="${1:-armeabi-v7a}"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-/opt/android-ndk}}"
 OUTPUT_DIR="${3:-./app/src/main/jniLibs/${ABI}}"
-HEV_VERSION="3.0.5"
+HEV_VERSION="2.15.0"
 
 # ── Validate ABI ─────────────────────────────────────────────
 case "${ABI}" in
@@ -74,7 +74,7 @@ mkdir -p "${BUILD_DIR}"
 HEV_DIR="${BUILD_DIR}/hev-socks5-tunnel"
 if [ ! -d "${HEV_DIR}" ]; then
     echo "Cloning hev-socks5-tunnel v${HEV_VERSION}..."
-    git clone --depth 1 --branch "${HEV_VERSION}" \
+    git clone --recurse-submodules --depth 1 --branch "${HEV_VERSION}" \
         https://github.com/heiher/hev-socks5-tunnel.git \
         "${HEV_DIR}"
 else
@@ -99,14 +99,27 @@ if [ -f "${APP_MK}" ]; then
     sed -i "s/^APP_ABI := .*/APP_ABI := ${ABI}/" "${APP_MK}"
 fi
 
-# ── Build with NDK ───────────────────────────────────────────
+# ── Build with ndk-build ──────────────────────────────────────
 echo "Building for ${ABI}..."
 export NDK_HOME="${NDK_PATH}"
-make ndk-build
+
+# Use ndk-build directly with the root-level Android.mk
+# hev-socks5-tunnel uses submodules (yaml, lwip, hev-task-system) which are
+# included by the root Android.mk. The --recurse-submodules clone ensures
+# these are available.
+${NDK_PATH}/ndk-build \
+    NDK_PROJECT_PATH="${HEV_DIR}" \
+    APP_BUILD_SCRIPT="${HEV_DIR}/Android.mk" \
+    APP_ABI="${ABI}" \
+    APP_PLATFORM=android-23 \
+    APP_SUPPORT_FLEXIBLE_PAGE_SIZES=false \
+    NDK_OUT="${HEV_DIR}/obj" \
+    NDK_LIBS_OUT="${HEV_DIR}/libs" \
+    2>&1 || { echo "ERROR: ndk-build failed"; exit 1; }
 
 # ── Copy from correct ABI-specific output ────────────────────
-# ndk-build places outputs in libs/{abi}/ directory
-HEV_OUTPUT="${HEV_DIR}/app/src/main/libs/${ABI}/hev-socks5-tunnel"
+# ndk-build produces a shared library: libhev-socks5-tunnel.so
+HEV_OUTPUT="${HEV_DIR}/libs/${ABI}/libhev-socks5-tunnel.so"
 
 if [ ! -f "${HEV_OUTPUT}" ]; then
     echo "ERROR: Built binary not found at ${HEV_OUTPUT}"

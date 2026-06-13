@@ -142,11 +142,17 @@ class TorProcessManager(private val context: Context) {
                 Log.d(tag, "Set executable on $libName: $set")
             }
 
-            // Also chmod as safety net for certain Android versions/filesystems
+            // Also chmod as safety net for certain Android versions/filesystems.
+            // SELinux may deny this on some devices — that's OK since the file
+            // is already executable from the APK's useLegacyPackaging extraction.
             try {
-                Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath)).waitFor()
+                val proc = Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath))
+                val exitCode = proc.waitFor()
+                if (exitCode != 0) {
+                    Log.d(tag, "chmod ${file.absolutePath} returned $exitCode (SELinux may block — this is normal)")
+                }
             } catch (e: Exception) {
-                Log.w(tag, "chmod fallback failed for ${file.absolutePath}: ${e.message}")
+                Log.d(tag, "chmod not needed for ${file.absolutePath}: ${e.message}")
             }
 
             Log.d(tag, "Found native binary: $libName ($size bytes, executable=${file.canExecute()})")
