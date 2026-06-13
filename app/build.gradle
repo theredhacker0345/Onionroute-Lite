@@ -170,6 +170,7 @@ android {
 
     // Compose compiler version must match Kotlin version
     // Kotlin 1.9.22 → Compose Compiler 1.5.10
+    // BOM 2024.02.00 → Compose UI 1.6.x (requires compiler ≤ 1.5.10)
     composeOptions {
         kotlinCompilerExtensionVersion = '1.5.10'
     }
@@ -186,15 +187,18 @@ android {
 // Use maximum compression for resources and assets in the APK
 android.aaptOptions {
     cruncherEnabled = true
-    noCompress ''  // Let AAPT2 compress everything by default
+    // No noCompress directive → AAPT2 compresses everything by default
+    // (noCompress '' is a no-op and misleading; omit it entirely)
 }
 
 dependencies {
     // ═══════════════════════════════════════════════════════
     // COMPOSE BOM — manages all Compose versions
     // All Compose libraries are Apache-2.0 (FOSS)
+    // BOM 2024.02.00 → Compose UI 1.6.x (compatible with
+    // Compose Compiler 1.5.10 / Kotlin 1.9.22)
     // ═══════════════════════════════════════════════════════
-    def composeBom = platform('androidx.compose:compose-bom:2024.12.01')
+    def composeBom = platform('androidx.compose:compose-bom:2024.02.00')
     implementation composeBom
 
     // Core Compose (Apache-2.0)

@@ -121,7 +121,7 @@ class TorProcessManager(private val context: Context) {
         for (libName in requiredBinaries) {
             val file = File(nativeLibDir, libName)
             if (!file.exists()) {
-                Log.e(tag, "CRITICAL: Native binary NOT FOUND: $libName at $nativeLibDir/$libName")
+                if (libName == Constants.BINARY_TOR) Log.e(tag, "CRITICAL: Native binary NOT FOUND: $libName at $nativeLibDir/$libName") else Log.w(tag, "WARNING: Optional binary not found: $libName — bridge feature unavailable")
                 missingCount++
                 continue
             }
@@ -142,17 +142,11 @@ class TorProcessManager(private val context: Context) {
                 Log.d(tag, "Set executable on $libName: $set")
             }
 
-            // Also chmod as safety net for certain Android versions/filesystems.
-            // SELinux may deny this on some devices — that's OK since the file
-            // is already executable from the APK's useLegacyPackaging extraction.
+            // Also chmod as safety net for certain Android versions/filesystems
             try {
-                val proc = Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath))
-                val exitCode = proc.waitFor()
-                if (exitCode != 0) {
-                    Log.d(tag, "chmod ${file.absolutePath} returned $exitCode (SELinux may block — this is normal)")
-                }
+                Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath)).waitFor()
             } catch (e: Exception) {
-                Log.d(tag, "chmod not needed for ${file.absolutePath}: ${e.message}")
+                Log.w(tag, "chmod fallback failed for ${file.absolutePath}: ${e.message}")
             }
 
             Log.d(tag, "Found native binary: $libName ($size bytes, executable=${file.canExecute()})")

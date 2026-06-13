@@ -15,7 +15,7 @@
 #   - x86_64       (64-bit Intel, emulators)
 #
 # Prerequisites:
-#   - Android NDK r25c installed
+#   - Android NDK r26d installed
 #   - Go 1.21+ installed
 #   - Standard build tools (make, gcc, git, curl)
 #

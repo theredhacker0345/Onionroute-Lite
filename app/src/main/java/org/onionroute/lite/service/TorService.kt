@@ -11,6 +11,12 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.onionroute.lite.Constants
 import org.onionroute.lite.KillSwitch
 import org.onionroute.lite.MainActivity
@@ -30,6 +36,12 @@ import org.onionroute.lite.tor.TorProcessManager
  * - Enforcing kill switch via [KillSwitch]
  * - Broadcasting status & bandwidth updates to the UI
  * - Running as a foreground service with persistent notification
+ *
+ * Threading:
+ *   All Tor operations (process start, control port connect, etc.) run on
+ *   [Dispatchers.IO] via [serviceScope] to avoid NetworkOnMainThreadException
+ *   and StrictMode violations. The main thread is only used for UI broadcasts
+ *   and notification updates.
  */
 class TorService : Service() {
 
@@ -45,6 +57,10 @@ class TorService : Service() {
     private var isSnowflakeEnabled = false
     private var isObfs4Enabled = false
     private var isWebTunnelEnabled = false
+
+    /** Coroutine scope tied to this service's lifecycle. Uses SupervisorJob so
+     *  one failed child coroutine doesn't cancel siblings. */
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val notificationManager by lazy {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -72,7 +88,7 @@ class TorService : Service() {
         }
 
         when (intent?.action) {
-            Constants.ACTION_START_TOR -> startTor()
+            Constants.ACTION_START_TOR -> startTorAsync()
             Constants.ACTION_STOP_TOR -> stopTor()
             Constants.ACTION_STOP_VPN -> handleVpnStop()
             Constants.ACTION_TOGGLE_SNOWFLAKE -> toggleSnowflake()
@@ -88,12 +104,29 @@ class TorService : Service() {
 
     override fun onDestroy() {
         stopTorInternal()
+        serviceScope.cancel()
         super.onDestroy()
     }
 
     // ── Tor Control ───────────────────────────────────────────────
 
-    private fun startTor() {
+    /**
+     * Launches [startTor] on [Dispatchers.IO] to avoid NetworkOnMainThreadException.
+     * All socket I/O (control port connection, bandwidth events) must happen off
+     * the main thread — Android StrictMode forbids network access on the UI thread.
+     */
+    private fun startTorAsync() {
+        serviceScope.launch {
+            startTor()
+        }
+    }
+
+    /**
+     * Starts the Tor daemon and connects to the control port.
+     * MUST be called from a background thread (via [startTorAsync]) because it
+     * performs blocking socket I/O to the Tor control port.
+     */
+    private suspend fun startTor() {
         if (isTorRunning) {
             Log.w(tag, "Tor is already running")
             broadcastStatus("CONNECTED")
@@ -109,7 +142,7 @@ class TorService : Service() {
             isObfs4Enabled = prefs.getBoolean(Constants.PREF_OBFS4_ENABLED, false)
             isWebTunnelEnabled = prefs.getBoolean(Constants.PREF_WEBTUNNEL_ENABLED, false)
 
-            torProcessManager = TorProcessManager(this)
+            torProcessManager = TorProcessManager(this@TorService)
             val configResult = torProcessManager!!.startTor(
                 useSnowflake = isSnowflakeEnabled,
                 useObfs4 = isObfs4Enabled,
@@ -122,15 +155,32 @@ class TorService : Service() {
                 return
             }
 
-            // Connect to Tor control port
-            torControlConnection = TorControlConnection(this)
-            val connected = torControlConnection!!.connect(
-                Constants.TOR_CONTROL_PORT,
-                torProcessManager!!.controlCookieFile
-            )
+            // Wait for Tor to initialize and open the control port.
+            // The daemon needs time to bind the control port after launch.
+            // Retry with exponential backoff: 500ms, 1s, 1.5s, 2s, 2.5s, 3s.
+            val maxRetries = 6
+            var connected = false
+
+            for (attempt in 1..maxRetries) {
+                delay(attempt * 500L)
+
+                try {
+                    torControlConnection = TorControlConnection(this@TorService)
+                    connected = torControlConnection!!.connect(
+                        Constants.TOR_CONTROL_PORT,
+                        torProcessManager!!.controlCookieFile
+                    )
+                    if (connected) break
+                } catch (e: Exception) {
+                    Log.d(tag, "Control port attempt $attempt failed: ${e.message}")
+                }
+
+                torControlConnection?.disconnect()
+                torControlConnection = null
+            }
 
             if (!connected) {
-                Log.e(tag, "Failed to connect to Tor control port")
+                Log.e(tag, "Failed to connect to Tor control port after $maxRetries attempts")
                 broadcastStatus("ERROR", "Failed to connect to Tor control port")
                 return
             }
@@ -183,7 +233,7 @@ class TorService : Service() {
         // Restart Tor with new bridge config if running
         if (isTorRunning) {
             stopTorInternal()
-            startTor()
+            startTorAsync()
         }
     }
 
@@ -196,7 +246,7 @@ class TorService : Service() {
         // Restart Tor with new bridge config if running
         if (isTorRunning) {
             stopTorInternal()
-            startTor()
+            startTorAsync()
         }
     }
 
@@ -209,7 +259,7 @@ class TorService : Service() {
         // Restart Tor with new bridge config if running
         if (isTorRunning) {
             stopTorInternal()
-            startTor()
+            startTorAsync()
         }
     }
 

@@ -7,15 +7,23 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Connection to the Tor control port for monitoring and controlling the Tor daemon.
+ *
+ * All reads from the control socket are routed through a single listener thread
+ * to avoid race conditions. GETINFO queries are handled via a pending-response map
+ * that the listener thread populates when the corresponding response arrives.
  *
  * Supports:
  * - Authenticating via cookie
  * - Subscribing to bandwidth events (BW)
  * - Subscribing to circuit/status events (CIRC, STATUS_CLIENT)
- * - Querying Tor info via GETINFO
+ * - Querying Tor info via GETINFO (thread-safe)
  */
 class TorControlConnection(private val context: Context) {
 
@@ -30,6 +38,11 @@ class TorControlConnection(private val context: Context) {
     private var onBandwidthUpdate: ((down: Long, up: Long) -> Unit)? = null
     private var onCircuitEvent: ((line: String) -> Unit)? = null
     private var onStatusEvent: ((line: String) -> Unit)? = null
+
+    // ── Thread-safe GETINFO support ───────────────────────────────
+    // Pending GETINFO requests waiting for responses from the listener thread.
+    private val pendingResponses = ConcurrentHashMap<String, CountDownLatch>()
+    private val responseValues = ConcurrentHashMap<String, String>()
 
     // ── Public API ────────────────────────────────────────────────
 
@@ -50,24 +63,26 @@ class TorControlConnection(private val context: Context) {
             Log.d(tag, "Connecting to Tor control port $port…")
 
             controlSocket = Socket("127.0.0.1", port)
-            controlSocket?.soTimeout = 5000
+            controlSocket?.soTimeout = 15000
 
             inputStream = controlSocket?.getInputStream()
             outputStream = controlSocket?.getOutputStream()
 
-            // Authenticate using cookie
+            // Authenticate using cookie — read response directly before listener starts
             val cookieFile = File(cookieFilePath)
             if (!cookieFile.exists()) {
-                Log.e(tag, "Cookie file not found: $cookieFilePath")
+                Log.e(tag, "Cookie file not found: \$cookieFilePath")
                 disconnect()
                 return false
             }
 
             val cookieHex = cookieFile.readBytes().joinToString("") { "%02x".format(it) }
-            val authCommand = "AUTHENTICATE $cookieHex\r\n"
-            sendCommand(authCommand)
+            synchronized(outputStream!!) {
+                outputStream!!.write("AUTHENTICATE $cookieHex\r\n".toByteArray())
+                outputStream!!.flush()
+            }
 
-            val response = readLine()
+            val response = readLineSync()
             if (!response.startsWith("250")) {
                 Log.e(tag, "Authentication failed: $response")
                 disconnect()
@@ -93,7 +108,10 @@ class TorControlConnection(private val context: Context) {
             listenerThread?.interrupt()
             listenerThread = null
 
-            sendCommand("SIGNAL SHUTDOWN\r\n")
+            synchronized(outputStream ?: return) {
+                outputStream?.write("SIGNAL SHUTDOWN\r\n".toByteArray())
+                outputStream?.flush()
+            }
         } catch (_: Exception) {}
 
         try {
@@ -108,6 +126,8 @@ class TorControlConnection(private val context: Context) {
         inputStream = null
         controlSocket = null
         isConnected = false
+        pendingResponses.clear()
+        responseValues.clear()
         Log.d(tag, "Disconnected from control port")
     }
 
@@ -126,7 +146,7 @@ class TorControlConnection(private val context: Context) {
         // Subscribe to BW, CIRC, and STATUS_CLIENT events
         sendCommand("SETEVENTS BW CIRC STATUS_CLIENT\r\n")
 
-        // Start listener thread
+        // Start listener thread — this is the ONLY thread that reads from inputStream
         listenerThread = Thread({
             listenForEvents()
         }, "TorControlListener")
@@ -135,21 +155,29 @@ class TorControlConnection(private val context: Context) {
     }
 
     /**
-     * Sends a GETINFO query to the control port.
+     * Sends a GETINFO query to the control port (thread-safe).
+     * The response is collected by the listener thread, not read directly.
      */
     fun getInfo(keyword: String): String? {
         if (!isConnected) return null
 
         return try {
+            val latch = CountDownLatch(1)
+            pendingResponses[keyword] = latch
+
             sendCommand("GETINFO $keyword\r\n")
-            val response = readLine()
-            if (response.startsWith("250")) {
-                // Parse the info value from 250-keyword=value
-                val prefix = "250-$keyword="
-                if (response.startsWith(prefix)) response.substring(prefix.length) else null
-            } else null
+
+            // Wait up to 10 seconds for the listener thread to deliver the response
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                Log.w(tag, "GETINFO timeout for $keyword")
+                pendingResponses.remove(keyword)
+                return null
+            }
+
+            responseValues.remove(keyword)
         } catch (e: Exception) {
             Log.e(tag, "GETINFO failed for $keyword", e)
+            pendingResponses.remove(keyword)
             null
         }
     }
@@ -161,9 +189,18 @@ class TorControlConnection(private val context: Context) {
         if (!isConnected) return false
 
         return try {
+            val latch = CountDownLatch(1)
+            pendingResponses["SIGNAL_$signal"] = latch
+
             sendCommand("SIGNAL $signal\r\n")
-            val response = readLine()
-            response.startsWith("250")
+
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                pendingResponses.remove("SIGNAL_$signal")
+                return false
+            }
+
+            val resp = responseValues.remove("SIGNAL_$signal")
+            resp?.startsWith("250") == true
         } catch (e: Exception) {
             Log.e(tag, "SIGNAL $signal failed", e)
             false
@@ -175,47 +212,97 @@ class TorControlConnection(private val context: Context) {
     private fun sendCommand(command: String) {
         try {
             val os = outputStream ?: return
-            os.write(command.toByteArray())
-            os.flush()
+            synchronized(os) {
+                os.write(command.toByteArray())
+                os.flush()
+            }
         } catch (e: Exception) {
-            Log.e(tag, "Failed to send command: $command", e)
+            Log.e(tag, "Failed to send command: \$command", e)
             isConnected = false
         }
     }
 
-    private fun readLine(): String {
+    /**
+     * Synchronous readLine for initial auth before the listener thread starts.
+     */
+    private fun readLineSync(): String {
         val sb = StringBuilder()
         val stream = inputStream ?: return ""
 
         while (true) {
             val b = stream.read()
-            if (b == -1 || b == '\n'.code) break
-            if (b != '\r'.code) sb.append(b.toChar())
+            if (b == -1 || b == 10) break
+            if (b != 13) sb.append(b.toChar())
         }
 
         return sb.toString()
     }
 
+    /**
+     * Listener thread — the ONLY reader from inputStream after connect().
+     * Routes responses to pending GETINFO requests or event callbacks.
+     */
     private fun listenForEvents() {
         try {
             val stream = inputStream ?: return
 
             while (isConnected && !Thread.currentThread().isInterrupted) {
-                val line = readLine()
+                val line = readLineFromStream(stream)
                 if (line.isEmpty()) continue
 
                 when {
+                    // Async events (650 ...)
                     line.startsWith("650 BW ") -> parseBandwidthEvent(line)
                     line.startsWith("650 CIRC ") -> onCircuitEvent?.invoke(line)
                     line.startsWith("650 STATUS_CLIENT ") -> onStatusEvent?.invoke(line)
+
+                    // GETINFO responses (250-keyword=value or 250 OK)
+                    line.startsWith("250-") -> {
+                        // Format: 250-keyword=value
+                        val eqIdx = line.indexOf('=', 4)
+                        if (eqIdx > 4) {
+                            val keyword = line.substring(4, eqIdx)
+                            val value = line.substring(eqIdx + 1)
+                            responseValues[keyword] = value
+                            pendingResponses.remove(keyword)?.countDown()
+                        }
+                    }
+                    line.startsWith("250 ") -> {
+                        // Final line of a response: 250 OK
+                        // Signal any pending response that wasn't a key=value pair
+                        for ((key, latch) in pendingResponses) {
+                            if (!responseValues.containsKey(key)) {
+                                responseValues[key] = line
+                            }
+                            latch.countDown()
+                        }
+                    }
+                    line.startsWith("5") -> {
+                        // Error response — unblock any pending requests
+                        for ((_, latch) in pendingResponses) {
+                            latch.countDown()
+                        }
+                    }
                 }
             }
         } catch (e: InterruptedException) {
             Log.d(tag, "Event listener interrupted")
         } catch (e: Exception) {
-            Log.e(tag, "Event listener error", e)
+            if (isConnected) {
+                Log.e(tag, "Event listener error", e)
+            }
             isConnected = false
         }
+    }
+
+    private fun readLineFromStream(stream: InputStream): String {
+        val sb = StringBuilder()
+        while (true) {
+            val b = stream.read()
+            if (b == -1 || b == 10) break
+            if (b != 13) sb.append(b.toChar())
+        }
+        return sb.toString()
     }
 
     private fun parseBandwidthEvent(line: String) {

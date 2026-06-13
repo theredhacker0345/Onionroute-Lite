@@ -12,7 +12,7 @@
 #   - x86_64       (64-bit Intel)
 #
 # Prerequisites:
-#   - Android NDK r25c (or compatible)
+#   - Android NDK r26d (or compatible)
 #   - Git
 #   - Make, GCC host toolchain
 #

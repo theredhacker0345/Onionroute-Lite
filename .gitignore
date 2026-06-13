@@ -44,28 +44,29 @@ local.properties
 *.keystore
 !app/debug.keystore
 
-# ── Manual Build Artifacts ──────────────────────────────────
-/build_manual/
+# ── Environment & Secrets ────────────────────────────────────
+.env
+.env.*
 
-# ── Analysis / Testing Artifacts ────────────────────────────
+# ── Development / CI Artifacts ───────────────────────────────
+/download/
+/upload/
+/latest/
+/skills/
+/worklog*.md
+/build_manual/
 /apk-extracted/
+
+# ── Stray Root Files ─────────────────────────────────────────
+# ProGuard rules belong in app/proguard-rules.pro, not root
+/proguard-rules.pro
+# Launcher icons belong in app/src/main/res/, not root
+/ic_launcher.png
+
+# ── Node.js (used by CI tooling only) ───────────────────────
 node_modules/
 package.json
 package-lock.json
-captcha-*
-signup-*.png
-solve-captcha.js
-test-apk.js
-upload-apk.js
-appetize-signup*.js
-complete-signup.js
-final-signup*.js
-
-# ── Legacy / Deleted Packages ───────────────────────────────
-# These were deleted for F-Droid compliance (Google STUN refs)
-/app/src/main/java/org/torlite/
-/app/src/main/java/org/phantomvpn/
-/metadata/org.torlite.yml
 
 # ── Temp Files ───────────────────────────────────────────────
 *.log

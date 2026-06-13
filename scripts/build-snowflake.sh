@@ -17,7 +17,7 @@
 #
 # Prerequisites:
 #   - Go 1.21+
-#   - Android NDK r25c
+#   - Android NDK r26d
 #   - Git
 #
 # Usage:
@@ -106,7 +106,6 @@ if [ -n "${GOARM}" ]; then
 fi
 export CGO_ENABLED=1
 export CC="${NDK_CC}"
-export CGO_CC="${NDK_CC}"
 export CGO_CFLAGS="${ABI_CFLAGS}"
 export CGO_LDFLAGS="${ABI_LDFLAGS}"
 
@@ -119,17 +118,8 @@ cd "${BUILD_DIR}"
 # Initialize Go module with pinned version
 echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
 go mod init onionroute-build/snowflake
-# IMPORTANT: The canonical module path does NOT have .git in it.
-# The module's go.mod declares: module gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2
-# Using the .git variant causes go.mod resolution errors.
-#
-# Use dummy imports to force go mod tidy to track the client and proxy packages.
-# Without this, `go get` adds the module as indirect and the packages
-# aren't resolvable at build time.
-echo 'package main; import _ "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/client"' > dummy_client.go
-go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2@v${SNOWFLAKE_VERSION}
+go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2@v${SNOWFLAKE_VERSION}
 go mod tidy
-rm -f dummy_client.go
 
 # Verify all module checksums
 go mod verify
@@ -138,13 +128,13 @@ go mod verify
 echo "Building Snowflake client for ${ABI}..."
 go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
     -o snowflake-client \
-    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/client
+    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/client
 
 # ── Build 2: Snowflake Proxy (Kindness Mode) ────────────────
 echo "Building Snowflake proxy for ${ABI}..."
 go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
     -o snowflake-proxy \
-    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/proxy
+    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/proxy
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"
