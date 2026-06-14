@@ -140,12 +140,58 @@ fun SettingsScreen(appState: OnionRouteAppState) {
         // KINDNESS section
         SectionLabel("KINDNESS MODE")
         Spacer(modifier = Modifier.height(12.dp))
-        SettingToggle("Kindness Mode", "Run a Snowflake proxy to help censored users", appState.isKindnessEnabled) { appState.updateKindness(it) }
-        Text(
-            text = "When enabled, your device acts as a Snowflake proxy. Censored users can route their Tor traffic through your connection via WebRTC. This uses minimal bandwidth and helps fight censorship.",
-            style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextSecondary),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
+
+        // Clickable kindness card that navigates to stats screen
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (appState.isKindnessEnabled) OnionRouteColors.JadeGlow else OnionRouteColors.Surface2)
+                .border(1.dp, if (appState.isKindnessEnabled) OnionRouteColors.Jade.copy(alpha = 0.4f) else OnionRouteColors.BorderSubtle, RoundedCornerShape(10.dp))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { appState.navigateTo(Screen.Kindness) }
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Kindness Mode",
+                        style = OnionRouteTypography.BodyMedium.copy(
+                            color = if (appState.isKindnessEnabled) OnionRouteColors.Jade else OnionRouteColors.TextPrimary
+                        )
+                    )
+                    Text(
+                        text = if (appState.isKindnessEnabled) "Tap to view stats" else "Run a Snowflake proxy to help censored users",
+                        style = OnionRouteTypography.LabelSmall.copy(
+                            color = if (appState.isKindnessEnabled) OnionRouteColors.Jade.copy(alpha = 0.7f) else OnionRouteColors.TextSecondary
+                        )
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (appState.isKindnessEnabled) OnionRouteColors.Jade else OnionRouteColors.TextTertiary)
+                    )
+                    Text(
+                        text = "\u2192",
+                        color = OnionRouteColors.Jade,
+                        fontSize = 16.sp,
+                        fontFamily = SyneFontFamily
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 

@@ -52,6 +52,12 @@ object Constants {
     const val PREF_WEBTUNNEL_CUSTOM_BRIDGES = "webtunnel_custom_bridges"
     const val PREF_CUSTOM_BRIDGES = "custom_bridges"
 
+    // ── Kindness Stats Preferences ────────────────────────────
+    const val PREF_KINDNESS_DATA_DONATED = "kindness_data_donated"
+    const val PREF_KINDNESS_PEOPLE_HELPED_NOW = "kindness_people_helped_now"
+    const val PREF_KINDNESS_PEOPLE_HELPED_TOTAL = "kindness_people_helped_total"
+    const val PREF_KINDNESS_SESSION_START = "kindness_session_start"
+
     // ── Notification ──────────────────────────────────────────
     const val NOTIFICATION_CHANNEL_ID = "onionroute_service"
     const val NOTIFICATION_ID = 1
@@ -75,6 +81,7 @@ object Constants {
     const val ACTION_VPN_ALWAYS_ON = "org.onionroute.lite.VPN_ALWAYS_ON"
     const val ACTION_NEW_CIRCUIT = "org.onionroute.lite.NEW_CIRCUIT"
     const val ACTION_IMPORT_BRIDGES = "org.onionroute.lite.IMPORT_BRIDGES"
+    const val ACTION_KINDNESS_STATS = "org.onionroute.lite.KINDNESS_STATS"
 
     // ── Broadcast Extra Keys ──────────────────────────────────
     const val EXTRA_TOR_STATUS = "tor_status"
@@ -84,6 +91,9 @@ object Constants {
     const val EXTRA_BYTES_UP = "bytes_up"
     const val EXTRA_BYTES_DOWN = "bytes_down"
     const val EXTRA_SPEED_UP = "speed_up"
+    const val EXTRA_KINDNESS_DATA_DONATED = "kindness_data_donated"
+    const val EXTRA_KINDNESS_PEOPLE_NOW = "kindness_people_now"
+    const val EXTRA_KINDNESS_PEOPLE_TOTAL = "kindness_people_total"
     const val EXTRA_SPEED_DOWN = "speed_down"
 
     // ── VPN Configuration ─────────────────────────────────────

@@ -13,7 +13,10 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.onionroute.lite.Constants
 import org.onionroute.lite.MainActivity
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Foreground service that runs a Snowflake proxy to help censored users.
@@ -23,10 +26,12 @@ import java.io.File
  * through the volunteer's proxy via WebRTC, bypassing network censorship.
  *
  * Responsible for:
- * - Installing the snowflake-proxy native binary from the APK's lib directory
- * - Running the snowflake-proxy process with the Tor Project broker
+ * - Running the snowflake-proxy native binary from the APK's lib directory
+ * - Parsing proxy stdout for real-time stats (data donated, clients helped)
+ * - Broadcasting stats to the UI via Intent broadcasts
  * - Maintaining a foreground notification while the proxy is active
  * - Stopping the proxy cleanly when Kindness Mode is disabled
+ * - Retry with exponential backoff on transient failures (exit code 2)
  *
  * The proxy binary is built from the same Snowflake source tree:
  *   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/proxy
@@ -43,6 +48,12 @@ class KindnessService : Service() {
 
     private var proxyProcess: Process? = null
     private var monitorThread: Thread? = null
+    private var stdoutThread: Thread? = null
+
+    private val dataDonated = AtomicLong(0L)
+    private val peopleHelpedNow = AtomicLong(0L)
+    private val peopleHelpedTotal = AtomicLong(0L)
+    private var consecutiveFailures = 0
 
     private val notificationManager by lazy {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -60,15 +71,18 @@ class KindnessService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForeground(
                 Constants.KINDNESS_NOTIFICATION_ID,
-                buildNotification("Starting Snowflake proxy…")
+                buildNotification("Starting Snowflake proxy\u2026")
             )
         }
 
         when (intent?.action) {
-            Constants.ACTION_START_KINDNESS -> startProxy()
+            Constants.ACTION_START_KINDNESS -> {
+                consecutiveFailures = 0
+                startProxy()
+            }
             Constants.ACTION_STOP_KINDNESS -> stopProxy()
             else -> {
-                // Default: start proxy if service is launched without action
+                consecutiveFailures = 0
                 startProxy()
             }
         }
@@ -99,24 +113,25 @@ class KindnessService : Service() {
             return
         }
 
-        Log.i(tag, "Starting Snowflake proxy…")
+        Log.i(tag, "Starting Snowflake proxy\u2026")
 
         try {
-            // Execute the proxy binary directly from nativeLibraryDir
             val proxyBinary = getProxyBinary()
             if (proxyBinary == null) {
                 Log.e(tag, "Failed to locate snowflake-proxy binary")
-                updateNotification("Snowflake proxy — binary not found")
+                updateNotification("Snowflake proxy \u2014 binary not found")
                 broadcastKindnessStatus(false)
                 return
             }
 
+            // Build command with capacity flag so proxy reports connection stats
             val processBuilder = ProcessBuilder(
                 proxyBinary.absolutePath,
                 "-broker", Constants.SNOWFLAKE_BROKER_URL,
                 "-front", Constants.SNOWFLAKE_FRONT_DOMAIN,
                 "-ice", Constants.SNOWFLAKE_ICE_SERVERS,
-                "-log", "info"
+                "-log", "info",
+                "-capacity", "5"
             )
 
             val appDataDir = filesDir.absolutePath
@@ -124,16 +139,29 @@ class KindnessService : Service() {
             processBuilder.redirectErrorStream(true)
 
             proxyProcess = processBuilder.start()
+
+            // Record session start time for uptime calculation
+            val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+            if (prefs.getLong(Constants.PREF_KINDNESS_SESSION_START, 0L) == 0L) {
+                prefs.edit().putLong(Constants.PREF_KINDNESS_SESSION_START, System.currentTimeMillis()).apply()
+            }
+
+            // Restore accumulated stats from preferences
+            dataDonated.set(prefs.getLong(Constants.PREF_KINDNESS_DATA_DONATED, 0L))
+            peopleHelpedTotal.set(prefs.getLong(Constants.PREF_KINDNESS_PEOPLE_HELPED_TOTAL, 0L))
+
+            startStdoutReader()
             startProcessMonitor()
 
-            updateNotification("Helping censored users — Snowflake proxy active")
+            updateNotification("Helping censored users \u2014 Snowflake proxy active")
             broadcastKindnessStatus(true)
+            broadcastKindnessStats()
 
             Log.i(tag, "Snowflake proxy started (PID: ${getPid()})")
 
         } catch (e: Exception) {
             Log.e(tag, "Failed to start Snowflake proxy", e)
-            updateNotification("Snowflake proxy — error")
+            updateNotification("Snowflake proxy \u2014 error")
             broadcastKindnessStatus(false)
         }
     }
@@ -142,13 +170,18 @@ class KindnessService : Service() {
      * Stops the Snowflake proxy and removes the foreground notification.
      */
     private fun stopProxy() {
+        // Persist final stats before stopping
+        persistStats()
         stopProxyInternal()
         updateNotification("Snowflake proxy stopped")
         broadcastKindnessStatus(false)
 
-        // Persist disabled state
+        // Persist disabled state and clear session
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
-        prefs.edit().putBoolean(Constants.PREF_KINDNESS_ENABLED, false).apply()
+        prefs.edit()
+            .putBoolean(Constants.PREF_KINDNESS_ENABLED, false)
+            .putLong(Constants.PREF_KINDNESS_SESSION_START, 0L)
+            .apply()
 
         // Stop the service entirely
         stopSelf()
@@ -156,6 +189,9 @@ class KindnessService : Service() {
 
     private fun stopProxyInternal() {
         try {
+            stdoutThread?.interrupt()
+            stdoutThread = null
+
             monitorThread?.interrupt()
             monitorThread = null
 
@@ -174,8 +210,7 @@ class KindnessService : Service() {
      * Executes the snowflake-proxy binary directly from nativeLibraryDir.
      *
      * With android:extractNativeLibs="true", Android extracts the .so files
-     * to nativeLibraryDir on install. We execute them directly from there —
-     * no copying to filesDir (which is mounted noexec on Android 10+).
+     * to nativeLibraryDir on install. We execute them directly from there.
      *
      * @return The executable File in nativeLibraryDir, or null if not found
      */
@@ -188,12 +223,127 @@ class KindnessService : Service() {
             return null
         }
 
-        // Ensure execute permission (should already be set, but be safe)
         if (!binary.canExecute()) {
             binary.setExecutable(true, false)
         }
         Log.d(tag, "Found snowflake-proxy binary: ${binary.absolutePath}")
         return binary
+    }
+
+    // ── Stdout Reader ────────────────────────────────────────────
+
+    /**
+     * Reads the proxy's stdout line-by-line and extracts stats.
+     *
+     * Snowflake proxy outputs lines like:
+     *   "proxy: client 1 connected"
+     *   "proxy: client 1 disconnected, data relayed: 1234567 bytes"
+     *   "proxy: snowflake proxy started"
+     *   "proxy: error: ..."
+     *
+     * We parse these to track:
+     * - Number of currently connected clients (people being helped right now)
+     * - Total number of clients helped
+     * - Total data donated (bytes relayed)
+     */
+    private fun startStdoutReader() {
+        stdoutThread = Thread({
+            try {
+                val process = proxyProcess ?: return@Thread
+                val reader = BufferedReader(InputStreamReader(process.inputStream), 4096)
+                var line: String?
+
+                while (reader.readLine().also { line = it } != null) {
+                    line?.let { parseProxyLine(it) }
+                }
+            } catch (e: InterruptedException) {
+                Log.d(tag, "Stdout reader interrupted")
+            } catch (e: Exception) {
+                Log.d(tag, "Stdout reader ended: ${e.message}")
+            }
+        }, "SnowflakeProxyStdout")
+        stdoutThread?.isDaemon = true
+        stdoutThread?.start()
+    }
+
+    /**
+     * Parses a single line of proxy stdout for stats.
+     *
+     * Known patterns from snowflake-proxy v2:
+     *   "proxy: client <n> connected"                              -> increment current count
+     *   "proxy: client <n> disconnected, data relayed: <bytes> B"  -> decrement current, add data
+     *   "proxy: In the snowflake proxy session, ... data relayed: <bytes>"  -> session total
+     */
+    private fun parseProxyLine(line: String) {
+        Log.d(tag, "Proxy: $line")
+
+        val trimmed = line.trim().lowercase()
+
+        // Client connected
+        if (trimmed.contains("connected") && !trimmed.contains("disconnected")) {
+            peopleHelpedNow.incrementAndGet()
+            peopleHelpedTotal.incrementAndGet()
+            broadcastKindnessStats()
+        }
+
+        // Client disconnected — look for data relayed
+        if (trimmed.contains("disconnected")) {
+            peopleHelpedNow.decrementAndGet().coerceAtLeast(0)
+            // Extract bytes: "data relayed: 1234567 B" or "data relayed: 1234567 bytes"
+            val dataMatch = Regex("""data\s+relayed:\s+(\d+)""").find(trimmed)
+            dataMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
+                dataDonated.addAndGet(bytes)
+            }
+            broadcastKindnessStats()
+        }
+
+        // Session summary data
+        if (trimmed.contains("data relayed:") && trimmed.contains("session")) {
+            val dataMatch = Regex("""data\s+relayed:\s+(\d+)""").find(trimmed)
+            dataMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
+                dataDonated.addAndGet(bytes)
+            }
+            broadcastKindnessStats()
+        }
+
+        // Periodic stats update (every ~30s the proxy may report status)
+        if (trimmed.contains("bytes") && (trimmed.contains("sent") || trimmed.contains("received"))) {
+            val byteMatch = Regex("""(\d+)\s+bytes""").find(trimmed)
+            byteMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
+                // Only add if it looks like a delta, not a cumulative total
+                if (bytes < 10_000_000) {
+                    dataDonated.addAndGet(bytes)
+                }
+            }
+            broadcastKindnessStats()
+        }
+    }
+
+    // ── Stats Persistence & Broadcasting ──────────────────────────
+
+    private fun persistStats() {
+        try {
+            val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+            prefs.edit()
+                .putLong(Constants.PREF_KINDNESS_DATA_DONATED, dataDonated.get())
+                .putLong(Constants.PREF_KINDNESS_PEOPLE_HELPED_NOW, peopleHelpedNow.get().coerceAtLeast(0))
+                .putLong(Constants.PREF_KINDNESS_PEOPLE_HELPED_TOTAL, peopleHelpedTotal.get())
+                .apply()
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to persist stats", e)
+        }
+    }
+
+    private fun broadcastKindnessStats() {
+        persistStats()
+
+        val intent = Intent(Constants.ACTION_KINDNESS_STATS).apply {
+            putExtra(Constants.EXTRA_KINDNESS_DATA_DONATED, dataDonated.get())
+            putExtra(Constants.EXTRA_KINDNESS_PEOPLE_NOW, peopleHelpedNow.get().coerceAtLeast(0))
+            putExtra(Constants.EXTRA_KINDNESS_PEOPLE_TOTAL, peopleHelpedTotal.get())
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
     }
 
     // ── Process Monitoring ────────────────────────────────────────
@@ -206,15 +356,33 @@ class KindnessService : Service() {
                 Log.w(tag, "Snowflake proxy exited with code $exitCode")
                 proxyProcess = null
 
-                // Auto-restart if kindness mode is still enabled
                 val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
                 val kindnessEnabled = prefs.getBoolean(Constants.PREF_KINDNESS_ENABLED, false)
+
                 if (kindnessEnabled && exitCode != 0) {
-                    Log.i(tag, "Attempting Snowflake proxy restart…")
-                    Thread.sleep(RESTART_DELAY_MS)
+                    consecutiveFailures++
+
+                    // Exponential backoff: 5s, 10s, 20s, 40s... capped at 5 min
+                    val delay = (RESTART_DELAY_MS * (1L shl (consecutiveFailures - 1).coerceAtMost(6)))
+                        .coerceAtMost(MAX_RESTART_DELAY_MS)
+
+                    Log.i(tag, "Attempting Snowflake proxy restart (attempt $consecutiveFailures, wait ${delay}ms)\u2026")
+
+                    if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
+                        Log.w(tag, "Too many consecutive failures ($consecutiveFailures), stopping restart attempts")
+                        updateNotification("Snowflake proxy \u2014 unable to connect. Tap to retry.")
+                        broadcastKindnessStatus(false)
+                        return@Thread
+                    }
+
+                    Thread.sleep(delay)
                     if (prefs.getBoolean(Constants.PREF_KINDNESS_ENABLED, false)) {
                         startProxy()
                     }
+                } else if (exitCode == 0) {
+                    // Clean exit — kindness was likely disabled
+                    updateNotification("Snowflake proxy stopped")
+                    broadcastKindnessStatus(false)
                 } else {
                     updateNotification("Snowflake proxy stopped")
                     broadcastKindnessStatus(false)
@@ -263,9 +431,18 @@ class KindnessService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Show stats in notification if we have them
+        val dataStr = formatBytes(dataDonated.get())
+        val peopleNow = peopleHelpedNow.get().coerceAtLeast(0)
+        val contentText = if (dataDonated.get() > 0 || peopleHelpedTotal.get() > 0) {
+            "$text | $dataStr donated, $peopleNow being helped"
+        } else {
+            text
+        }
+
         return NotificationCompat.Builder(this, Constants.KINDNESS_NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Kindness Mode")
-            .setContentText(text)
+            .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
@@ -312,8 +489,18 @@ class KindnessService : Service() {
         }
     }
 
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1_073_741_824 -> "%.1f GB".format(bytes / 1_073_741_824.0)
+        bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
+        bytes >= 1024 -> "%.1f KB".format(bytes / 1024.0)
+        bytes > 0 -> "$bytes B"
+        else -> "0 B"
+    }
+
     companion object {
         private const val RESTART_DELAY_MS = 5000L
+        private const val MAX_RESTART_DELAY_MS = 300_000L  // 5 minutes cap
+        private const val MAX_CONSECUTIVE_FAILURES = 10
 
         /**
          * Starts the Kindness Mode service (Snowflake proxy).
@@ -352,5 +539,29 @@ class KindnessService : Service() {
             val prefs = context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getBoolean(Constants.PREF_KINDNESS_ENABLED, false)
         }
+
+        /**
+         * Reads the current kindness stats from preferences.
+         * Used by UI to restore stats without waiting for a broadcast.
+         */
+        fun getStats(context: Context): KindnessStats {
+            val prefs = context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            return KindnessStats(
+                dataDonated = prefs.getLong(Constants.PREF_KINDNESS_DATA_DONATED, 0L),
+                peopleNow = prefs.getLong(Constants.PREF_KINDNESS_PEOPLE_HELPED_NOW, 0L),
+                peopleTotal = prefs.getLong(Constants.PREF_KINDNESS_PEOPLE_HELPED_TOTAL, 0L),
+                sessionStart = prefs.getLong(Constants.PREF_KINDNESS_SESSION_START, 0L)
+            )
+        }
     }
 }
+
+/**
+ * Data class holding kindness mode statistics.
+ */
+data class KindnessStats(
+    val dataDonated: Long = 0L,
+    val peopleNow: Long = 0L,
+    val peopleTotal: Long = 0L,
+    val sessionStart: Long = 0L
+)

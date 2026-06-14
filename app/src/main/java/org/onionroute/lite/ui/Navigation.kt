@@ -12,6 +12,7 @@ import org.onionroute.lite.ui.screens.HomeScreen
 import org.onionroute.lite.ui.screens.SettingsScreen
 import org.onionroute.lite.ui.screens.BridgeScreen
 import org.onionroute.lite.ui.screens.BandwidthScreen
+import org.onionroute.lite.ui.screens.KindnessScreen
 import org.onionroute.lite.ui.theme.ConnectionState
 
 sealed class Screen(val route: String) {
@@ -20,6 +21,7 @@ sealed class Screen(val route: String) {
     data object Bridges : Screen("bridges")
     data object Bandwidth : Screen("bandwidth")
     data object AppSelection : Screen("app_selection")
+    data object Kindness : Screen("kindness")
 }
 
 class OnionRouteAppState {
@@ -87,6 +89,20 @@ class OnionRouteAppState {
     var currentIcon by mutableStateOf("default")
         internal set
 
+    // ── Kindness Stats ─────────────────────────────────────────
+
+    var kindnessDataDonated by mutableStateOf(0L)
+        internal set
+
+    var kindnessPeopleNow by mutableStateOf(0L)
+        internal set
+
+    var kindnessPeopleTotal by mutableStateOf(0L)
+        internal set
+
+    var kindnessSessionStart by mutableStateOf(0L)
+        internal set
+
     fun updateCurrentIcon(icon: String) { currentIcon = icon }
 
     fun updateCustomBridges(bridges: List<String>) { customBridges = bridges }
@@ -104,6 +120,7 @@ class OnionRouteAppState {
             Screen.Bridges -> Screen.Settings
             Screen.Bandwidth -> Screen.Home
             Screen.AppSelection -> Screen.Settings
+            Screen.Kindness -> Screen.Settings
         }
     }
 
@@ -168,6 +185,13 @@ class OnionRouteAppState {
         totalDownloaded = totalDown
     }
 
+    fun updateKindnessStats(dataDonated: Long, peopleNow: Long, peopleTotal: Long, sessionStart: Long) {
+        kindnessDataDonated = dataDonated
+        kindnessPeopleNow = peopleNow
+        kindnessPeopleTotal = peopleTotal
+        kindnessSessionStart = sessionStart
+    }
+
     fun addSpeedDataPoint(speed: Float) {
         val current = speedDataPoints.toMutableList()
         current.add(speed)
@@ -198,6 +222,7 @@ fun OnionRouteNavigation(appState: OnionRouteAppState) {
             Screen.Bridges -> BridgeScreen(appState = appState)
             Screen.Bandwidth -> BandwidthScreen(appState = appState)
             Screen.AppSelection -> AppSelectionScreen(appState = appState)
+            Screen.Kindness -> KindnessScreen(appState = appState)
         }
     }
 }

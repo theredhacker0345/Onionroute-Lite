@@ -575,6 +575,32 @@ fun QuickToggleRow(appState: OnionRouteAppState) {
                 onToggle = { appState.updateObfs4(!appState.isObfs4Enabled) }
             )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ToggleChip(
+                label = "KINDNESS",
+                isActive = appState.isKindnessEnabled,
+                modifier = Modifier.weight(1f),
+                onToggle = {
+                    appState.updateKindness(!appState.isKindnessEnabled)
+                    // Navigate to kindness stats screen when enabling
+                    if (!appState.isKindnessEnabled) {
+                        appState.navigateTo(Screen.Kindness)
+                    }
+                }
+            )
+            ToggleChip(
+                label = "WEBTUNNEL",
+                isActive = appState.isWebTunnelEnabled,
+                modifier = Modifier.weight(1f),
+                onToggle = { appState.updateWebTunnel(!appState.isWebTunnelEnabled) }
+            )
+        }
     }
 }
 

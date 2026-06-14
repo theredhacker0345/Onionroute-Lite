@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
             when (intent?.action) {
                 Constants.ACTION_STATUS_UPDATE -> handleStatusUpdate(intent)
                 Constants.ACTION_BANDWIDTH_UPDATE -> handleBandwidthUpdate(intent)
+                Constants.ACTION_KINDNESS_STATS -> handleKindnessStats(intent)
             }
         }
     }
@@ -227,6 +228,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun handleKindnessStats(intent: Intent) {
+        val dataDonated = intent.getLongExtra(Constants.EXTRA_KINDNESS_DATA_DONATED, 0)
+        val peopleNow = intent.getLongExtra(Constants.EXTRA_KINDNESS_PEOPLE_NOW, 0)
+        val peopleTotal = intent.getLongExtra(Constants.EXTRA_KINDNESS_PEOPLE_TOTAL, 0)
+
+        val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+        val sessionStart = prefs.getLong(Constants.PREF_KINDNESS_SESSION_START, 0L)
+
+        runOnUiThread {
+            appState.updateKindnessStats(
+                dataDonated = dataDonated,
+                peopleNow = peopleNow,
+                peopleTotal = peopleTotal,
+                sessionStart = sessionStart
+            )
+        }
+    }
+
     private fun sendCommandToService(action: String) {
         val intent = Intent(this, TorService::class.java).apply { this.action = action }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -240,6 +259,7 @@ class MainActivity : ComponentActivity() {
         val filter = IntentFilter().apply {
             addAction(Constants.ACTION_STATUS_UPDATE)
             addAction(Constants.ACTION_BANDWIDTH_UPDATE)
+            addAction(Constants.ACTION_KINDNESS_STATS)
         }
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
