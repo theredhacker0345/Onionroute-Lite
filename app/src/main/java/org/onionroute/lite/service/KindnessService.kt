@@ -16,6 +16,7 @@ import org.onionroute.lite.MainActivity
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -53,7 +54,7 @@ class KindnessService : Service() {
     private val dataDonated = AtomicLong(0L)
     private val peopleHelpedNow = AtomicLong(0L)
     private val peopleHelpedTotal = AtomicLong(0L)
-    private var consecutiveFailures = 0
+    private val consecutiveFailures = AtomicInteger(0)
 
     private val notificationManager by lazy {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -77,12 +78,12 @@ class KindnessService : Service() {
 
         when (intent?.action) {
             Constants.ACTION_START_KINDNESS -> {
-                consecutiveFailures = 0
+                consecutiveFailures.set(0)
                 startProxy()
             }
             Constants.ACTION_STOP_KINDNESS -> stopProxy()
             else -> {
-                consecutiveFailures = 0
+                consecutiveFailures.set(0)
                 startProxy()
             }
         }
@@ -198,6 +199,9 @@ class KindnessService : Service() {
             proxyProcess?.destroy()
             proxyProcess = null
 
+            // Reset active connection count since proxy is stopped
+            peopleHelpedNow.set(0)
+
             Log.i(tag, "Snowflake proxy stopped")
         } catch (e: Exception) {
             Log.e(tag, "Error stopping Snowflake proxy", e)
@@ -288,7 +292,7 @@ class KindnessService : Service() {
 
         // Client disconnected — look for data relayed
         if (trimmed.contains("disconnected")) {
-            peopleHelpedNow.decrementAndGet().coerceAtLeast(0)
+            peopleHelpedNow.getAndUpdate { (it - 1).coerceAtLeast(0) }
             // Extract bytes: "data relayed: 1234567 B" or "data relayed: 1234567 bytes"
             val dataMatch = Regex("""data\s+relayed:\s+(\d+)""").find(trimmed)
             dataMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
@@ -360,16 +364,16 @@ class KindnessService : Service() {
                 val kindnessEnabled = prefs.getBoolean(Constants.PREF_KINDNESS_ENABLED, false)
 
                 if (kindnessEnabled && exitCode != 0) {
-                    consecutiveFailures++
+                    val failures = consecutiveFailures.incrementAndGet()
 
                     // Exponential backoff: 5s, 10s, 20s, 40s... capped at 5 min
-                    val delay = (RESTART_DELAY_MS * (1L shl (consecutiveFailures - 1).coerceAtMost(6)))
+                    val delay = (RESTART_DELAY_MS * (1L shl (failures - 1).coerceAtMost(6)))
                         .coerceAtMost(MAX_RESTART_DELAY_MS)
 
-                    Log.i(tag, "Attempting Snowflake proxy restart (attempt $consecutiveFailures, wait ${delay}ms)\u2026")
+                    Log.i(tag, "Attempting Snowflake proxy restart (attempt $failures, wait ${delay}ms)\u2026")
 
-                    if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
-                        Log.w(tag, "Too many consecutive failures ($consecutiveFailures), stopping restart attempts")
+                    if (failures > MAX_CONSECUTIVE_FAILURES) {
+                        Log.w(tag, "Too many consecutive failures ($failures), stopping restart attempts")
                         updateNotification("Snowflake proxy \u2014 unable to connect. Tap to retry.")
                         broadcastKindnessStatus(false)
                         return@Thread

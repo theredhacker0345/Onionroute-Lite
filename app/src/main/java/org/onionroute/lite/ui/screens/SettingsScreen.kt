@@ -212,7 +212,7 @@ fun SettingsScreen(appState: OnionRouteAppState) {
         // ABOUT section
         SectionLabel("ABOUT")
         Spacer(modifier = Modifier.height(12.dp))
-        SettingInfo("Version", "1.0.0")
+        SettingInfo("Version", "1.1.0-fdroid")
         SettingInfo("License", "GPL-3.0-or-later")
     }
 }

@@ -63,6 +63,8 @@ class MainActivity : ComponentActivity() {
         appState.updateAutoStart(prefs.getBoolean(Constants.PREF_AUTO_START, false))
         appState.updateSnowflake(prefs.getBoolean(Constants.PREF_SNOWFLAKE_ENABLED, false))
         appState.updateObfs4(prefs.getBoolean(Constants.PREF_OBFS4_ENABLED, false))
+        appState.updateWebTunnel(prefs.getBoolean(Constants.PREF_WEBTUNNEL_ENABLED, false))
+        appState.updateKindness(prefs.getBoolean(Constants.PREF_KINDNESS_ENABLED, false))
 
         // Load custom bridges from BridgeConfig
         val bridgeConfig = BridgeConfig(this)
