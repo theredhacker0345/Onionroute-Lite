@@ -115,45 +115,32 @@ BUILD_DIR="${SCRIPT_DIR}/../build-native/snowflake/${ABI}"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-# Initialize Go module with pinned version.
-# Use the canonical module path (no .git suffix).
-echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
-go mod init onionroute-build/snowflake
+# ── Build strategy ───────────────────────────────────────────
+# Go 1.21+ supports building directly from a versioned package path:
+#   go build pkg@version
+# This downloads the module, resolves all dependencies, and builds
+# the package — no go.mod/go.sum management needed.
+#
+# IMPORTANT: The Snowflake module's go.mod declares its canonical
+# path WITHOUT the .git suffix:
+#   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2
+# Using .git suffix causes a module path mismatch error.
 
-go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2@v${SNOWFLAKE_VERSION}
+SF_MODULE="gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2"
 
-# Create a dummy Go file that imports the snowflake client and proxy packages.
-# This prevents `go mod tidy` from pruning the dependency — without an
-# importing source file, tidy removes the require directive and `go build`
-# then fails with "no required module provides package".
-cat > dummy.go <<'EOF'
-//go:build ignore
-// +build ignore
-
-package main
-
-import (
-    _ "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/client"
-    _ "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/proxy"
-)
-EOF
-
-go mod tidy
-
-# Verify all module checksums
-go mod verify
+echo "Building Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
 
 # ── Build 1: Snowflake Client ────────────────────────────────
 echo "Building Snowflake client for ${ABI}..."
 go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
     -o snowflake-client \
-    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/client
+    "${SF_MODULE}/client@v${SNOWFLAKE_VERSION}"
 
 # ── Build 2: Snowflake Proxy (Kindness Mode) ────────────────
 echo "Building Snowflake proxy for ${ABI}..."
 go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
     -o snowflake-proxy \
-    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/proxy
+    "${SF_MODULE}/proxy@v${SNOWFLAKE_VERSION}"
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"

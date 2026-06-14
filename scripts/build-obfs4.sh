@@ -111,38 +111,26 @@ BUILD_DIR="${SCRIPT_DIR}/../build-native/obfs4/${ABI}"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-# Initialize Go module with pinned version
-echo "Downloading obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
-go mod init onionroute-build/obfs4
+# ── Build strategy ───────────────────────────────────────────
+# Go 1.21+ supports building directly from a versioned package path:
+#   go build pkg@version
+# This downloads the module, resolves all dependencies, and builds
+# the package — no go.mod/go.sum management needed.
+#
+# Previous approach (go mod init → go get → go mod tidy → go build)
+# failed because go mod tidy pruned dependencies that weren't
+# imported by any source file in the current module.
 
-# Add the obfs4 dependency
-go get gitlab.com/yawning/obfs4.git@${OBFS4_VERSION}
+echo "Building obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
 
-# Create a dummy Go file that imports the obfs4 package.
-# This prevents `go mod tidy` from pruning the dependency —
-# without an importing source file, tidy removes the require
-# directive and `go build` then fails with "no required module".
-cat > dummy.go <<'EOF'
-//go:build ignore
-// +build ignore
-
-package main
-
-import _ "gitlab.com/yawning/obfs4.git/cmd/obfs4proxy"
-EOF
-
-go mod tidy
-
-# Verify all module checksums
-go mod verify
-
-echo "Building obfs4proxy for ${ABI}..."
-# Build the obfs4proxy binary from the cmd/obfs4proxy package.
-OBFS4_PKG="gitlab.com/yawning/obfs4.git/cmd/obfs4proxy"
+# The obfs4proxy binary lives at cmd/obfs4proxy in the obfs4 module.
+# Try the standard cmd/ path first, then fall back to root path
+# (older versions put it at the module root).
+OBFS4_PKG="gitlab.com/yawning/obfs4.git/cmd/obfs4proxy@${OBFS4_VERSION}"
 if ! go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    -o obfs4proxy "${OBFS4_PKG}" 2>/dev/null; then
-    echo "Trying alternate package path (obfs4proxy at module root)..."
-    OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy"
+    -o obfs4proxy "${OBFS4_PKG}" 2>&1; then
+    echo "cmd/obfs4proxy path failed, trying module root path..."
+    OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy@${OBFS4_VERSION}"
     go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
         -o obfs4proxy "${OBFS4_PKG}"
 fi
