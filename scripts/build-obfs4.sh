@@ -112,38 +112,42 @@ mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
 # ── Build strategy ───────────────────────────────────────────
-# We use `go install pkg@version` which downloads the module and
-# compiles the package to $GOBIN/$GOPATH/bin. Then we copy the
-# binary to the output directory with the .so name.
+# We create a Go module, add the obfs4 dependency, and build
+# WITHOUT running `go mod tidy`. This is critical because:
 #
-# Note: `go build pkg@version` does NOT work — only `go get` and
-# `go install` support the path@version syntax in Go 1.21.
-# And `go install` produces a binary, while `go get` only downloads.
+#   1. go mod tidy prunes unused dependencies from go.mod
+#   2. Since our module has no source files importing obfs4,
+#      tidy removes it and go build then fails
+#   3. Build tags like //go:build ignore don't help because
+#      tidy also respects them
+#   4. go install pkg@version doesn't work with GOBIN when
+#      cross-compiling ("cannot install cross-compiled binaries
+#      when GOBIN is set")
+#   5. go build pkg@version doesn't support the @version syntax
 #
-# Previous approaches (go mod init → go get → go mod tidy → go build)
-# failed because go mod tidy pruned dependencies that weren't
-# imported by any non-ignored source file in the current module.
+# The solution: go mod init → go get → go mod download → go build
+# WITHOUT go mod tidy. This keeps all deps in go.mod/go.sum.
 
-# Set GOBIN to our build directory so `go install` puts the binary there
-export GOBIN="${BUILD_DIR}"
+echo "Downloading obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
+go mod init onionroute-build/obfs4
+go get gitlab.com/yawning/obfs4.git@${OBFS4_VERSION}
+go mod download
 
-echo "Building obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
-
-# The obfs4proxy binary lives at cmd/obfs4proxy in the obfs4 module.
-# Try the standard cmd/ path first, then fall back to root path
-# (older versions put it at the module root).
-OBFS4_PKG="gitlab.com/yawning/obfs4.git/cmd/obfs4proxy@${OBFS4_VERSION}"
-if ! go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    "${OBFS4_PKG}" 2>&1; then
-    echo "cmd/obfs4proxy path failed, trying module root path..."
-    OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy@${OBFS4_VERSION}"
-    go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
-        "${OBFS4_PKG}"
+echo "Building obfs4proxy for ${ABI}..."
+# The obfs4proxy binary may be at different paths depending on version.
+# Try the module root path first (where the main package is), then cmd/.
+OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy"
+if ! go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+    -o obfs4proxy "${OBFS4_PKG}" 2>&1; then
+    echo "Module root path failed, trying cmd/obfs4proxy..."
+    OBFS4_PKG="gitlab.com/yawning/obfs4.git/cmd/obfs4proxy"
+    go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+        -o obfs4proxy "${OBFS4_PKG}"
 fi
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"
-cp "${GOBIN}/obfs4proxy" "${OUTPUT_DIR}/libobfs4proxy.so"
+cp obfs4proxy "${OUTPUT_DIR}/libobfs4proxy.so"
 
 echo "Built: ${OUTPUT_DIR}/libobfs4proxy.so"
 ls -lh "${OUTPUT_DIR}/libobfs4proxy.so"

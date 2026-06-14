@@ -116,12 +116,19 @@ mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
 # ── Build strategy ───────────────────────────────────────────
-# We use `go install pkg@version` which downloads the module and
-# compiles the package to $GOBIN. Then we copy the binary to the
-# output directory with the .so name.
+# We create a Go module, add the snowflake dependency, and build
+# WITHOUT running `go mod tidy`. This is critical because:
 #
-# Note: `go build pkg@version` does NOT work — only `go get` and
-# `go install` support the path@version syntax in Go 1.21.
+#   1. go mod tidy prunes unused dependencies from go.mod
+#   2. Since our module has no source files importing snowflake,
+#      tidy removes it and go build then fails
+#   3. go install pkg@version doesn't work with GOBIN when
+#      cross-compiling ("cannot install cross-compiled binaries
+#      when GOBIN is set")
+#   4. go build pkg@version doesn't support the @version syntax
+#
+# The solution: go mod init → go get → go mod download → go build
+# WITHOUT go mod tidy. This keeps all deps in go.mod/go.sum.
 #
 # IMPORTANT: The Snowflake module's go.mod declares its canonical
 # path WITHOUT the .git suffix:
@@ -130,35 +137,27 @@ cd "${BUILD_DIR}"
 
 SF_MODULE="gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2"
 
-# Set GOBIN to our build directory so `go install` puts the binaries there
-export GOBIN="${BUILD_DIR}"
-
-echo "Building Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
+echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
+go mod init onionroute-build/snowflake
+go get "${SF_MODULE}@v${SNOWFLAKE_VERSION}"
+go mod download
 
 # ── Build 1: Snowflake Client ────────────────────────────────
 echo "Building Snowflake client for ${ABI}..."
-go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    "${SF_MODULE}/client@v${SNOWFLAKE_VERSION}"
-
-# Rename the binary (go install names it after the package dir)
-if [ -f "${GOBIN}/client" ]; then
-    mv "${GOBIN}/client" "${GOBIN}/snowflake-client"
-fi
+go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+    -o snowflake-client \
+    "${SF_MODULE}/client"
 
 # ── Build 2: Snowflake Proxy (Kindness Mode) ────────────────
 echo "Building Snowflake proxy for ${ABI}..."
-go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    "${SF_MODULE}/proxy@v${SNOWFLAKE_VERSION}"
-
-# Rename the binary (go install names it after the package dir)
-if [ -f "${GOBIN}/proxy" ]; then
-    mv "${GOBIN}/proxy" "${GOBIN}/snowflake-proxy"
-fi
+go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
+    -o snowflake-proxy \
+    "${SF_MODULE}/proxy"
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"
-cp "${GOBIN}/snowflake-client" "${OUTPUT_DIR}/libsnowflake.so"
-cp "${GOBIN}/snowflake-proxy" "${OUTPUT_DIR}/libsnowflake-proxy.so"
+cp snowflake-client "${OUTPUT_DIR}/libsnowflake.so"
+cp snowflake-proxy "${OUTPUT_DIR}/libsnowflake-proxy.so"
 
 echo "Built: ${OUTPUT_DIR}/libsnowflake.so"
 ls -lh "${OUTPUT_DIR}/libsnowflake.so"
