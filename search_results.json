@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://www.reddit.com/r/golang/comments/1iiiqku/error_during_go_build_in_github_actions",
+    "name": "Error during go build in GitHub Actions : r/golang - Reddit",
+    "snippet": "Edit: Found my error now. Im using templ and thus need to generate the _templ.go files. However, they were ignored in my push to git.",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/actions/checkout/issues/1388",
+    "name": "Error with checkout on self hosted Windows Runner #1388 - GitHub",
+    "snippet": "I currently have an error with this action, the error occurs for v2 AND v3, but I'm just posting the v3 error message for now as that's the most current.",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://community.home-assistant.io/t/create-group-of-lights-via-helper-failed-to-perform-action/839957",
+    "name": "Create group of lights via Helper - \"Failed to perform action.\"",
+    "snippet": "Starting out with a single light in the group, the Preview button in the Create Group UI, always returns an error: \"failed to perform the action ...",
+    "host_name": "community.home-assistant.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://blue-build.org/learn/troubleshooting",
+    "name": "Troubleshooting, reporting bugs, and common issues - BlueBuild",
+    "snippet": "In this tutorial, we will explore practical ways to troubleshoot issues in custom image builds, ask for help with issues, and report bugs with BlueBuild to the ...",
+    "host_name": "blue-build.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/71660466/github-actions-failing-error-fail-to-load-actions-checkout-main-action-yml",
+    "name": "Github Actions Failing Error: Fail to load actions/checkout/main",
+    "snippet": "Looks like you're self-hosted runner is using an old version of the action runner. If upgrading is not an option for you, you need to manually ...",
+    "host_name": "stackoverflow.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]
