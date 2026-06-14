@@ -587,9 +587,10 @@ fun QuickToggleRow(appState: OnionRouteAppState) {
                 isActive = appState.isKindnessEnabled,
                 modifier = Modifier.weight(1f),
                 onToggle = {
-                    appState.updateKindness(!appState.isKindnessEnabled)
+                    val enabling = !appState.isKindnessEnabled
+                    appState.updateKindness(enabling)
                     // Navigate to kindness stats screen when enabling
-                    if (!appState.isKindnessEnabled) {
+                    if (enabling) {
                         appState.navigateTo(Screen.Kindness)
                     }
                 }
