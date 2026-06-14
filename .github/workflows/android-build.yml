@@ -353,6 +353,82 @@ jobs:
           name: onionroute-lite-fdroid-debug
           path: apk/
 
+      - name: Write emulator test script
+        run: |
+          # reactivecircus/android-emulator-runner@v2 runs each script line in a
+          # SEPARATE /usr/bin/sh -c invocation, so shell variables set on one line
+          # are NOT available on the next. To work around this, we write the entire
+          # test as a single bash script and execute it as one command.
+          cat > /tmp/emulator-test.sh << 'SCRIPT'
+          #!/bin/bash
+          set -uo pipefail
+
+          echo "=== Emulator ready ==="
+
+          # Find and install the APK
+          APK=$(find apk/ -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK found in apk/ directory"
+            ls -la apk/ 2>/dev/null || true
+            exit 1
+          fi
+          echo "Installing APK: $APK"
+          adb install -r "$APK"
+
+          # List native libs in the installed APK
+          echo ""
+          echo "=== Native libraries ==="
+          adb shell pm path org.onionroute.lite
+          NATIVE_DIR=$(adb shell pm path org.onionroute.lite | head -1 | sed 's/package://;s/\r//')
+          echo "APK path: $NATIVE_DIR"
+          adb shell ls -la "$(dirname $NATIVE_DIR)/lib/x86_64/" 2>/dev/null || echo "(no x86_64 lib dir found)"
+
+          # Launch the app
+          echo ""
+          echo "=== Launching OnionRoute Lite ==="
+          adb shell am start -n org.onionroute.lite/org.onionroute.lite.MainActivity
+          sleep 5
+
+          # Capture logcat for 45 seconds
+          echo ""
+          echo "=== Capturing logcat (45s) ==="
+          adb logcat -c
+          timeout 45 adb logcat -v time \
+            -s "TorService:*" "TorProcessManager:*" "TorControlConnection:*" \
+            "BandwidthTracker:*" "BridgeConfig:*" "KillSwitch:*" \
+            "AndroidRuntime:E" "System.err:W" \
+            2>/dev/null | tee /tmp/logcat.txt || true
+
+          # Check for critical errors
+          echo ""
+          echo "=== Error analysis ==="
+          ERRORS=0
+          if grep -qi "FATAL EXCEPTION" /tmp/logcat.txt; then
+            echo "CRITICAL: FATAL EXCEPTION found!"
+            grep -A 20 "FATAL EXCEPTION" /tmp/logcat.txt
+            ERRORS=1
+          fi
+          if grep -qi "Native binary NOT FOUND" /tmp/logcat.txt; then
+            echo "CRITICAL: Missing native binary!"
+            grep "NOT FOUND" /tmp/logcat.txt
+            ERRORS=1
+          fi
+          if grep -qi "Exec format error" /tmp/logcat.txt; then
+            echo "CRITICAL: Wrong architecture binary!"
+            grep "format error" /tmp/logcat.txt
+            ERRORS=1
+          fi
+          if grep -qi "Tor process exited" /tmp/logcat.txt; then
+            echo "WARNING: Tor process crashed"
+            grep "exited" /tmp/logcat.txt
+          fi
+
+          if [ "$ERRORS" -eq 0 ]; then
+            echo "No critical errors detected."
+          fi
+          SCRIPT
+          chmod +x /tmp/emulator-test.sh
+
       - name: Run Tests on Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -365,65 +441,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: |
-            echo "=== Emulator ready ==="
-
-            # Find and install the APK
-            APK=$(find apk/ -name "*.apk" | head -1)
-            echo "Installing APK: $APK"
-            adb install -r "$APK"
-
-            # List native libs in the installed APK
-            echo ""
-            echo "=== Native libraries ==="
-            adb shell pm path org.onionroute.lite
-            NATIVE_DIR=$(adb shell pm path org.onionroute.lite | head -1 | sed 's/package://;s/\r//')
-            echo "APK path: $NATIVE_DIR"
-            adb shell ls -la $(dirname $NATIVE_DIR)/lib/x86_64/ 2>/dev/null || echo "(no x86_64 lib dir found)"
-
-            # Launch the app
-            echo ""
-            echo "=== Launching OnionRoute Lite ==="
-            adb shell am start -n org.onionroute.lite/org.onionroute.lite.MainActivity
-            sleep 5
-
-            # Capture logcat for 45 seconds
-            echo ""
-            echo "=== Capturing logcat (45s) ==="
-            adb logcat -c
-            timeout 45 adb logcat -v time \
-              -s "TorService:*" "TorProcessManager:*" "TorControlConnection:*" \
-              "BandwidthTracker:*" "BridgeConfig:*" "KillSwitch:*" \
-              "AndroidRuntime:E" "System.err:W" \
-              2>/dev/null | tee /tmp/logcat.txt || true
-
-            # Check for critical errors
-            echo ""
-            echo "=== Error analysis ==="
-            ERRORS=0
-            if grep -qi "FATAL EXCEPTION" /tmp/logcat.txt; then
-              echo "CRITICAL: FATAL EXCEPTION found!"
-              grep -A 20 "FATAL EXCEPTION" /tmp/logcat.txt
-              ERRORS=1
-            fi
-            if grep -qi "Native binary NOT FOUND" /tmp/logcat.txt; then
-              echo "CRITICAL: Missing native binary!"
-              grep "NOT FOUND" /tmp/logcat.txt
-              ERRORS=1
-            fi
-            if grep -qi "Exec format error" /tmp/logcat.txt; then
-              echo "CRITICAL: Wrong architecture binary!"
-              grep "format error" /tmp/logcat.txt
-              ERRORS=1
-            fi
-            if grep -qi "Tor process exited" /tmp/logcat.txt; then
-              echo "WARNING: Tor process crashed"
-              grep "exited" /tmp/logcat.txt
-            fi
-
-            if [ "$ERRORS" -eq 0 ]; then
-              echo "No critical errors detected."
-            fi
+          script: bash /tmp/emulator-test.sh
 
       - name: Upload Logcat
         if: always()

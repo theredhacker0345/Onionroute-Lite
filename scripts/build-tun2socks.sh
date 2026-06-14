@@ -20,7 +20,7 @@
 #
 # Prerequisites:
 #   - Android NDK r26d
-#   - Git, Make
+#   - Git
 #
 # Usage:
 #   ./build-tun2socks.sh [ABI] [NDK_PATH] [OUTPUT_DIR]
@@ -29,8 +29,9 @@
 #
 # F-Droid notes:
 #   - Source is cloned from git with pinned tag
-#   - Uses NDK's ndk-build system
+#   - Uses NDK's ndk-build system directly
 #   - No downloads of prebuilt binaries
+#   - Must clone --recursive for third-part/ submodules
 # ══════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -39,7 +40,9 @@ set -euo pipefail
 ABI="${1:-armeabi-v7a}"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-/opt/android-ndk}}"
 OUTPUT_DIR="${3:-./app/src/main/jniLibs/${ABI}}"
-HEV_VERSION="3.0.5"
+# NOTE: Version 3.0.5 does NOT exist. Latest is 2.15.0.
+# The 2.x series uses ndk-build; the project has never had a 3.x release.
+HEV_VERSION="2.15.0"
 
 # ── Validate ABI ─────────────────────────────────────────────
 case "${ABI}" in
@@ -57,12 +60,19 @@ echo "════════════════════════�
 echo " Building hev-socks5-tunnel ${HEV_VERSION} for Android ${ABI} "
 echo "════════════════════════════════════════════"
 echo "ABI: ${ABI}"
+echo "NDK: ${NDK_PATH}"
 echo "Output: ${OUTPUT_DIR}"
 echo ""
 
 # ── Verify NDK ───────────────────────────────────────────────
 if [ ! -d "${NDK_PATH}" ]; then
     echo "ERROR: NDK not found at ${NDK_PATH}"
+    exit 1
+fi
+
+NDK_BUILD="${NDK_PATH}/ndk-build"
+if [ ! -f "${NDK_BUILD}" ]; then
+    echo "ERROR: ndk-build not found at ${NDK_BUILD}"
     exit 1
 fi
 
@@ -74,53 +84,67 @@ mkdir -p "${BUILD_DIR}"
 HEV_DIR="${BUILD_DIR}/hev-socks5-tunnel"
 if [ ! -d "${HEV_DIR}" ]; then
     echo "Cloning hev-socks5-tunnel v${HEV_VERSION}..."
-    git clone --depth 1 --branch "${HEV_VERSION}" \
+    # --recursive is CRITICAL: third-part/ contains yaml, lwip, hev-task-system submodules
+    git clone --depth 1 --branch "${HEV_VERSION}" --recursive \
         https://github.com/heiher/hev-socks5-tunnel.git \
         "${HEV_DIR}"
 else
-    echo "hev-socks5-tunnel already cloned, using cached source"
+    echo "hev-socks5-tunnel already cloned, ensuring submodules are present..."
+    cd "${HEV_DIR}" && git submodule update --init --recursive 2>/dev/null || true
 fi
 
-cd "${HEV_DIR}"
+# ── Build with ndk-build ─────────────────────────────────────
+# hev-socks5-tunnel uses the Android ndk-build system (Android.mk + Application.mk).
+# There is NO `make ndk-build` target — you must run ndk-build directly.
+#
+# The official build method (from README):
+#   mkdir hev-socks5-tunnel && cd hev-socks5-tunnel
+#   git clone --recursive https://github.com/heiher/hev-socks5-tunnel jni
+#   ndk-build
+#
+# ndk-build expects source in a directory called "jni/". We create a
+# temporary project directory with a wrapper Android.mk that includes
+# the cloned source, then run ndk-build with explicit paths.
 
-# ── Patch Application.mk for target ABI ──────────────────────
-# hev-socks5-tunnel uses ndk-build which reads APP_ABI from
-# Application.mk. We set it to build only the requested ABI.
-# This avoids building all ABIs when only one is needed.
+NDK_TMPDIR="${BUILD_DIR}/ndk-project-${ABI}"
+rm -rf "${NDK_TMPDIR}"
+mkdir -p "${NDK_TMPDIR}/jni"
 
-APP_MK="${HEV_DIR}/app/src/main/jni/Application.mk"
-if [ -f "${APP_MK}" ]; then
-    echo "Patching Application.mk for APP_ABI=${ABI}..."
-    # Backup original if not already backed up
-    if [ ! -f "${APP_MK}.orig" ]; then
-        cp "${APP_MK}" "${APP_MK}.orig"
-    fi
-    # Replace APP_ABI line with our target
-    sed -i "s/^APP_ABI := .*/APP_ABI := ${ABI}/" "${APP_MK}"
-fi
+# Create wrapper Android.mk that includes the hev-socks5-tunnel source
+cat > "${NDK_TMPDIR}/jni/Android.mk" <<'MKEOF'
+include $(call all-subdir-makefiles)
+MKEOF
 
-# ── Build with NDK ───────────────────────────────────────────
-echo "Building for ${ABI}..."
-export NDK_HOME="${NDK_PATH}"
-make ndk-build
+# Symlink the hev-socks5-tunnel source into the jni/ directory
+ln -s "${HEV_DIR}" "${NDK_TMPDIR}/jni/hev-socks5-tunnel"
 
-# ── Copy from correct ABI-specific output ────────────────────
-# ndk-build places outputs in libs/{abi}/ directory
-HEV_OUTPUT="${HEV_DIR}/app/src/main/libs/${ABI}/hev-socks5-tunnel"
+echo "Building for ${ABI} with ndk-build..."
+cd "${NDK_TMPDIR}"
+
+"${NDK_BUILD}" \
+    NDK_PROJECT_PATH="${NDK_TMPDIR}" \
+    APP_BUILD_SCRIPT="${NDK_TMPDIR}/jni/Android.mk" \
+    APP_ABI="${ABI}" \
+    APP_PLATFORM=android-29 \
+    NDK_LIBS_OUT="${NDK_TMPDIR}/libs" \
+    NDK_OUT="${NDK_TMPDIR}/obj" \
+    APP_OPTIM=release \
+    APP_CFLAGS="-O3" \
+    -j$(nproc)
+
+# ── Copy from ndk-build output ───────────────────────────────
+# ndk-build produces: libs/{abi}/libhev-socks5-tunnel.so
+HEV_OUTPUT="${NDK_TMPDIR}/libs/${ABI}/libhev-socks5-tunnel.so"
 
 if [ ! -f "${HEV_OUTPUT}" ]; then
     echo "ERROR: Built binary not found at ${HEV_OUTPUT}"
     echo "Check ndk-build output for errors"
+    ls -la "${NDK_TMPDIR}/libs/" 2>/dev/null || true
     exit 1
 fi
 
 mkdir -p "${OUTPUT_DIR}"
 cp "${HEV_OUTPUT}" "${OUTPUT_DIR}/libtun2socks.so"
-
-# Restore original Application.mk if we patched it
-if [ -f "${APP_MK}.orig" ]; then
-    cp "${APP_MK}.orig" "${APP_MK}"
-fi
 
 echo "Built: ${OUTPUT_DIR}/libtun2socks.so"
 ls -lh "${OUTPUT_DIR}/libtun2socks.so"

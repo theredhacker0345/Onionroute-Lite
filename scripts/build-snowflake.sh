@@ -16,7 +16,7 @@
 #   - x86_64       (64-bit Intel, GOARCH=amd64)
 #
 # Prerequisites:
-#   - Go 1.21+
+#   - Go 1.21 (do NOT use Go 1.22+ — anet package net.zoneCache bug)
 #   - Android NDK r26d
 #   - Git
 #
@@ -115,10 +115,29 @@ BUILD_DIR="${SCRIPT_DIR}/../build-native/snowflake/${ABI}"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-# Initialize Go module with pinned version
+# Initialize Go module with pinned version.
+# Use the canonical module path (no .git suffix).
 echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
 go mod init onionroute-build/snowflake
+
 go get gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2@v${SNOWFLAKE_VERSION}
+
+# Create a dummy Go file that imports the snowflake client and proxy packages.
+# This prevents `go mod tidy` from pruning the dependency — without an
+# importing source file, tidy removes the require directive and `go build`
+# then fails with "no required module provides package".
+cat > dummy.go <<'EOF'
+//go:build ignore
+// +build ignore
+
+package main
+
+import (
+    _ "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/client"
+    _ "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git/v2/proxy"
+)
+EOF
+
 go mod tidy
 
 # Verify all module checksums

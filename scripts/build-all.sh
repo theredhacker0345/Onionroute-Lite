@@ -16,7 +16,7 @@
 #
 # Prerequisites:
 #   - Android NDK r26d installed
-#   - Go 1.21+ installed
+#   - Go 1.21+ installed (do NOT use Go 1.22+)
 #   - Standard build tools (make, gcc, git, curl)
 #
 # Usage:
@@ -34,7 +34,11 @@
 #   - Compiler hardening flags are enabled
 # ══════════════════════════════════════════════════════════════
 
-set -euo pipefail
+# NOTE: We do NOT use `set -e` here because we want to continue
+# building remaining components even if one fails. Each component
+# script uses `set -euo pipefail` internally, and we catch their
+# exit codes to report which succeeded and which failed.
+set -uo pipefail
 
 # ── Supported ABIs ────────────────────────────────────────────
 ALL_ABIS=("armeabi-v7a" "arm64-v8a" "x86" "x86_64")
@@ -67,7 +71,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}/.."
 
 echo "╔═══════════════════════════════════════════════╗"
-echo "║   OnionRoute Lite — Build All Binaries         ║"
+echo "║   OnionRoute Lite — Build All Binaries        ║"
 echo "║   ABIs: ${SELECTED_ABIS[*]}"
 echo "║   NDK:  ${NDK_PATH}"
 echo "╚═══════════════════════════════════════════════╝"
@@ -82,6 +86,7 @@ fi
 
 # ── Build each ABI ────────────────────────────────────────────
 TOTAL_START=$(date +%s)
+OVERALL_OK=true
 
 for ABI in "${SELECTED_ABIS[@]}"; do
     OUTPUT_DIR="${PROJECT_DIR}/app/src/main/jniLibs/${ABI}"
@@ -96,30 +101,63 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     # Create output directory
     mkdir -p "${OUTPUT_DIR}"
 
+    # Track which components succeed/fail for this ABI
+    declare -A COMPONENT_STATUS
+    COMPONENT_STATUS[tor]="NOT_BUILT"
+    COMPONENT_STATUS[obfs4]="NOT_BUILT"
+    COMPONENT_STATUS[snowflake]="NOT_BUILT"
+    COMPONENT_STATUS[tun2socks]="NOT_BUILT"
+
     # ── Build Each Component ──────────────────────────────────
+    # We run each build independently so a failure in one component
+    # does not prevent the others from being attempted.
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " [1/4] Building Tor daemon [${ABI}]..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    bash "${SCRIPT_DIR}/build-tor.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"
+    if bash "${SCRIPT_DIR}/build-tor.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
+        COMPONENT_STATUS[tor]="OK"
+    else
+        COMPONENT_STATUS[tor]="FAILED"
+        OVERALL_OK=false
+        echo "WARNING: Tor build failed for ${ABI}, continuing with other components..."
+    fi
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " [2/4] Building obfs4proxy [${ABI}]..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    bash "${SCRIPT_DIR}/build-obfs4.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"
+    if bash "${SCRIPT_DIR}/build-obfs4.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
+        COMPONENT_STATUS[obfs4]="OK"
+    else
+        COMPONENT_STATUS[obfs4]="FAILED"
+        OVERALL_OK=false
+        echo "WARNING: obfs4proxy build failed for ${ABI}, continuing with other components..."
+    fi
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " [3/4] Building Snowflake client + proxy [${ABI}]..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    bash "${SCRIPT_DIR}/build-snowflake.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"
+    if bash "${SCRIPT_DIR}/build-snowflake.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
+        COMPONENT_STATUS[snowflake]="OK"
+    else
+        COMPONENT_STATUS[snowflake]="FAILED"
+        OVERALL_OK=false
+        echo "WARNING: Snowflake build failed for ${ABI}, continuing with other components..."
+    fi
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " [4/4] Building hev-socks5-tunnel [${ABI}]..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    bash "${SCRIPT_DIR}/build-tun2socks.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"
+    if bash "${SCRIPT_DIR}/build-tun2socks.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
+        COMPONENT_STATUS[tun2socks]="OK"
+    else
+        COMPONENT_STATUS[tun2socks]="FAILED"
+        OVERALL_OK=false
+        echo "WARNING: hev-socks5-tunnel build failed for ${ABI}, continuing with other components..."
+    fi
 
     # ── Verify this ABI's outputs ─────────────────────────────
     echo ""
@@ -127,22 +165,26 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     MISSING=0
     for expected in libtor.so libobfs4proxy.so libsnowflake.so libsnowflake-proxy.so libtun2socks.so; do
         if [ ! -f "${OUTPUT_DIR}/${expected}" ]; then
-            echo "  ERROR: Missing ${expected}"
+            echo "  MISSING: ${expected}"
             MISSING=1
         else
-            echo "  OK: ${expected}"
+            SIZE=$(stat -c%s "${OUTPUT_DIR}/${expected}" 2>/dev/null || echo "0")
+            echo "  OK: ${expected} (${SIZE} bytes)"
         fi
     done
 
     if [ "${MISSING}" -eq 1 ]; then
         echo ""
-        echo "ERROR: Some ${ABI} binaries are missing! Check build output above."
-        exit 1
+        echo "WARNING: Some ${ABI} binaries are missing."
+        echo "Component results: tor=${COMPONENT_STATUS[tor]} obfs4=${COMPONENT_STATUS[obfs4]} snowflake=${COMPONENT_STATUS[snowflake]} tun2socks=${COMPONENT_STATUS[tun2socks]}"
+    else
+        echo ""
+        echo "ABI ${ABI} build complete! All binaries present."
     fi
 
-    echo ""
-    echo "ABI ${ABI} build complete!"
     echo "  Size: $(du -sh "${OUTPUT_DIR}/" | cut -f1)"
+
+    unset COMPONENT_STATUS
 done
 
 # ── Summary ──────────────────────────────────────────────────
@@ -161,16 +203,26 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     ABI_DIR="${PROJECT_DIR}/app/src/main/jniLibs/${ABI}"
     echo ""
     echo "  [${ABI}]"
-    ls -lh "${ABI_DIR}/" | tail -n +2 | while read -r line; do
+    ls -lh "${ABI_DIR}/" 2>/dev/null | tail -n +2 | while read -r line; do
         echo "    ${line}"
     done
-    echo "    Total: $(du -sh "${ABI_DIR}/" | cut -f1)"
+    echo "    Total: $(du -sh "${ABI_DIR}/" 2>/dev/null | cut -f1)"
 done
 
-echo ""
-echo "All native binaries built successfully!"
-echo ""
-echo "Next steps:"
-echo "  1. Build the APK: ./gradlew assembleRelease"
-echo "  2. Per-ABI APKs will be generated automatically"
-echo "  3. Install on device: adb install app/build/outputs/apk/fdroidRelease/app-fdroid-release-${SELECTED_ABIS[0]}.apk"
+if [ "${OVERALL_OK}" = true ]; then
+    echo ""
+    echo "All native binaries built successfully!"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Build the APK: ./gradlew assembleRelease"
+    echo "  2. Per-ABI APKs will be generated automatically"
+    echo "  3. Install on device: adb install app/build/outputs/apk/fdroidRelease/app-fdroid-release-${SELECTED_ABIS[0]}.apk"
+    exit 0
+else
+    echo ""
+    echo "WARNING: Some components failed to build."
+    echo "The APK can still be built, but missing native libraries will cause"
+    echo "runtime errors when the app tries to use those features."
+    echo "Check the build output above for details."
+    exit 1
+fi

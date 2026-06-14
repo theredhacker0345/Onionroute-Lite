@@ -12,7 +12,7 @@
 #   - x86_64       (64-bit Intel, GOARCH=amd64)
 #
 # Prerequisites:
-#   - Go 1.21+
+#   - Go 1.21+ (do NOT use Go 1.22+ — anet package is incompatible)
 #   - Android NDK r26d
 #   - Git
 #
@@ -114,19 +114,34 @@ cd "${BUILD_DIR}"
 # Initialize Go module with pinned version
 echo "Downloading obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
 go mod init onionroute-build/obfs4
+
+# Add the obfs4 dependency
 go get gitlab.com/yawning/obfs4.git@${OBFS4_VERSION}
+
+# Create a dummy Go file that imports the obfs4 package.
+# This prevents `go mod tidy` from pruning the dependency —
+# without an importing source file, tidy removes the require
+# directive and `go build` then fails with "no required module".
+cat > dummy.go <<'EOF'
+//go:build ignore
+// +build ignore
+
+package main
+
+import _ "gitlab.com/yawning/obfs4.git/cmd/obfs4proxy"
+EOF
+
 go mod tidy
 
 # Verify all module checksums
 go mod verify
 
 echo "Building obfs4proxy for ${ABI}..."
-# The obfs4proxy binary may be at different paths depending on version.
-# Try the standard path first, then fall back to the root cmd path.
+# Build the obfs4proxy binary from the cmd/obfs4proxy package.
 OBFS4_PKG="gitlab.com/yawning/obfs4.git/cmd/obfs4proxy"
 if ! go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
     -o obfs4proxy "${OBFS4_PKG}" 2>/dev/null; then
-    echo "Trying alternate package path..."
+    echo "Trying alternate package path (obfs4proxy at module root)..."
     OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy"
     go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
         -o obfs4proxy "${OBFS4_PKG}"
