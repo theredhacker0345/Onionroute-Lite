@@ -45,9 +45,9 @@ class BridgeConfig(private val context: Context) {
      * Returns the Snowflake bridge configuration lines for torrc.
      */
     fun getSnowflakeConfig(): List<String> {
-        val appDataDir = context.filesDir.absolutePath
+        val nativeLibDir = context.applicationInfo.nativeLibraryDir
         return listOf(
-            "ClientTransportPlugin snowflake exec $appDataDir/${Constants.EXEC_SNOWFLAKE}",
+            "ClientTransportPlugin snowflake exec $nativeLibDir/${Constants.BINARY_SNOWFLAKE}",
             "Bridge snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=${Constants.SNOWFLAKE_BROKER_URL} fronts=${Constants.SNOWFLAKE_FRONT_DOMAIN} ice=${Constants.SNOWFLAKE_ICE_SERVERS}",
             "UseBridges 1"
         )
@@ -74,9 +74,9 @@ class BridgeConfig(private val context: Context) {
      * Returns the obfs4 bridge configuration lines for torrc.
      */
     fun getObfs4Config(): List<String> {
-        val appDataDir = context.filesDir.absolutePath
+        val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val lines = mutableListOf(
-            "ClientTransportPlugin obfs4 exec $appDataDir/${Constants.EXEC_OBFS4PROXY}"
+            "ClientTransportPlugin obfs4 exec $nativeLibDir/${Constants.BINARY_OBFS4PROXY}"
         )
         Constants.DEFAULT_OBFS4_BRIDGES.forEach { bridge ->
             lines.add("Bridge $bridge")

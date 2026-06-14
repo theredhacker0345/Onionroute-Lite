@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -83,7 +84,10 @@ class TorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(Constants.NOTIFICATION_ID, buildNotification("Starting Tor…"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForeground(Constants.NOTIFICATION_ID, buildNotification("Starting Tor…"))
         }
 
@@ -94,6 +98,7 @@ class TorService : Service() {
             Constants.ACTION_TOGGLE_SNOWFLAKE -> toggleSnowflake()
             Constants.ACTION_TOGGLE_OBFS4 -> toggleObfs4()
             Constants.ACTION_TOGGLE_WEBTUNNEL -> toggleWebTunnel()
+            Constants.ACTION_NEW_CIRCUIT -> requestNewCircuit()
             else -> Log.w(tag, "Unknown action: ${intent?.action}")
         }
 
@@ -266,6 +271,31 @@ class TorService : Service() {
     private fun handleVpnStop() {
         killSwitch?.setVpnMode(false)
         Log.d(tag, "VPN stop signal received")
+    }
+
+    /**
+     * Sends a NEWNYM signal to Tor to establish a new circuit (new exit node).
+     * Called from the Quick Settings "New Circuit" tile via broadcast.
+     */
+    private fun requestNewCircuit() {
+        if (!isTorRunning) {
+            Log.w(tag, "Cannot request new circuit — Tor not running")
+            return
+        }
+
+        serviceScope.launch {
+            try {
+                val result = torControlConnection?.signal("NEWNYM")
+                if (result == true) {
+                    Log.i(tag, "New circuit requested (NEWNYM signal sent)")
+                    updateNotification("OnionRoute Lite — New circuit")
+                } else {
+                    Log.w(tag, "NEWNYM signal failed — control connection may be closed")
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "Error sending NEWNYM signal", e)
+            }
+        }
     }
 
     // ── Notification ──────────────────────────────────────────────

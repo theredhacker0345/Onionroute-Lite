@@ -19,8 +19,9 @@ class BootReceiver : BroadcastReceiver() {
     private val tag = "BootReceiver"
 
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) {
-            Log.w(tag, "Ignoring action: ${intent?.action}")
+        val action = intent?.action
+        if (action != Intent.ACTION_BOOT_COMPLETED && action != "android.intent.action.QUICKBOOT_POWERON") {
+            Log.w(tag, "Ignoring action: $action")
             return
         }
 

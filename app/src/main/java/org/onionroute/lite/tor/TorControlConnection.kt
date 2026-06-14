@@ -108,10 +108,10 @@ class TorControlConnection(private val context: Context) {
             listenerThread?.interrupt()
             listenerThread = null
 
-            synchronized(outputStream ?: return) {
-                outputStream?.write("SIGNAL SHUTDOWN\r\n".toByteArray())
-                outputStream?.flush()
-            }
+            // Don't send SIGNAL SHUTDOWN here — the caller (TorService) already
+            // handles stopping the Tor process via Process.destroy(). Sending
+            // SHUTDOWN could cause a race condition where Tor shuts down before
+            // we've finished reading pending events.
         } catch (_: Exception) {}
 
         try {

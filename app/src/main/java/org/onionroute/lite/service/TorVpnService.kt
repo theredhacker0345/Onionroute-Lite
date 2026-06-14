@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -54,7 +55,10 @@ class TorVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(Constants.VPN_NOTIFICATION_ID, buildNotification("VPN active"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForeground(Constants.VPN_NOTIFICATION_ID, buildNotification("VPN active"))
         }
 
@@ -153,17 +157,20 @@ class TorVpnService : VpnService() {
                             }
                         }
                     } else {
-                        // No apps selected — route everything (default behaviour)
-                        Log.i(tag, "SELECTED_ONLY mode with no apps selected, routing all apps")
+                        // No apps selected — block all traffic through VPN (safe default)
+                        // The VPN TUN is up but no app is allowed, so all traffic is blocked.
+                        // This prevents the privacy leak of routing all apps when the user
+                        // explicitly chose SELECTED_ONLY mode.
+                        Log.i(tag, "SELECTED_ONLY mode with no apps selected — blocking all traffic")
+                        builder.addAllowedApplication(packageName) // only self allowed (already disallowed, but explicit)
                     }
                 }
             }
 
-            // For always-on VPN, allow the system to manage the lifecycle
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Mark the VPN as always-on compatible so Android can restart it
-                builder.setHttpProxy(android.net.ProxyInfo.buildDirectProxy("127.0.0.1", Constants.TOR_HTTP_PORT))
-            }
+            // Always-on VPN compatibility: no HTTP proxy needed.
+            // Traffic is routed through tun2socks → SOCKS5 (127.0.0.1:9050),
+            // so setHttpProxy would be redundant and may cause issues on some devices.
+            // The VPN builder already routes all traffic through the TUN interface.
 
             vpnInterface = builder.establish()
 

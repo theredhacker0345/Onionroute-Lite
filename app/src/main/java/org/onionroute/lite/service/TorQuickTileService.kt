@@ -13,7 +13,6 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import org.onionroute.lite.Constants
 import org.onionroute.lite.R
-import org.onionroute.lite.tor.TorControlConnection
 
 /**
  * Quick Settings tile for toggling the Tor connection on/off.
@@ -227,28 +226,12 @@ class RefreshTileService : TileService() {
 
         Log.i(tag, "Requesting new Tor circuit (NEWNYM)")
 
-        // Send NEWNYM signal via a dedicated thread
-        Thread {
-            try {
-                val controlConn = TorControlConnection(this)
-                val cookieFile = "${applicationInfo.dataDir}/${Constants.TOR_DATA_DIR}/${Constants.TOR_CONTROL_COOKIE}"
-                val connected = controlConn.connect(Constants.TOR_CONTROL_PORT, cookieFile)
-
-                if (connected) {
-                    val success = controlConn.signal("NEWNYM")
-                    if (success) {
-                        Log.i(tag, "NEWNYM signal sent successfully")
-                    } else {
-                        Log.e(tag, "NEWNYM signal failed")
-                    }
-                    controlConn.disconnect()
-                } else {
-                    Log.e(tag, "Failed to connect to Tor control port for NEWNYM")
-                }
-            } catch (e: Exception) {
-                Log.e(tag, "Error sending NEWNYM signal", e)
-            }
-        }.start()
+        // Send NEWNYM request via broadcast to TorService instead of
+        // creating a competing control port connection. TorService owns
+        // the single control connection and can safely send the signal.
+        val intent = Intent(Constants.ACTION_NEW_CIRCUIT)
+        intent.setPackage(packageName)
+        sendBroadcast(intent)
 
         // Brief visual feedback — flash the tile active then revert
         val tile = qsTile
