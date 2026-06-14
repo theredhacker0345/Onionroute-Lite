@@ -12,9 +12,6 @@
 # ── BroadcastReceiver ─────────────────────────────────────────
 -keep class org.onionroute.lite.service.BootReceiver { *; }
 
-# ── Data classes used in IPC ───────────────────────────────────
--keep class org.onionroute.lite.tor.BandwidthData { *; }
-
 # ── Constants (accessed via reflection by Android framework) ───
 -keep class org.onionroute.lite.Constants { *; }
 
