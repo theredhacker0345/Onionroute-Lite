@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=es1p2hFGRZQ",
+    "name": "GitHub Actions Security Mistake Leaking Millions of Secrets - YouTube",
+    "snippet": "In this video, we'll explore the implications of the Trivy security incident, where compromised #github actions security pipelines were ...",
+    "host_name": "www.youtube.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/77415300/github-action-fails-on-laravel-project",
+    "name": "Github Action fails on Laravel project - Stack Overflow",
+    "snippet": "To fix this issue make sure that your Laravel application is configured to use the SQLite connection when running in the GitHub Actions environment.",
+    "host_name": "stackoverflow.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/actions/actions-runner-controller/issues/3006",
+    "name": "Runner connect error after successful Github authentication #3006",
+    "snippet": "The problem is that the runner disconnects from Github after 1 minute after it had previously authenticated and connected to Github.",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://unit42.paloaltonetworks.com/github-actions-supply-chain-attack",
+    "name": "GitHub Actions Supply Chain Attack: A Targeted Attack on Coinbase",
+    "snippet": "The tj-actions/changed-files GitHub action was recently compromised, allowing attackers to access sensitive workflow secrets that relied on this action.",
+    "host_name": "unit42.paloaltonetworks.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/pytorch/pytorch/issues/74304",
+    "name": "GitHub Outage: No Github Actions workflows can be run #74304",
+    "snippet": "Current Status ongoing Error looks like Jobs failing to schedule, general flakiness of all things GitHub Incident timeline (all times ...",
+    "host_name": "github.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://www.kaggle.com/product-feedback/293168",
+    "name": "Remote connection to kaggle",
+    "snippet": "A lightweight solution for remote VS Code access to Kaggle kernels using Zrok. It simplifies setup via HTTP communication with the Zrok web console.",
+    "host_name": "www.kaggle.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=lnw616HiINY",
+    "name": "How to Set Up SSH via Cloudflare Tunnel - YouTube",
+    "snippet": "Join this channel to get access to perks: https://www.youtube.com/channel/UCXJ4jKAvMMg56WGhqrZHFgw/join Racknerd VPS Deals ...",
+    "host_name": "www.youtube.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/AlirezaSalehy/VSCodeTunnel",
+    "name": "VS Code Remote Tunnels on Kaggle - GitHub",
+    "snippet": "What this notebook does. It starts a lightweight VS Code server inside the running Kaggle session so you can edit, run, and debug from VS Code Desktop.",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.kaggle.com/code/omidostovari/kaggle-vscode-remote-tunnel",
+    "name": "kaggle-vscode-remote-tunnel",
+    "snippet": "Easily connect your Kaggle Notebook or Kaggle GPU runtime to Visual Studio Code (VS Code) using the VS Code Remote Tunnel feature.",
+    "host_name": "www.kaggle.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/kaggle/comments/1ln9hxw/connect_to_kaggle_like_ssh_but_not_ssh",
+    "name": "Connect to Kaggle like SSH, but not SSH - Reddit",
+    "snippet": "Tired of warnings about “commercial use”? I'm developing an open-source remote access tool that actually works (a KVM with BIOS access via SSH).",
+    "host_name": "www.reddit.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

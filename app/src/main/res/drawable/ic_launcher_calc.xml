@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Camouflage icon — Quick Calc (calculator grid) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Dark background circle -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M54,54m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0" />
+
+    <!-- Calculator body -->
+    <path
+        android:fillColor="#FF1C1C1C"
+        android:strokeColor="#FF2A2A2A"
+        android:strokeWidth="1"
+        android:pathData="M34,26L74,26L74,84L34,84Z" />
+
+    <!-- Display area -->
+    <path
+        android:fillColor="#FF0D0D0D"
+        android:pathData="M38,30L70,30L70,42L38,42Z" />
+
+    <!-- Display text -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF00E5C4"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.6"
+        android:pathData="M60,38L66,38" />
+
+    <!-- Button row 1: 7 8 9 ÷ -->
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M38,46L47,46L47,54L38,54Z" />
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M49,46L58,46L58,54L49,54Z" />
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M60,46L69,46L69,54L60,54Z" />
+    <!-- Operator button (÷) with jade tint -->
+    <path
+        android:fillColor="#FF00E5C4"
+        android:fillAlpha="0.1"
+        android:pathData="M38,56L47,56L47,64L38,64Z" />
+
+    <!-- Button row 2: 4 5 6 × -->
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M49,56L58,56L58,64L49,64Z" />
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M60,56L69,56L69,64L60,64Z" />
+    <!-- Operator button (×) with jade tint -->
+    <path
+        android:fillColor="#FF00E5C4"
+        android:fillAlpha="0.1"
+        android:pathData="M38,66L47,66L47,74L38,74Z" />
+
+    <!-- Button row 3: 1 2 3 − -->
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M49,66L58,66L58,74L49,74Z" />
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M60,66L69,66L69,74L60,74Z" />
+    <!-- Operator button (−) with jade tint -->
+    <path
+        android:fillColor="#FF00E5C4"
+        android:fillAlpha="0.1"
+        android:pathData="M38,76L47,76L47,80L38,80Z" />
+
+    <!-- Bottom row: 0 . = + -->
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M49,76L58,76L58,80L49,80Z" />
+    <path
+        android:fillColor="#FF2A2A2A"
+        android:pathData="M60,76L69,76L69,80L60,80Z" />
+    <!-- Equals button with jade accent -->
+    <path
+        android:fillColor="#FF00E5C4"
+        android:fillAlpha="0.25"
+        android:pathData="M60,76L69,76L69,80L60,80Z" />
+
+</vector>
