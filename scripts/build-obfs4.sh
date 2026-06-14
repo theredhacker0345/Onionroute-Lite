@@ -112,14 +112,20 @@ mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
 # ── Build strategy ───────────────────────────────────────────
-# Go 1.21+ supports building directly from a versioned package path:
-#   go build pkg@version
-# This downloads the module, resolves all dependencies, and builds
-# the package — no go.mod/go.sum management needed.
+# We use `go install pkg@version` which downloads the module and
+# compiles the package to $GOBIN/$GOPATH/bin. Then we copy the
+# binary to the output directory with the .so name.
 #
-# Previous approach (go mod init → go get → go mod tidy → go build)
+# Note: `go build pkg@version` does NOT work — only `go get` and
+# `go install` support the path@version syntax in Go 1.21.
+# And `go install` produces a binary, while `go get` only downloads.
+#
+# Previous approaches (go mod init → go get → go mod tidy → go build)
 # failed because go mod tidy pruned dependencies that weren't
-# imported by any source file in the current module.
+# imported by any non-ignored source file in the current module.
+
+# Set GOBIN to our build directory so `go install` puts the binary there
+export GOBIN="${BUILD_DIR}"
 
 echo "Building obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
 
@@ -127,17 +133,17 @@ echo "Building obfs4proxy ${OBFS4_VERSION} for ${ABI}..."
 # Try the standard cmd/ path first, then fall back to root path
 # (older versions put it at the module root).
 OBFS4_PKG="gitlab.com/yawning/obfs4.git/cmd/obfs4proxy@${OBFS4_VERSION}"
-if ! go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    -o obfs4proxy "${OBFS4_PKG}" 2>&1; then
+if ! go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
+    "${OBFS4_PKG}" 2>&1; then
     echo "cmd/obfs4proxy path failed, trying module root path..."
     OBFS4_PKG="gitlab.com/yawning/obfs4.git/obfs4proxy@${OBFS4_VERSION}"
-    go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
-        -o obfs4proxy "${OBFS4_PKG}"
+    go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
+        "${OBFS4_PKG}"
 fi
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"
-cp obfs4proxy "${OUTPUT_DIR}/libobfs4proxy.so"
+cp "${GOBIN}/obfs4proxy" "${OUTPUT_DIR}/libobfs4proxy.so"
 
 echo "Built: ${OUTPUT_DIR}/libobfs4proxy.so"
 ls -lh "${OUTPUT_DIR}/libobfs4proxy.so"

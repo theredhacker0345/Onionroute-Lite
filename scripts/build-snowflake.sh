@@ -116,10 +116,12 @@ mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
 # ── Build strategy ───────────────────────────────────────────
-# Go 1.21+ supports building directly from a versioned package path:
-#   go build pkg@version
-# This downloads the module, resolves all dependencies, and builds
-# the package — no go.mod/go.sum management needed.
+# We use `go install pkg@version` which downloads the module and
+# compiles the package to $GOBIN. Then we copy the binary to the
+# output directory with the .so name.
+#
+# Note: `go build pkg@version` does NOT work — only `go get` and
+# `go install` support the path@version syntax in Go 1.21.
 #
 # IMPORTANT: The Snowflake module's go.mod declares its canonical
 # path WITHOUT the .git suffix:
@@ -128,24 +130,35 @@ cd "${BUILD_DIR}"
 
 SF_MODULE="gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2"
 
+# Set GOBIN to our build directory so `go install` puts the binaries there
+export GOBIN="${BUILD_DIR}"
+
 echo "Building Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
 
 # ── Build 1: Snowflake Client ────────────────────────────────
 echo "Building Snowflake client for ${ABI}..."
-go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    -o snowflake-client \
+go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
     "${SF_MODULE}/client@v${SNOWFLAKE_VERSION}"
+
+# Rename the binary (go install names it after the package dir)
+if [ -f "${GOBIN}/client" ]; then
+    mv "${GOBIN}/client" "${GOBIN}/snowflake-client"
+fi
 
 # ── Build 2: Snowflake Proxy (Kindness Mode) ────────────────
 echo "Building Snowflake proxy for ${ABI}..."
-go build -trimpath -ldflags="-s -w -extldflags '-pie'" \
-    -o snowflake-proxy \
+go install -trimpath -ldflags="-s -w -extldflags '-pie'" \
     "${SF_MODULE}/proxy@v${SNOWFLAKE_VERSION}"
+
+# Rename the binary (go install names it after the package dir)
+if [ -f "${GOBIN}/proxy" ]; then
+    mv "${GOBIN}/proxy" "${GOBIN}/snowflake-proxy"
+fi
 
 # ── Copy ─────────────────────────────────────────────────────
 mkdir -p "${OUTPUT_DIR}"
-cp snowflake-client "${OUTPUT_DIR}/libsnowflake.so"
-cp snowflake-proxy "${OUTPUT_DIR}/libsnowflake-proxy.so"
+cp "${GOBIN}/snowflake-client" "${OUTPUT_DIR}/libsnowflake.so"
+cp "${GOBIN}/snowflake-proxy" "${OUTPUT_DIR}/libsnowflake-proxy.so"
 
 echo "Built: ${OUTPUT_DIR}/libsnowflake.so"
 ls -lh "${OUTPUT_DIR}/libsnowflake.so"
