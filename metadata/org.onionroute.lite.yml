@@ -71,7 +71,7 @@ Repo: https://github.com/darkmaster0345/Onionroute-Lite.git
 Builds:
   - versionName: '1.1.0'
     versionCode: 2000
-    commit: fdc1901d8ec4f65205dee5ddce501883b8a645fc
+    commit: 9b533dd5e96b9fbc9efb92204ee8ceb81c8961ca
     subdir: app
     gradle:
       - fdroid
