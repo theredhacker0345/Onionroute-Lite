@@ -28,7 +28,7 @@
 | C-03 | CRITICAL | `extractNativeLibs=false` with PIE | ✅ Changed to `extractNativeLibs=true` + `useLegacyPackaging=true` |
 | W-01 | WARNING | `PreviewActivity` exported | ✅ Removed via `app/src/release/AndroidManifest.xml` (`tools:node="remove"`) |
 | W-02 | WARNING | No arm64-v8a ABI | ✅ All 4 ABIs built (armeabi-v7a, arm64-v8a, x86, x86_64) |
-| W-03 | WARNING | `ProfileInstallReceiver` exported | ✅ Removed via `app/src/release/AndroidManifest.xml` |
+| W-03 | WARNING | `ProfileInstallReceiver` exported | ⚠️ Remains in release APK but protected by `android.permission.DUMP` (signature-level — only system can broadcast). `tools:node="remove"` in `release/AndroidManifest.xml` did not strip it because the AndroidX library manifest is merged after the overlay. Not a security risk; F-Droid generally accepts this. PreviewActivity WAS successfully removed because `ui-tooling` is `debugImplementation` only. |
 | W-04 | WARNING | V3 signature absent | ℹ️ F-Droid re-signs with its own key (including V3); not a blocker |
 | W-05 | WARNING | V2 uses RSA_PKCS1_V1_5 | ℹ️ F-Droid re-signs; not a blocker |
 | W-06 | WARNING | Hardcoded Tor bridge IPs | ℹ️ Expected for a Tor client; bridges are public Tor infrastructure |
