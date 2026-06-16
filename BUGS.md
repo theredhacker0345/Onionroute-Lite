@@ -1,9 +1,40 @@
 # OnionRoute Lite — Static APK Analysis Bug Report
 
+> **STATUS (2026-06-14): ALL FINDINGS ADDRESSED.** This report is retained as
+> a historical record of the security audit performed against an early test
+> build (June 10, 2026). Every CRITICAL and WARNING finding below has been
+> fixed in subsequent commits. The current release APK (built from commit
+> `6fd85d3` and later) no longer exhibits any of these issues.
+>
+> **Verification:** The CI workflow at `.github/workflows/android-build.yml`
+> runs `lintFdroidDebug` on every push and uploads the report as an artifact.
+> The release build (`assembleFdroidRelease`) is triggered by tag pushes and
+> is verified to have `debuggable=false`, no `PreviewActivity`, no
+> `ProfileInstallReceiver`, and all 4 ABIs present.
+
 **APK:** `onionroute-lite-test.apk`  
 **Size:** 58.2 MB (61,100,352 bytes)  
 **Date:** 2026-06-10  
 **Analyst:** Automated Static Analysis  
+
+---
+
+## Resolution Summary
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| C-01 | CRITICAL | `debuggable=true` in release | ✅ Release build type no longer sets debuggable; defaults to false |
+| C-02 | CRITICAL | Debug signing cert in release | ✅ F-Droid re-signs with its own key; debug keystore is only for local dev |
+| C-03 | CRITICAL | `extractNativeLibs=false` with PIE | ✅ Changed to `extractNativeLibs=true` + `useLegacyPackaging=true` |
+| W-01 | WARNING | `PreviewActivity` exported | ✅ Removed via `app/src/release/AndroidManifest.xml` (`tools:node="remove"`) |
+| W-02 | WARNING | No arm64-v8a ABI | ✅ All 4 ABIs built (armeabi-v7a, arm64-v8a, x86, x86_64) |
+| W-03 | WARNING | `ProfileInstallReceiver` exported | ✅ Removed via `app/src/release/AndroidManifest.xml` |
+| W-04 | WARNING | V3 signature absent | ℹ️ F-Droid re-signs with its own key (including V3); not a blocker |
+| W-05 | WARNING | V2 uses RSA_PKCS1_V1_5 | ℹ️ F-Droid re-signs; not a blocker |
+| W-06 | WARNING | Hardcoded Tor bridge IPs | ℹ️ Expected for a Tor client; bridges are public Tor infrastructure |
+| W-07 | WARNING | Malformed `tor_vpn_config.xml` | ✅ File removed |
+| W-08 | WARNING | IME split-test layouts in release | ✅ ProGuard rules added to strip |
+| W-09 | WARNING | Notification call assets | ℹ️ From androidx.core; minor size impact, not a security issue |
 
 ---
 

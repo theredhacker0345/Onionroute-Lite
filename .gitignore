@@ -56,6 +56,9 @@ local.properties
 /worklog*.md
 /build_manual/
 /apk-extracted/
+/audit/
+androguard.db
+androguard.log
 
 # ── Stray Root Files ─────────────────────────────────────────
 # ProGuard rules belong in app/proguard-rules.pro, not root

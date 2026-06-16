@@ -281,11 +281,28 @@ jobs:
         run: |
           APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
           if [ -z "$APK" ]; then echo "ERROR: No APK found"; exit 1; fi
-          if unzip -l "$APK" | grep -q "META-INF/com.android.build/gradle-metadata"; then
-            echo "ERROR: DependencyInfoBlock found in APK"
-            exit 1
+          # The DependencyInfoBlock, when present, is stored as a binary blob
+          # in the APK signing block. We check for it by looking for the
+          # dependencies-metadata file path. Note: the path uses slashes (/),
+          # not dots (.) — the previous check was broken because it used dots.
+          if unzip -l "$APK" | grep -qE "META-INF/com/android/build/gradle/(dependencies-metadata|app-metadata)"; then
+            # app-metadata.properties is always present and is fine;
+            # dependencies-metadata is the DependencyInfoBlock we want to exclude.
+            if unzip -l "$APK" | grep -q "META-INF/com/android/build/gradle/dependencies-metadata"; then
+              echo "ERROR: DependencyInfoBlock (dependencies-metadata) found in APK"
+              unzip -l "$APK" | grep "META-INF/com/android/build/gradle/"
+              exit 1
+            else
+              echo "OK: app-metadata.properties present (expected), no dependencies-metadata block"
+            fi
           else
             echo "OK: No DependencyInfoBlock in APK"
+          fi
+          # Also verify via apkanalyzer if available
+          if command -v apkanalyzer >/dev/null 2>&1; then
+            echo ""
+            echo "=== apkanalyzer APK verification ==="
+            apkanalyzer apk summary "$APK" 2>/dev/null | head -20 || true
           fi
 
       - name: Report APK size
@@ -383,47 +400,85 @@ jobs:
           echo "APK path: $NATIVE_DIR"
           adb shell ls -la "$(dirname $NATIVE_DIR)/lib/x86_64/" 2>/dev/null || echo "(no x86_64 lib dir found)"
 
+          # Clear any previous logcat buffer so we start fresh
+          adb logcat -c
+
           # Launch the app
           echo ""
           echo "=== Launching OnionRoute Lite ==="
           adb shell am start -n org.onionroute.lite/org.onionroute.lite.MainActivity
           sleep 5
 
-          # Capture logcat for 45 seconds
+          # Take a screenshot of the launched app (initial state)
           echo ""
-          echo "=== Capturing logcat (45s) ==="
-          adb logcat -c
-          timeout 45 adb logcat -v time \
-            -s "TorService:*" "TorProcessManager:*" "TorControlConnection:*" \
-            "BandwidthTracker:*" "BridgeConfig:*" "KillSwitch:*" \
-            "AndroidRuntime:E" "System.err:W" \
-            2>/dev/null | tee /tmp/logcat.txt || true
+          echo "=== Screenshot: initial launch ==="
+          adb shell screencap -p /sdcard/onionroute_01_launch.png
+          adb pull /sdcard/onionroute_01_launch.png /tmp/ 2>/dev/null || echo "(screenshot pull failed)"
+
+          # Capture UNFILTERED logcat for 90 seconds.
+          # Previous version filtered by tag (-s "TorService:*" ...) but the app
+          # didn't log to those exact tags, producing a 0-byte logcat artifact.
+          # Unfiltered capture ensures we see EVERYTHING: crashes, native binary
+          # errors, Tor bootstrap progress, etc.
+          echo ""
+          echo "=== Capturing logcat (90s, unfiltered) ==="
+          timeout 90 adb logcat -v time -v thread *:V 2>/dev/null > /tmp/logcat.txt || true
+          LOGCAT_SIZE=$(stat -c%s /tmp/logcat.txt 2>/dev/null || echo 0)
+          echo "Logcat captured: $LOGCAT_SIZE bytes"
+
+          # Try to tap the Connect button (center of screen on Pixel 6 emulator)
+          # This is best-effort — if the button isn't there, the tap is a no-op.
+          echo ""
+          echo "=== Tapping Connect button ==="
+          adb shell input tap 540 1200
+          sleep 5
+
+          # Take a screenshot after tapping Connect
+          echo "=== Screenshot: after tapping Connect ==="
+          adb shell screencap -p /sdcard/onionroute_02_after_connect.png
+          adb pull /sdcard/onionroute_02_after_connect.png /tmp/ 2>/dev/null || echo "(screenshot pull failed)"
+
+          # Capture another 30s of logcat to catch Tor bootstrap progress
+          echo ""
+          echo "=== Capturing logcat (30s more, after Connect tap) ==="
+          timeout 30 adb logcat -v time -v thread *:V 2>/dev/null > /tmp/logcat_after_connect.txt || true
 
           # Check for critical errors
           echo ""
           echo "=== Error analysis ==="
           ERRORS=0
-          if grep -qi "FATAL EXCEPTION" /tmp/logcat.txt; then
+          if grep -qi "FATAL EXCEPTION" /tmp/logcat.txt /tmp/logcat_after_connect.txt; then
             echo "CRITICAL: FATAL EXCEPTION found!"
-            grep -A 20 "FATAL EXCEPTION" /tmp/logcat.txt
+            grep -A 20 "FATAL EXCEPTION" /tmp/logcat.txt /tmp/logcat_after_connect.txt | head -50
             ERRORS=1
           fi
-          if grep -qi "Native binary NOT FOUND" /tmp/logcat.txt; then
+          if grep -qi "Native binary NOT FOUND\|native binary not found" /tmp/logcat.txt /tmp/logcat_after_connect.txt; then
             echo "CRITICAL: Missing native binary!"
-            grep "NOT FOUND" /tmp/logcat.txt
+            grep -i "NOT FOUND" /tmp/logcat.txt /tmp/logcat_after_connect.txt | head -10
             ERRORS=1
           fi
-          if grep -qi "Exec format error" /tmp/logcat.txt; then
+          if grep -qi "Exec format error" /tmp/logcat.txt /tmp/logcat_after_connect.txt; then
             echo "CRITICAL: Wrong architecture binary!"
-            grep "format error" /tmp/logcat.txt
+            grep "format error" /tmp/logcat.txt /tmp/logcat_after_connect.txt | head -10
             ERRORS=1
           fi
-          if grep -qi "Tor process exited" /tmp/logcat.txt; then
+          if grep -qi "Tor process exited" /tmp/logcat.txt /tmp/logcat_after_connect.txt; then
             echo "WARNING: Tor process crashed"
-            grep "exited" /tmp/logcat.txt
+            grep "exited" /tmp/logcat.txt /tmp/logcat_after_connect.txt | head -10
           fi
 
+          # Look for Tor bootstrap progress (good signal)
+          echo ""
+          echo "=== Tor bootstrap progress ==="
+          grep -iE "bootstrap|tor.*ready|circuit.*established|control_auth_cookie|GETINFO" /tmp/logcat.txt /tmp/logcat_after_connect.txt | head -20 || echo "(no bootstrap logs found)"
+
+          # Look for the app's own log tags (to confirm what tags it actually uses)
+          echo ""
+          echo "=== App log tags detected ==="
+          grep -oE "^[0-9]{2}-[0-9]{2} [0-9:]+\. [A-Z]/[a-zA-Z_]+" /tmp/logcat.txt /tmp/logcat_after_connect.txt | sed 's|.*||' | sort -u | head -20 || echo "(no tags found)"
+
           if [ "$ERRORS" -eq 0 ]; then
+            echo ""
             echo "No critical errors detected."
           fi
           SCRIPT
@@ -448,8 +503,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: emulator-logcat
-          path: /tmp/logcat.txt
+          path: |
+            /tmp/logcat.txt
+            /tmp/logcat_after_connect.txt
           retention-days: 7
+
+      - name: Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshots
+          path: /tmp/onionroute_*.png
+          retention-days: 7
+          if-no-files-found: warn
 
   # ── F-Droid Metadata Validation ─────────────────────────────
   validate-metadata:
