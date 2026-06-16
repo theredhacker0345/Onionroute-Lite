@@ -1,0 +1,32 @@
+Version 1.1.0 — Major feature update
+
+• All 4 ABIs supported: armeabi-v7a, arm64-v8a, x86, x86_64
+• Kindness Mode: run Snowflake proxy to help censored users
+• Kindness stats dashboard: real-time count of people helped
+• Quick Settings tiles: Connect toggle + New Circuit
+• Camouflage launcher icons: 4 alternate icons to disguise the app
+• WebTunnel bridge support (HTTPS-mimicking transport)
+• Custom bridge import via QR code scan or paste
+• Always-on VPN support
+• Per-app routing: choose which apps go through Tor
+• Bandwidth speed graph
+
+Security & Stability:
+• Tor 0.4.9.9 with OpenSSL 1.1.1w
+• NDK r26d aligned across all native build scripts
+• foregroundServiceType=specialUse for Android 14 (API 34) compliance
+• Network security config: cleartext only to localhost
+• Compiler hardening: -fstack-protector-strong, -D_FORTIFY_SOURCE=2, -Wl,-z,relro,-z,now
+• Reproducible build flags: -trimpath, -ffile-prefix-map, -Wl,--build-id=none
+• TorControlConnection race condition fixed
+• BandwidthTracker conflicting read fixed
+• Kindness + WebTunnel toggle state restored on app restart
+• peopleHelpedNow AtomicLong going negative fixed
+• consecutiveFailures race condition fixed (AtomicInteger)
+
+F-Droid:
+• GPL-3.0-or-later license
+• Reproducible build configuration
+• Native binaries built from source (Tor, obfs4proxy, snowflake, tun2socks)
+• NonFreeNet AntiFeature declared
+• FOSS-only STUN servers (no Google STUN by default)
