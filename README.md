@@ -203,9 +203,14 @@ Built for **Samsung Galaxy Grand Prime Plus** (SM-G532F):
 | Aspect | Detail |
 |--------|--------|
 | **RAM** | 1.5 GB — App uses ~30-50 MB; tor daemon ~20-40 MB |
-| **Storage** | 8 GB — APK is ~18 MB installed; leave room for tor data |
+| **Storage** | 8 GB — APK is ~38 MB; leave room for tor data |
 | **CPU** | Spreadtrum SC9830E — First connect may take 30-60s |
 | **Battery** | Foreground service drains faster; plug in when possible |
+
+> **Phone/tablet only.** The release APK ships only ARM ABIs
+> (armeabi-v7a + arm64-v8a). x86/x86_64 (Intel-based tablets and
+> emulators) are not supported in release builds — see
+> [Supported ABIs](#supported-abis) for details.
 
 ### Recommended Settings
 
@@ -273,13 +278,22 @@ onionroute-lite/
 
 ## Supported ABIs
 
-| ABI | Version Code Offset | Target Devices |
-|-----|---------------------|----------------|
-| `armeabi-v7a` | +1 | Most older Android phones (including SM-G532F) |
-| `arm64-v8a` | +2 | Modern 64-bit Android phones |
-| `x86` | +3 | Android emulators, some tablets |
-| `x86_64` | +4 | Android emulators (x86_64 images) |
-| `universal` | +0 | Fallback (contains all ABIs) |
+OnionRoute Lite ships **only ARM ABIs** in the release APK to keep the
+file size small (~38 MB instead of ~77 MB). x86 and x86_64 are
+**emulator-only** ABIs and would double the APK size with no benefit to
+real Android users — ~99% of Android phones and tablets are ARM-based.
+
+| ABI | In Release APK? | Target Devices |
+|-----|-----------------|----------------|
+| `armeabi-v7a` | ✅ Yes | Older 32-bit ARM phones (Samsung Grand Prime Plus, etc.) |
+| `arm64-v8a`   | ✅ Yes | Modern 64-bit ARM phones and tablets |
+| `x86`         | ❌ No | Android emulators, rare Intel tablets |
+| `x86_64`      | ❌ No | Android emulators (x86_64 images) |
+
+> **Need x86/x86_64 for emulator testing?** Build the debug variant
+> locally: `./gradlew assembleFdroidDebug` — the debug CI job builds
+> armeabi-v7a + x86_64 so the app can be tested on standard Android
+> emulators. The release APK is for production phone/tablet installs only.
 
 ---
 
