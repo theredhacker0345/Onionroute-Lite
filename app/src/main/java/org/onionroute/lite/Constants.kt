@@ -95,6 +95,8 @@ object Constants {
     const val EXTRA_KINDNESS_PEOPLE_NOW = "kindness_people_now"
     const val EXTRA_KINDNESS_PEOPLE_TOTAL = "kindness_people_total"
     const val EXTRA_SPEED_DOWN = "speed_down"
+    /** Carries Tor bootstrap progress (0..100) when EXTRA_TOR_STATUS == "BOOTSTRAPPING". */
+    const val EXTRA_BOOTSTRAP_PROGRESS = "bootstrap_progress"
 
     // ── VPN Configuration ─────────────────────────────────────
     const val VPN_MTU = 1500

@@ -38,6 +38,7 @@ class TorControlConnection(private val context: Context) {
     private var onBandwidthUpdate: ((down: Long, up: Long) -> Unit)? = null
     private var onCircuitEvent: ((line: String) -> Unit)? = null
     private var onStatusEvent: ((line: String) -> Unit)? = null
+    private var onBootstrapEvent: ((progress: Int, tag: String) -> Unit)? = null
 
     // ── Thread-safe GETINFO support ───────────────────────────────
     // Pending GETINFO requests waiting for responses from the listener thread.
@@ -133,18 +134,24 @@ class TorControlConnection(private val context: Context) {
 
     /**
      * Subscribes to asynchronous events from the control port.
+     *
+     * @param onBootstrap Called with (progress 0..100, tag) for each
+     *   `650 BOOTSTRAP` event. Progress 100 means Tor has finished
+     *   building circuits and is ready to carry traffic.
      */
     fun subscribeEvents(
         onBandwidth: (down: Long, up: Long) -> Unit,
         onCircuit: (line: String) -> Unit = {},
-        onStatus: (line: String) -> Unit = {}
+        onStatus: (line: String) -> Unit = {},
+        onBootstrap: (progress: Int, tag: String) -> Unit = { _, _ -> }
     ) {
         onBandwidthUpdate = onBandwidth
         onCircuitEvent = onCircuit
         onStatusEvent = onStatus
+        onBootstrapEvent = onBootstrap
 
-        // Subscribe to BW, CIRC, and STATUS_CLIENT events
-        sendCommand("SETEVENTS BW CIRC STATUS_CLIENT\r\n")
+        // Subscribe to BW, CIRC, STATUS_CLIENT, and BOOTSTRAP events
+        sendCommand("SETEVENTS BW CIRC STATUS_CLIENT BOOTSTRAP\r\n")
 
         // Start listener thread — this is the ONLY thread that reads from inputStream
         listenerThread = Thread({
@@ -255,6 +262,7 @@ class TorControlConnection(private val context: Context) {
                     line.startsWith("650 BW ") -> parseBandwidthEvent(line)
                     line.startsWith("650 CIRC ") -> onCircuitEvent?.invoke(line)
                     line.startsWith("650 STATUS_CLIENT ") -> onStatusEvent?.invoke(line)
+                    line.startsWith("650 BOOTSTRAP ") -> parseBootstrapEvent(line)
 
                     // GETINFO responses (250-keyword=value or 250 OK)
                     line.startsWith("250-") -> {
@@ -316,6 +324,24 @@ class TorControlConnection(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(tag, "Failed to parse bandwidth event", e)
+        }
+    }
+
+    private fun parseBootstrapEvent(line: String) {
+        // Format: 650 BOOTSTRAP PROGRESS=<n> TAG=<tag> [WARNING=...]
+        // Example: 650 BOOTSTRAP PROGRESS=100 TAG=done
+        try {
+            var progress = 0
+            var tag = ""
+            for (part in line.split(" ")) {
+                when {
+                    part.startsWith("PROGRESS=") -> progress = part.removePrefix("PROGRESS=").toIntOrNull() ?: 0
+                    part.startsWith("TAG=") -> tag = part.removePrefix("TAG=")
+                }
+            }
+            onBootstrapEvent?.invoke(progress, tag)
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to parse bootstrap event", e)
         }
     }
 }

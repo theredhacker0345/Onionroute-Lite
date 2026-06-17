@@ -33,16 +33,23 @@ class BandwidthTracker(
      * Starts bandwidth tracking using the given control connection.
      *
      * @param connection An authenticated [TorControlConnection]
+     * @param onBootstrap Optional bootstrap progress callback (progress 0..100, tag).
+     *   The caller (TorService) uses this to wait for Tor to finish bootstrapping
+     *   before declaring CONNECTED.
      */
-    fun start(connection: TorControlConnection) {
+    fun start(
+        connection: TorControlConnection,
+        onBootstrap: (progress: Int, tag: String) -> Unit = { _, _ -> }
+    ) {
         controlConnection = connection
         lastTimestamp.set(System.currentTimeMillis())
 
-        // Subscribe to async bandwidth events — no GETINFO polling needed
+        // Subscribe to async bandwidth + bootstrap events — no GETINFO polling needed
         connection.subscribeEvents(
             onBandwidth = { down, up ->
                 handleBandwidthEvent(down, up)
-            }
+            },
+            onBootstrap = onBootstrap
         )
 
         Log.i(tag, "BandwidthTracker started")

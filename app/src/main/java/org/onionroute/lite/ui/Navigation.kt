@@ -201,10 +201,10 @@ class OnionRouteAppState {
 
     fun toggleConnection() {
         connectionState = when (connectionState) {
-            is ConnectionState.Disconnected -> ConnectionState.Connecting
+            is ConnectionState.Disconnected -> ConnectionState.Connecting()
             is ConnectionState.Connecting -> ConnectionState.Disconnected
             is ConnectionState.Connected -> ConnectionState.Disconnected
-            is ConnectionState.Error -> ConnectionState.Connecting
+            is ConnectionState.Error -> ConnectionState.Connecting()
         }
     }
 }

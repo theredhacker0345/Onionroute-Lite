@@ -105,7 +105,8 @@ object OnionRouteSpacing {
 
 sealed class ConnectionState {
     data object Disconnected : ConnectionState()
-    data object Connecting : ConnectionState()
+    /** @param progress Tor bootstrap progress 0..100 (0 = not yet started / unknown) */
+    data class Connecting(val progress: Int = 0) : ConnectionState()
     data class Connected(val exitNodeIp: String = "") : ConnectionState()
     data class Error(val message: String) : ConnectionState()
 }

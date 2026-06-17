@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -63,6 +65,7 @@ fun HomeScreen(appState: OnionRouteAppState) {
         modifier = Modifier
             .fillMaxSize()
             .background(OnionRouteColors.Black)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -131,7 +134,10 @@ fun HomeScreen(appState: OnionRouteAppState) {
         // ── Quick Toggles ────────────────────────────────────────
         QuickToggleRow(appState = appState)
 
-        Spacer(modifier = Modifier.weight(1f))
+        // Bottom padding so the last toggle row is reachable above the
+        // gesture nav bar. Previously used Spacer(weight=1f) which is a
+        // no-op inside a vertically scrollable column.
+        Spacer(modifier = Modifier.height(48.dp))
     }
 }
 
@@ -301,7 +307,7 @@ fun StatusDisplay(appState: OnionRouteAppState) {
                 )
             }
             is ConnectionState.Connecting -> {
-                AnimatedConnectingText()
+                AnimatedConnectingText(progress = state.progress)
             }
             is ConnectionState.Connected -> {
                 Text(
@@ -310,13 +316,15 @@ fun StatusDisplay(appState: OnionRouteAppState) {
                         color = OnionRouteColors.Jade
                     )
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = state.exitNodeIp,
-                    style = OnionRouteTypography.LabelSmall.copy(
-                        color = OnionRouteColors.TextSecondary
+                if (state.exitNodeIp.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = state.exitNodeIp,
+                        style = OnionRouteTypography.LabelSmall.copy(
+                            color = OnionRouteColors.TextSecondary
+                        )
                     )
-                )
+                }
             }
             is ConnectionState.Error -> {
                 Text(
@@ -343,7 +351,7 @@ fun StatusDisplay(appState: OnionRouteAppState) {
 // ═══════════════════════════════════════════════════════════════════
 
 @Composable
-fun AnimatedConnectingText() {
+fun AnimatedConnectingText(progress: Int = 0) {
     val infiniteTransition = rememberInfiniteTransition(label = "dots")
     val dotCount by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -356,8 +364,10 @@ fun AnimatedConnectingText() {
     )
 
     val dots = ".".repeat(dotCount.toInt().coerceIn(0, 3))
+    // If we have bootstrap progress, show it; otherwise just "CONNECTING…"
+    val text = if (progress > 0) "CONNECTING $progress%" else "CONNECTING$dots"
     Text(
-        text = "CONNECTING$dots",
+        text = text,
         style = OnionRouteTypography.LabelMedium.copy(
             color = OnionRouteColors.StatusAmber
         )

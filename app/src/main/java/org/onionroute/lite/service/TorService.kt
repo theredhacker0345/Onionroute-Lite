@@ -18,6 +18,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.onionroute.lite.Constants
 import org.onionroute.lite.KillSwitch
 import org.onionroute.lite.MainActivity
@@ -190,15 +193,43 @@ class TorService : Service() {
                 return
             }
 
-            // Start bandwidth monitoring
-            bandwidthTracker?.start(torControlConnection!!)
+            // Start bandwidth monitoring + bootstrap listener.
+            // We do NOT broadcast CONNECTED yet — Tor has only just opened its
+            // control port; it still needs to download consensus, build circuits,
+            // and establish a path through the Tor network (bootstrap, 0→100%).
+            // Premature "CONNECTED" was the previous behaviour — the UI would
+            // show CONNECTED while Tor was actually still bootstrapping (or had
+            // failed to bootstrap at all).
+            val bootstrapLatch = CountDownLatch(1)
+            val lastProgress = AtomicInteger(0)
+
+            bandwidthTracker?.start(torControlConnection!!) { progress, bootstrapTag ->
+                Log.i(tag, "Bootstrap: $progress% ($bootstrapTag)")
+                lastProgress.set(progress)
+                // Broadcast intermediate progress so the UI shows "CONNECTING 45%"
+                broadcastBootstrapProgress(progress)
+                if (progress >= 100) {
+                    bootstrapLatch.countDown()
+                }
+            }
+
+            // Wait up to 120 seconds for Tor to reach 100% bootstrap.
+            // Tor on a clean connection typically bootstraps in 5–30s; 120s
+            // gives headroom for slow networks or bridge connections.
+            val bootstrapped = bootstrapLatch.await(120, TimeUnit.SECONDS)
+            if (!bootstrapped) {
+                Log.e(tag, "Tor bootstrap timed out at ${lastProgress.get()}% after 120s")
+                broadcastStatus("ERROR", "Tor bootstrap timed out at ${lastProgress.get()}%")
+                stopTorInternal()
+                return
+            }
 
             isTorRunning = true
             killSwitch?.setVpnMode(isVpnActive())
             broadcastStatus("CONNECTED")
             updateNotification("OnionRoute Lite — Connected")
 
-            Log.i(tag, "Tor started successfully")
+            Log.i(tag, "Tor bootstrap complete — CONNECTED")
 
         } catch (e: Exception) {
             Log.e(tag, "Error starting Tor", e)
@@ -361,6 +392,20 @@ class TorService : Service() {
         }
         sendBroadcast(intent)
         Log.d(tag, "Status broadcast: $status")
+    }
+
+    /**
+     * Broadcasts Tor bootstrap progress (0..100) so the UI can show
+     * "CONNECTING 45%" while Tor is building circuits.
+     */
+    private fun broadcastBootstrapProgress(progress: Int) {
+        val intent = Intent(Constants.ACTION_STATUS_UPDATE).apply {
+            putExtra(Constants.EXTRA_TOR_STATUS, "BOOTSTRAPPING")
+            putExtra(Constants.EXTRA_BOOTSTRAP_PROGRESS, progress)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
+        Log.d(tag, "Bootstrap progress: $progress%")
     }
 
     private fun broadcastBandwidth(speedDown: Long, speedUp: Long, totalDown: Long, totalUp: Long) {

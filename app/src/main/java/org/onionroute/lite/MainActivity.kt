@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun startTor() {
-        appState.updateConnectionState(ConnectionState.Connecting)
+        appState.updateConnectionState(ConnectionState.Connecting(progress = 0))
         sendCommandToService(Constants.ACTION_START_TOR)
     }
 
@@ -197,11 +197,17 @@ class MainActivity : ComponentActivity() {
         runOnUiThread {
             when (torStatus) {
                 "CONNECTED" -> appState.updateConnectionState(
-                    ConnectionState.Connected(exitNodeIp = "tor.0.4.8.14")
+                    // exit IP is not queried — leave empty so UI shows just "CONNECTED"
+                    ConnectionState.Connected(exitNodeIp = "")
                 )
                 "CONNECTING", "STARTING" -> appState.updateConnectionState(
-                    ConnectionState.Connecting
+                    ConnectionState.Connecting(progress = 0)
                 )
+                "BOOTSTRAPPING" -> {
+                    // Tor control port is up; Tor is building circuits.
+                    val progress = intent.getIntExtra(Constants.EXTRA_BOOTSTRAP_PROGRESS, 0)
+                    appState.updateConnectionState(ConnectionState.Connecting(progress = progress))
+                }
                 "DISCONNECTED" -> appState.updateConnectionState(
                     ConnectionState.Disconnected
                 )

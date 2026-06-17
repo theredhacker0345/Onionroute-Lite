@@ -145,6 +145,14 @@ MaintainerNotes: |
   The app is NOT useless without Tor — it can still function as a
   local SOCKS5/HTTP proxy client for any SOCKS5 service.
 
+  QUERY_ALL_PACKAGES permission: required by the per-app routing
+  feature (AppSelectionManager.getInstalledApps). On Android 11+
+  (API 30+), package visibility restrictions hide user-installed
+  apps from this app unless QUERY_ALL_PACKAGES is declared or a
+  <queries> filter matches. For a VPN app that routes per-app
+  traffic, seeing all installed apps is essential. This permission
+  is 'normal' protection level (auto-granted, no user prompt).
+
 AntiFeatures:
   # NonFreeNet: The app connects to Tor bridges and STUN servers operated
   # by third parties. While the Tor Project and STUN providers run free

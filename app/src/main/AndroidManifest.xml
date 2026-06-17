@@ -35,6 +35,18 @@
     <!-- ── Battery Optimization Bypass ────────────────────────── -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- ── Package Visibility (Android 11+, API 30+) ────────────
+         Required by AppSelectionManager.getInstalledApps() to enumerate
+         all installed apps for per-app VPN routing. Without this, on
+         Android 11+ the app can only see system apps — user apps are
+         hidden by package visibility restrictions.
+
+         This permission is 'normal' protection level (auto-granted,
+         no user prompt). Google Play restricts it but F-Droid allows
+         it. VPN apps are a legitimate use case per Google Play policy. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
