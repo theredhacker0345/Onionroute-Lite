@@ -240,19 +240,25 @@ jobs:
           chmod +x gradlew
           chmod +x scripts/*.sh
 
-      - name: Build native binaries for ALL ABIs
+      - name: Build native binaries for ARM ABIs only
+        # Release APK ships only ARM ABIs (armeabi-v7a + arm64-v8a) to
+        # keep APK size down. x86 + x86_64 are emulator-only and would
+        # double the APK size (~77MB → ~42MB) for no benefit to real
+        # Android users. Emulator testing uses the debug CI artifact
+        # which builds armeabi-v7a + x86_64.
         run: |
           NDK_PATH="${{ steps.resolve-ndk.outputs.ndk-path }}"
           if [ -z "$NDK_PATH" ]; then
             echo "ERROR: No NDK path resolved"
             exit 1
           fi
-          ./scripts/build-all.sh all "$NDK_PATH"
+          ./scripts/build-all.sh armeabi-v7a "$NDK_PATH"
+          ./scripts/build-all.sh arm64-v8a "$NDK_PATH"
 
       - name: Verify all native binaries
         run: |
           FAILED=0
-          for ABI in armeabi-v7a arm64-v8a x86 x86_64; do
+          for ABI in armeabi-v7a arm64-v8a; do
             for lib in libtor.so libobfs4proxy.so libsnowflake.so libsnowflake-proxy.so libtun2socks.so; do
               FILE="app/src/main/jniLibs/$ABI/$lib"
               if [ ! -f "$FILE" ]; then

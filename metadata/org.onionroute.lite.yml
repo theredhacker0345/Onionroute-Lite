@@ -83,7 +83,11 @@ Builds:
       - chmod +x ../scripts/build-snowflake.sh
       - chmod +x ../scripts/build-tun2socks.sh
       - cd ..
-      - ./scripts/build-all.sh all $$NDK$$
+      # Build only ARM ABIs — x86/x86_64 are emulator-only and would
+      # double the APK size. The fdroid flavor's ndk.abiFilters
+      # ensures only these 2 ABIs are packaged even if others exist.
+      - ./scripts/build-all.sh armeabi-v7a $$NDK$$
+      - ./scripts/build-all.sh arm64-v8a $$NDK$$
     scanignore:
       - app/src/main/jniLibs/armeabi-v7a/libtor.so
       - app/src/main/jniLibs/armeabi-v7a/libobfs4proxy.so
@@ -95,16 +99,6 @@ Builds:
       - app/src/main/jniLibs/arm64-v8a/libsnowflake.so
       - app/src/main/jniLibs/arm64-v8a/libsnowflake-proxy.so
       - app/src/main/jniLibs/arm64-v8a/libtun2socks.so
-      - app/src/main/jniLibs/x86/libtor.so
-      - app/src/main/jniLibs/x86/libobfs4proxy.so
-      - app/src/main/jniLibs/x86/libsnowflake.so
-      - app/src/main/jniLibs/x86/libsnowflake-proxy.so
-      - app/src/main/jniLibs/x86/libtun2socks.so
-      - app/src/main/jniLibs/x86_64/libtor.so
-      - app/src/main/jniLibs/x86_64/libobfs4proxy.so
-      - app/src/main/jniLibs/x86_64/libsnowflake.so
-      - app/src/main/jniLibs/x86_64/libsnowflake-proxy.so
-      - app/src/main/jniLibs/x86_64/libtun2socks.so
 
 MaintainerNotes: |
   Native binaries (libtor.so, libobfs4proxy.so, libsnowflake.so,
@@ -115,11 +109,12 @@ MaintainerNotes: |
   pre-built binary paths since they are verified to be built from
   source during the build step.
 
-  F-Droid builds a SINGLE UNIVERSAL APK containing all 4 ABIs
-  (armeabi-v7a, arm64-v8a, x86, x86_64). The fdroid product flavor
-  disables ABI splits in build.gradle so that assembleFdroidRelease
-  produces one universal APK instead of per-ABI splits. This ensures
-  the app works on all supported devices from a single F-Droid install.
+  F-Droid builds a SINGLE UNIVERSAL APK containing only ARM ABIs
+  (armeabi-v7a + arm64-v8a). x86 and x86_64 are intentionally excluded
+  because they are emulator-only and would double the APK size (~42MB
+  vs ~77MB) with no benefit to real Android users. ~99% of Android
+  devices are ARM. The fdroid product flavor's ndk.abiFilters enforces
+  this at packaging time.
 
   All dependencies are FOSS (Apache-2.0) from Maven Central and
   Google's Maven repository. No Google Play Services, Firebase,

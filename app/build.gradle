@@ -58,15 +58,22 @@ android {
         fdroid {
             dimension "distribution"
             buildConfigField "boolean", "FDROID_BUILD", "true"
-            // F-Droid reproducible build: versionName is plain "1.1.0"
+            // F-Droid reproducible build: versionName is plain "1.0.0"
             // (no -fdroid suffix) so the metadata's versionName matches
             // the APK's versionName exactly for reproducibility verification.
             //
-            // F-Droid: disable ABI splits → produces single universal APK
-            // containing all 4 ABIs (armeabi-v7a, arm64-v8a, x86, x86_64).
+            // F-Droid: disable ABI splits → produces single universal APK.
             // F-Droid publishes one APK per versionCode; per-ABI splits
             // would confuse its infrastructure.
             splits.abi.enable = false
+
+            // Ship only ARM ABIs in the universal APK. x86 + x86_64 are
+            // emulator-only and would double the APK size for no benefit
+            // to real Android users. ~99% of Android devices are ARM.
+            // (armeabi-v7a = old 32-bit ARM, arm64-v8a = modern 64-bit ARM)
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
         }
         gplay {
             dimension "distribution"
