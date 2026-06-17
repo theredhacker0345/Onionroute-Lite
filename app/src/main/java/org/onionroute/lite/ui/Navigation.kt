@@ -32,6 +32,11 @@ class OnionRouteAppState {
     var connectionState by mutableStateOf<ConnectionState>(ConnectionState.Disconnected)
         internal set
 
+    /** Current Tor exit node IP, or empty string if unknown/disconnected.
+     *  Updated every 15s by TorService via ACTION_EXIT_IP_UPDATE broadcast. */
+    var exitIp by mutableStateOf("")
+        internal set
+
     var isVpnMode by mutableStateOf(false)
         internal set
 
@@ -134,6 +139,15 @@ class OnionRouteAppState {
             is ConnectionState.Connected -> 1f
             is ConnectionState.Error -> 0f
         }
+        // Clear exit IP when disconnected so UI doesn't show stale IP
+        if (state is ConnectionState.Disconnected || state is ConnectionState.Error) {
+            exitIp = ""
+        }
+    }
+
+    /** Called by MainActivity when ACTION_EXIT_IP_UPDATE broadcast is received. */
+    fun updateExitIp(ip: String) {
+        exitIp = ip
     }
 
     fun updateVpnMode(enabled: Boolean) {

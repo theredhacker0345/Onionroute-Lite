@@ -316,12 +316,23 @@ fun StatusDisplay(appState: OnionRouteAppState) {
                         color = OnionRouteColors.Jade
                     )
                 )
-                if (state.exitNodeIp.isNotEmpty()) {
+                // Show the current Tor exit IP (updated every 15s by TorService).
+                // Empty until the first successful fetch completes (usually within
+                // a few seconds of CONNECTED — see startExitIpUpdates()).
+                if (appState.exitIp.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = state.exitNodeIp,
+                        text = "Exit: ${appState.exitIp}",
                         style = OnionRouteTypography.LabelSmall.copy(
                             color = OnionRouteColors.TextSecondary
+                        )
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Resolving exit IP…",
+                        style = OnionRouteTypography.LabelSmall.copy(
+                            color = OnionRouteColors.TextTertiary
                         )
                     )
                 }

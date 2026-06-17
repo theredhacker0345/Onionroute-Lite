@@ -82,6 +82,8 @@ object Constants {
     const val ACTION_NEW_CIRCUIT = "org.onionroute.lite.NEW_CIRCUIT"
     const val ACTION_IMPORT_BRIDGES = "org.onionroute.lite.IMPORT_BRIDGES"
     const val ACTION_KINDNESS_STATS = "org.onionroute.lite.KINDNESS_STATS"
+    /** Broadcast when the Tor exit IP changes (or is first detected). */
+    const val ACTION_EXIT_IP_UPDATE = "org.onionroute.lite.EXIT_IP_UPDATE"
 
     // ── Broadcast Extra Keys ──────────────────────────────────
     const val EXTRA_TOR_STATUS = "tor_status"
@@ -97,6 +99,8 @@ object Constants {
     const val EXTRA_SPEED_DOWN = "speed_down"
     /** Carries Tor bootstrap progress (0..100) when EXTRA_TOR_STATUS == "BOOTSTRAPPING". */
     const val EXTRA_BOOTSTRAP_PROGRESS = "bootstrap_progress"
+    /** Carries the Tor exit node IP address (string, may be empty if lookup failed). */
+    const val EXTRA_EXIT_IP = "exit_ip"
 
     // ── VPN Configuration ─────────────────────────────────────
     const val VPN_MTU = 1500
@@ -107,6 +111,13 @@ object Constants {
     // ── Snowflake Default Configuration ───────────────────────
     const val SNOWFLAKE_BROKER_URL = "https://snowflake-broker.torproject.net/"
     const val SNOWFLAKE_FRONT_DOMAIN = "cdn.sstatic.net"
+
+    // ── Tor Exit IP Check ─────────────────────────────────────
+    // Queried via the Tor SOCKS5 proxy (127.0.0.1:9050) every
+    // EXIT_IP_UPDATE_INTERVAL_MS to display the user's current Tor
+    // exit node IP. Response JSON: {"IsTor":true,"IP":"1.2.3.4"}
+    const val EXIT_IP_CHECK_URL = "https://check.torproject.org/api/ip"
+    const val EXIT_IP_UPDATE_INTERVAL_MS = 15_000L
     // STUN servers for Snowflake WebRTC NAT traversal.
     // Using FOSS-friendly STUN servers where possible.
     // stun.l.google.com is excluded from the default list because

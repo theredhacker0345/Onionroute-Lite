@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
                 Constants.ACTION_STATUS_UPDATE -> handleStatusUpdate(intent)
                 Constants.ACTION_BANDWIDTH_UPDATE -> handleBandwidthUpdate(intent)
                 Constants.ACTION_KINDNESS_STATS -> handleKindnessStats(intent)
+                Constants.ACTION_EXIT_IP_UPDATE -> handleExitIpUpdate(intent)
             }
         }
     }
@@ -236,6 +237,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun handleExitIpUpdate(intent: Intent) {
+        val ip = intent.getStringExtra(Constants.EXTRA_EXIT_IP) ?: ""
+        runOnUiThread {
+            appState.updateExitIp(ip)
+        }
+    }
+
     private fun handleKindnessStats(intent: Intent) {
         val dataDonated = intent.getLongExtra(Constants.EXTRA_KINDNESS_DATA_DONATED, 0)
         val peopleNow = intent.getLongExtra(Constants.EXTRA_KINDNESS_PEOPLE_NOW, 0)
@@ -267,6 +275,7 @@ class MainActivity : ComponentActivity() {
         val filter = IntentFilter().apply {
             addAction(Constants.ACTION_STATUS_UPDATE)
             addAction(Constants.ACTION_BANDWIDTH_UPDATE)
+            addAction(Constants.ACTION_EXIT_IP_UPDATE)
             addAction(Constants.ACTION_KINDNESS_STATS)
         }
         if (Build.VERSION.SDK_INT >= 33) {

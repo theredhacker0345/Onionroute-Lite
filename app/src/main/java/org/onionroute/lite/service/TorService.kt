@@ -14,10 +14,16 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.URL
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -61,6 +67,11 @@ class TorService : Service() {
     private var isSnowflakeEnabled = false
     private var isObfs4Enabled = false
     private var isWebTunnelEnabled = false
+
+    /** Periodic job that fetches the Tor exit IP every 15s and broadcasts
+     *  updates to the UI. Cancelled in stopTorInternal(). */
+    private var exitIpUpdateJob: Job? = null
+    private var lastExitIp: String = ""
 
     /** Coroutine scope tied to this service's lifecycle. Uses SupervisorJob so
      *  one failed child coroutine doesn't cancel siblings. */
@@ -229,6 +240,12 @@ class TorService : Service() {
             broadcastStatus("CONNECTED")
             updateNotification("OnionRoute Lite — Connected")
 
+            // Start periodic exit-IP polling (every 15s). Broadcasts the
+            // Tor exit IP to the UI so the user can see which exit node
+            // they're currently using, and notice when it changes (e.g.,
+            // after a NEWNYM signal rotates the circuit).
+            startExitIpUpdates()
+
             Log.i(tag, "Tor bootstrap complete — CONNECTED")
 
         } catch (e: Exception) {
@@ -247,6 +264,12 @@ class TorService : Service() {
         if (!isTorRunning) return
 
         Log.i(tag, "Stopping Tor daemon…")
+
+        // Stop the exit-IP polling job and clear the cached value so
+        // the UI doesn't show a stale IP after disconnect.
+        exitIpUpdateJob?.cancel()
+        exitIpUpdateJob = null
+        lastExitIp = ""
 
         bandwidthTracker?.stop()
         torControlConnection?.disconnect()
@@ -406,6 +429,97 @@ class TorService : Service() {
         }
         sendBroadcast(intent)
         Log.d(tag, "Bootstrap progress: $progress%")
+    }
+
+    /**
+     * Broadcasts the Tor exit IP so the UI can display it under "CONNECTED".
+     * Only broadcast when the IP changes (avoids spamming the UI every 15s
+     * with the same value).
+     */
+    private fun broadcastExitIp(ip: String) {
+        if (ip == lastExitIp) return
+        lastExitIp = ip
+        val intent = Intent(Constants.ACTION_EXIT_IP_UPDATE).apply {
+            putExtra(Constants.EXTRA_EXIT_IP, ip)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
+        Log.d(tag, "Exit IP update: $ip")
+    }
+
+    /**
+     * Starts a background job that fetches the Tor exit IP every
+     * [Constants.EXIT_IP_UPDATE_INTERVAL_MS] (15 seconds) by making an
+     * HTTPS request to check.torproject.org/api/ip through the Tor SOCKS5
+     * proxy on 127.0.0.1:9050.
+     *
+     * The first fetch happens immediately so the user sees their IP within
+     * a few seconds of connecting. Subsequent fetches happen every 15s so
+     * the user is notified when their exit node changes (e.g., after a
+     * NEWNYM signal or circuit rotation).
+     *
+     * The job is cancelled in [stopTorInternal] when Tor disconnects.
+     */
+    private fun startExitIpUpdates() {
+        exitIpUpdateJob?.cancel()
+        exitIpUpdateJob = serviceScope.launch {
+            Log.i(tag, "Starting exit IP update job (every ${Constants.EXIT_IP_UPDATE_INTERVAL_MS}ms)")
+            while (isTorRunning && isActive) {
+                try {
+                    val ip = fetchExitIp()
+                    if (ip != null) {
+                        broadcastExitIp(ip)
+                    } else {
+                        Log.d(tag, "Exit IP fetch returned null — Tor may not be carrying traffic yet")
+                    }
+                } catch (e: Exception) {
+                    Log.w(tag, "Exit IP fetch failed: ${e.message}")
+                }
+                delay(Constants.EXIT_IP_UPDATE_INTERVAL_MS)
+            }
+            Log.i(tag, "Exit IP update job ended")
+        }
+    }
+
+    /**
+     * Fetches the Tor exit IP by querying check.torproject.org/api/ip
+     * through the Tor SOCKS5 proxy.
+     *
+     * Response format: {"IsTor":true,"IP":"1.2.3.4"}
+     * Returns null if the request fails, IsTor is false, or the JSON
+     * can't be parsed.
+     */
+    private fun fetchExitIp(): String? {
+        var connection: HttpURLConnection? = null
+        return try {
+            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", Constants.TOR_SOCKS_PORT))
+            val url = URL(Constants.EXIT_IP_CHECK_URL)
+            connection = (url.openConnection(proxy) as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "OnionRoute-Lite/1.0")
+            }
+            val responseCode = connection.responseCode
+            if (responseCode != 200) {
+                Log.w(tag, "Exit IP check returned HTTP $responseCode")
+                return null
+            }
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            Log.d(tag, "Exit IP response: $body")
+            // Parse {"IsTor":true,"IP":"1.2.3.4"} without a JSON library
+            // (avoid adding org.json dependency for this small feature).
+            val isTorMatch = Regex("\"IsTor\"\\s*:\\s*(true|false)").find(body)
+            val ipMatch = Regex("\"IP\"\\s*:\\s*\"([^\"]+)\"").find(body)
+            val isTor = isTorMatch?.groupValues?.get(1)?.toBoolean() ?: false
+            val ip = ipMatch?.groupValues?.get(1)
+            if (isTor && !ip.isNullOrEmpty()) ip else null
+        } catch (e: Exception) {
+            Log.w(tag, "fetchExitIp failed: ${e.message}")
+            null
+        } finally {
+            connection?.disconnect()
+        }
     }
 
     private fun broadcastBandwidth(speedDown: Long, speedUp: Long, totalDown: Long, totalUp: Long) {
