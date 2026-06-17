@@ -69,8 +69,8 @@ Repo: https://github.com/darkmaster0345/Onionroute-Lite.git
 # F-Droid will NOT accept tags in the commit field.
 
 Builds:
-  - versionName: '1.1.0'
-    versionCode: 2000
+  - versionName: '1.0.0'
+    versionCode: 1000
     commit: 9b6c35365564426b856f72f159e34335e68fe460
     subdir: app
     gradle:
@@ -156,5 +156,5 @@ AntiFeatures:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '1.1.0'
-CurrentVersionCode: 2000
+CurrentVersion: '1.0.0'
+CurrentVersionCode: 1000

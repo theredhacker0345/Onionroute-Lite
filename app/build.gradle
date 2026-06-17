@@ -11,8 +11,8 @@ android {
         applicationId "org.onionroute.lite"
         minSdk 23          // Android 6.0.1 — Samsung Grand Prime Plus
         targetSdk 34       // API 34 for foregroundServiceType=specialUse
-        versionCode 2
-        versionName "1.1.0"
+        versionCode 1
+        versionName "1.0.0"
 
         // No abiFilters — jniLibs contains all ABIs built by scripts;
         // the splits block below generates per-ABI APKs instead.

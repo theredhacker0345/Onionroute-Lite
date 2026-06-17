@@ -30,8 +30,8 @@ cat metadata/org.onionroute.lite.yml | grep -A2 "Builds:"
 You should see:
 ```yaml
 Builds:
-  - versionName: '1.1.0'
-    versionCode: 2000
+  - versionName: '1.0.0'
+    versionCode: 1000
     commit: 9b533dd5e96b9fbc9efb92204ee8ceb81c8961ca
 ```
 
@@ -158,7 +158,7 @@ This script does steps 2-5 automatically. You still need to do step 1 (fork) and
 ## Current Status
 
 - **Source repo:** https://github.com/darkmaster0345/Onionroute-Lite
-- **Release tag:** `v1.1.0-fdroid` on commit `9b6c353`
+- **Release tag:** `v1.0.0-fdroid` on commit `9b6c353`
 - **Metadata commit:** `9b533dd5e96b9fbc9efb92204ee8ceb81c8961ca`
 - **CI:** All checks passing (build, emulator test, metadata validation)
 - **Release APK:** Built by CI on tag push, downloadable from GitHub Releases

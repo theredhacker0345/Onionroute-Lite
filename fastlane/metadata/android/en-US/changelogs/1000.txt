@@ -1,4 +1,4 @@
-Version 1.1.0 — Major feature update
+Version 1.0.0 — Initial release
 
 • All 4 ABIs supported: armeabi-v7a, arm64-v8a, x86, x86_64
 • Kindness Mode: run Snowflake proxy to help censored users
