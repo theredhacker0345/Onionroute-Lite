@@ -62,17 +62,36 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:enabled="true"
             android:screenOrientation="portrait">
+            <!-- MainActivity has NO launcher intent-filter here. The
+                 launcher entry is provided by one of the <activity-alias>
+                 entries below (AliasDefault by default, or AliasNote /
+                 AliasWeather / AliasMusic / AliasCalc for camouflage).
+                 This lets IconSwitcher disable MainActivity's launcher
+                 entry without disabling the activity itself, which
+                 would crash the running app. -->
+        </activity>
+
+        <!-- ── Camouflage Launcher Aliases ──────────────────────── -->
+        <!-- Each alias provides a launcher icon + label. Only ONE alias
+             is enabled at a time; IconSwitcher toggles them via
+             PackageManager.setComponentEnabledSetting(). -->
+
+        <!-- Default alias — enabled by default. Mirrors the real
+             MainActivity icon + label so the launcher looks normal. -->
+        <activity-alias
+            android:name=".AliasDefault"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
-
-        <!-- ── Camouflage Launcher Aliases ──────────────────────── -->
-        <!-- Each alias provides an alternate launcher icon + label
-             to disguise the app. Only one alias is enabled at a time;
-             the PackageManager toggles them via IconSwitcher utility. -->
+        </activity-alias>
 
         <activity-alias
             android:name=".AliasNote"

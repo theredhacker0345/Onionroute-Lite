@@ -27,6 +27,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.onionroute.lite.service.AppInfo
 import org.onionroute.lite.service.AppSelectionManager
 import org.onionroute.lite.service.RoutingMode
@@ -40,11 +42,24 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
 
     var routingMode by remember { mutableStateOf(manager.getRoutingMode()) }
     var searchQuery by remember { mutableStateOf("") }
-    var installedApps by remember { mutableStateOf(manager.getInstalledApps()) }
+    // Start with empty list + isLoading=true. getInstalledApps() loads
+    // icons and queries PackageManager for every installed app — on a
+    // phone with 100+ apps this takes 1-3 seconds and would freeze the
+    // UI if done on the main thread. Load asynchronously on Dispatchers.IO.
+    var installedApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
-    // Refresh selections when toggling mode — the meaning of "checked" changes
+    // Initial load + reload when routing mode changes (selection state
+    // differs between ALL and SELECTED_ONLY modes)
     LaunchedEffect(routingMode) {
-        installedApps = manager.getInstalledApps()
+        isLoading = true
+        // Run the PackageManager queries + icon loads off the main thread.
+        // Default Dispatchers.IO is appropriate — this is exactly the kind
+        // of blocking I/O it's designed for.
+        installedApps = withContext(Dispatchers.IO) {
+            manager.getInstalledApps()
+        }
+        isLoading = false
     }
 
     val filteredApps = remember(installedApps, searchQuery) {
@@ -113,6 +128,26 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Loading state — show a single placeholder row while
+                // PackageManager queries + icon loads run on Dispatchers.IO.
+                if (isLoading && installedApps.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Loading apps…",
+                                style = OnionRouteTypography.BodyMedium.copy(
+                                    color = OnionRouteColors.TextTertiary
+                                )
+                            )
+                        }
+                    }
+                }
+
                 // User apps
                 if (userApps.isNotEmpty()) {
                     item {

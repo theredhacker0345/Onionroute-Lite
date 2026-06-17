@@ -197,6 +197,11 @@ class TorProcessManager(private val context: Context) {
             appendLine("ControlPort ${Constants.TOR_CONTROL_PORT}")
             appendLine("DNSPort 127.0.0.1:${Constants.TOR_DNS_PORT}")
             appendLine("CookieAuthentication 1")
+            // Explicit cookie file path — TorProcessManager.controlCookieFile
+            // reads from this exact path. Without this directive Tor defaults
+            // to DataDirectory/control_auth_cookie which happens to match,
+            // but making it explicit avoids surprises if DataDirectory changes.
+            appendLine("CookieAuthFile ${File(torDataDir, Constants.TOR_CONTROL_COOKIE).absolutePath}")
             appendLine("CookieAuthFileGroupReadable 1")
             appendLine("AvoidDiskWrites 1")
             appendLine("StrictNodes 1")
@@ -324,6 +329,15 @@ class TorProcessManager(private val context: Context) {
             daemonBuilder.redirectErrorStream(true)
 
             torProcess = daemonBuilder.start()
+
+            // CRITICAL: Tor is configured with 'Log notice stdout' so all of
+            // its bootstrap logs go to stdout. If we don't drain that pipe,
+            // the OS pipe buffer (~64KB) fills up and Tor blocks forever on
+            // its next write — bootstrap silently stalls, control port never
+            // opens, app shows ERROR. Pump stdout to logcat in a background
+            // thread so the buffer stays drained and we get diagnostic logs.
+            startStdoutPump(torProcess!!)
+
             startProcessMonitor()
 
             Log.i(tag, "Tor process started (PID: ${getPid()})")
@@ -350,6 +364,43 @@ class TorProcessManager(private val context: Context) {
         }, "TorProcessMonitor")
         monitorThread?.isDaemon = true
         monitorThread?.start()
+    }
+
+    /**
+     * Pumps Tor's stdout (bootstrap logs, notices, warnings) to logcat
+     * under the TorProcessManager tag. Without this, the OS pipe buffer
+     * (~64KB) fills up and Tor blocks on its next log write — bootstrap
+     * silently stalls.
+     *
+     * Lines starting with [notice] are logged at INFO level.
+     * Lines starting with [warn] are logged at WARN level.
+     * Lines starting with [err] are logged at ERROR level.
+     * Everything else is logged at DEBUG.
+     */
+    private fun startStdoutPump(process: Process) {
+        val pump = Thread({
+            try {
+                val reader = process.inputStream.bufferedReader()
+                var line = reader.readLine()
+                while (line != null) {
+                    when {
+                        line.contains("[notice]") -> Log.i(tag, "tor: $line")
+                        line.contains("[warn]") -> Log.w(tag, "tor: $line")
+                        line.contains("[err]") -> Log.e(tag, "tor: $line")
+                        else -> Log.d(tag, "tor: $line")
+                    }
+                    line = reader.readLine()
+                }
+            } catch (e: InterruptedException) {
+                // Normal — pump is interrupted when Tor is stopped
+            } catch (e: Exception) {
+                if (torProcess != null) {
+                    Log.e(tag, "Stdout pump error", e)
+                }
+            }
+        }, "TorStdoutPump")
+        pump.isDaemon = true
+        pump.start()
     }
 
     private fun getPid(): Long {

@@ -56,6 +56,11 @@ class KindnessService : Service() {
     private val peopleHelpedNow = AtomicLong(0L)
     private val peopleHelpedTotal = AtomicLong(0L)
     private val consecutiveFailures = AtomicInteger(0)
+    /** Last error/fatal line from snowflake-proxy stdout. Included in
+     *  the error notification when the process exits non-zero so the
+     *  user can see WHY it failed (e.g. 'broker unreachable', 'STUN
+     *  timeout', 'invalid flag') without needing logcat. */
+    private val lastProxyError = java.util.concurrent.atomic.AtomicReference("")
 
     private val notificationManager by lazy {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -132,12 +137,21 @@ class KindnessService : Service() {
                 return
             }
 
-            // Build command with capacity flag so proxy reports connection stats
+            // Build command with capacity flag so proxy reports connection stats.
+            // Snowflake v2.x standalone proxy flags (see proxy/snowflake.go):
+            //   -broker URL    — broker URL (required)
+            //   -front DOMAIN  — front domain for broker connection
+            //   -ice LIST      — comma-separated STUN/TURN servers
+            //   -relay URL     — WebSocket relay URL (defaults to wss://snowflake.bamsoftware.com/)
+            //   -log LEVEL     — info|debug|warn|error
+            //   -capacity N    — max concurrent clients
+            //   -keep-local-addresses — include local interface candidates (default off)
             val processBuilder = ProcessBuilder(
                 proxyBinary.absolutePath,
                 "-broker", Constants.SNOWFLAKE_BROKER_URL,
                 "-front", Constants.SNOWFLAKE_FRONT_DOMAIN,
                 "-ice", Constants.SNOWFLAKE_ICE_SERVERS,
+                "-relay", "wss://snowflake.bamsoftware.com/",
                 "-log", "info",
                 "-capacity", "5"
             )
@@ -147,6 +161,12 @@ class KindnessService : Service() {
             processBuilder.redirectErrorStream(true)
 
             proxyProcess = processBuilder.start()
+
+            // Capture last error line for better error notifications.
+            // The stdout reader (startStdoutReader) parses stats; we also
+            // stash the last 'error'/'fatal' line so the process monitor
+            // can include it in the notification when the proxy exits.
+            lastProxyError.set("")
 
             // Record session start time for uptime calculation
             val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
@@ -169,7 +189,8 @@ class KindnessService : Service() {
 
         } catch (e: Exception) {
             Log.e(tag, "Failed to start Snowflake proxy", e)
-            updateNotification("Snowflake proxy \u2014 error")
+            val errMsg = e.message?.take(150) ?: "Unknown error"
+            updateNotification("Snowflake proxy \u2014 error: $errMsg")
             broadcastKindnessStatus(false)
         }
     }
@@ -290,6 +311,14 @@ class KindnessService : Service() {
 
         val trimmed = line.trim().lowercase()
 
+        // Capture error/fatal lines so the process monitor can include
+        // them in the error notification when the proxy exits.
+        if (trimmed.contains("error") || trimmed.contains("fatal") ||
+            trimmed.contains("panic") || trimmed.contains("failed to")) {
+            // Truncate to avoid Notification text overflow
+            lastProxyError.set(line.take(200))
+        }
+
         // Client connected
         if (trimmed.contains("connected") && !trimmed.contains("disconnected")) {
             peopleHelpedNow.incrementAndGet()
@@ -381,7 +410,13 @@ class KindnessService : Service() {
 
                     if (failures > MAX_CONSECUTIVE_FAILURES) {
                         Log.w(tag, "Too many consecutive failures ($failures), stopping restart attempts")
-                        updateNotification("Snowflake proxy \u2014 unable to connect. Tap to retry.")
+                        val errLine = lastProxyError.get()
+                        val notifMsg = if (errLine.isNotEmpty()) {
+                            "Snowflake proxy \u2014 failed (exit $exitCode): $errLine".take(180)
+                        } else {
+                            "Snowflake proxy \u2014 failed (exit $exitCode). Tap to retry."
+                        }
+                        updateNotification(notifMsg)
                         broadcastKindnessStatus(false)
                         return@Thread
                     }

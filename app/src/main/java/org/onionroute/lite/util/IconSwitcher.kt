@@ -23,8 +23,13 @@ import org.onionroute.lite.Constants
 class IconSwitcher(private val context: Context) {
 
     // ── App Icon Enum ──────────────────────────────────────────
+    // IMPORTANT: DEFAULT must point to the .AliasDefault activity-alias,
+    // NOT to .MainActivity directly. Disabling MainActivity would crash
+    // the running app and remove the launcher entry entirely. The
+    // AliasDefault alias mirrors MainActivity's icon+label and is the
+    // "enabled by default" launcher entry declared in AndroidManifest.xml.
     enum class AppIcon(val alias: String, val label: String, val key: String) {
-        DEFAULT(".MainActivity",  "OnionRoute Lite", "default"),
+        DEFAULT(".AliasDefault", "OnionRoute Lite", "default"),
         NOTE(".AliasNote",       "Quick Notes",     "note"),
         WEATHER(".AliasWeather",  "Weather Now",     "weather"),
         MUSIC(".AliasMusic",      "Beat Player",     "music"),
