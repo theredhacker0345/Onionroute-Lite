@@ -123,16 +123,13 @@ class MainActivity : ComponentActivity() {
                 OnionRouteNavigation(appState = appState)
             }
         }
-    }
 
-    override fun onResume() {
-        super.onResume()
+        // Register the status receiver in onCreate (not onResume) so we
+        // don't miss broadcasts while the app is paused. Previously this
+        // was in onResume/onPause which meant: if Tor broadcast CONNECTED
+        // while the user had pressed Home, the broadcast was lost and the
+        // UI showed stale CONNECTING state on resume.
         registerStatusReceiver()
-    }
-
-    override fun onPause() {
-        try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}
-        super.onPause()
     }
 
     override fun onDestroy() {

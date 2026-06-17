@@ -104,10 +104,11 @@ class ConnectTileService : TileService() {
             }
             startService(vpnIntent)
 
-            prefs.edit()
-                .putBoolean(Constants.PREF_TOR_CONNECTED, false)
-                .putBoolean(Constants.PREF_VPN_ENABLED, false)
-                .apply()
+            // Don't write PREF_TOR_CONNECTED here — TorService.broadcastStatus()
+            // will write it when it broadcasts DISCONNECTED. Writing it here
+            // prematurely would cause a stale state if Tor fails to stop.
+            // (VPN_ENABLED is OK to clear here because we just sent STOP_VPN.)
+            prefs.edit().putBoolean(Constants.PREF_VPN_ENABLED, false).apply()
         } else {
             // Start Tor
             Log.i(tag, "Toggling ON — starting Tor")
@@ -120,7 +121,10 @@ class ConnectTileService : TileService() {
                 startService(intent)
             }
 
-            prefs.edit().putBoolean(Constants.PREF_TOR_CONNECTED, true).apply()
+            // Don't write PREF_TOR_CONNECTED=true here — TorService will
+            // write it when bootstrap completes and it broadcasts CONNECTED.
+            // Writing it prematurely caused the tile to show "Connected"
+            // even when Tor failed to bootstrap.
         }
 
         updateTile()

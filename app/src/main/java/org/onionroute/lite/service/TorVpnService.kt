@@ -146,23 +146,31 @@ class TorVpnService : VpnService() {
                     }
                 }
                 RoutingMode.SELECTED_ONLY -> {
-                    // Only route selected apps through Tor
+                    // Only route selected apps through Tor.
+                    //
+                    // If no apps are selected, REFUSE to start the VPN. The
+                    // VpnService.Builder API doesn't support "block all apps"
+                    // — calling addAllowedApplication(packageName) here would
+                    // throw IllegalArgumentException because packageName is
+                    // already in the disallowed list (line above). And calling
+                    // addAllowedApplication on a non-existent package throws
+                    // NameNotFoundException. The safest behavior is to not
+                    // start the VPN at all and tell the user to select apps.
                     val selectedApps = appSelectionManager.getSelectedApps()
-                    if (selectedApps.isNotEmpty()) {
-                        for (selectedPkg in selectedApps) {
-                            try {
-                                builder.addAllowedApplication(selectedPkg)
-                            } catch (e: Exception) {
-                                Log.w(tag, "Cannot allow unknown package: $selectedPkg", e)
-                            }
+                    if (selectedApps.isEmpty()) {
+                        Log.w(tag, "SELECTED_ONLY mode with no apps selected — refusing to start VPN")
+                        updateNotification("VPN disabled — select apps in App Routing first")
+                        // Update preferences so the UI reflects the actual state
+                        val p = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+                        p.edit().putBoolean(Constants.PREF_VPN_ENABLED, false).apply()
+                        return
+                    }
+                    for (selectedPkg in selectedApps) {
+                        try {
+                            builder.addAllowedApplication(selectedPkg)
+                        } catch (e: Exception) {
+                            Log.w(tag, "Cannot allow unknown package: $selectedPkg", e)
                         }
-                    } else {
-                        // No apps selected — block all traffic through VPN (safe default)
-                        // The VPN TUN is up but no app is allowed, so all traffic is blocked.
-                        // This prevents the privacy leak of routing all apps when the user
-                        // explicitly chose SELECTED_ONLY mode.
-                        Log.i(tag, "SELECTED_ONLY mode with no apps selected — blocking all traffic")
-                        builder.addAllowedApplication(packageName) // only self allowed (already disallowed, but explicit)
                     }
                 }
             }
@@ -284,6 +292,29 @@ class TorVpnService : VpnService() {
                 "--loglevel", "error"
             )
             tun2socksProcess = processBuilder.start()
+
+            // Drain tun2socks stdout in a background thread. Even at
+            // --loglevel error, tun2socks prints error messages to stdout
+            // which would fill the OS pipe buffer (~64KB) and block the
+            // process. Same fix as TorProcessManager.startStdoutPump().
+            Thread({
+                try {
+                    val reader = tun2socksProcess?.inputStream?.bufferedReader()
+                        ?: return@Thread
+                    var line = reader.readLine()
+                    while (line != null) {
+                        Log.d(tag, "tun2socks: $line")
+                        line = reader.readLine()
+                    }
+                } catch (_: InterruptedException) {
+                } catch (e: Exception) {
+                    if (tun2socksProcess != null) Log.e(tag, "tun2socks stdout pump error", e)
+                }
+            }, "Tun2SocksStdoutPump").apply {
+                isDaemon = true
+                start()
+            }
+
             Log.i(tag, "tun2socks started — fd=$fd, proxy=$socksAddr, dns=$dnsAddr")
         } catch (e: Exception) {
             Log.e(tag, "Failed to start tun2socks from $tun2socksPath", e)

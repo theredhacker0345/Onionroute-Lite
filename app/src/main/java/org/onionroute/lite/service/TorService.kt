@@ -415,6 +415,23 @@ class TorService : Service() {
         }
         sendBroadcast(intent)
         Log.d(tag, "Status broadcast: $status")
+
+        // Persist connection state to SharedPreferences so the Quick
+        // Settings tile (and other components) can read the current state
+        // even if they weren't listening when this broadcast was sent.
+        // The tile only registers its receiver in onStartListening (when
+        // visible in the QS panel) — without this prefs write, the tile
+        // would show stale state when Tor was started from the app while
+        // the tile wasn't visible.
+        val connected = when (status) {
+            "CONNECTED" -> true
+            "DISCONNECTED", "ERROR" -> false
+            else -> return  // CONNECTING, BOOTSTRAPPING — don't update prefs
+        }
+        getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putBoolean(Constants.PREF_TOR_CONNECTED, connected)
+            .apply()
     }
 
     /**
