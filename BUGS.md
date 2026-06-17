@@ -36,6 +36,14 @@
 | W-08 | WARNING | IME split-test layouts in release | ✅ ProGuard rules added to strip |
 | W-09 | WARNING | Notification call assets | ℹ️ From androidx.core; minor size impact, not a security issue |
 
+## Runtime Bugs Found via User Testing (2026-06-17)
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| R-01 | HIGH | HomeScreen doesn't scroll — content overflows on phones | ✅ Added `verticalScroll(rememberScrollState())` to the Column; replaced `Spacer(weight=1f)` (no-op in scrollable column) with `Spacer(height=48.dp)` |
+| R-02 | HIGH | App routing list only shows system apps, not user apps | ✅ Android 11+ package visibility — added `QUERY_ALL_PACKAGES` permission to manifest (required for per-app VPN routing to enumerate installed apps) |
+| R-03 | CRITICAL | App shows CONNECTED instantly when pressing Connect — Tor hadn't actually bootstrapped | ✅ `TorControlConnection` now subscribes to `BOOTSTRAP` events; `TorService.startTor()` waits for `PROGRESS=100` (120s timeout) before broadcasting CONNECTED; broadcasts `BOOTSTRAPPING` with progress % during bootstrap; UI shows "CONNECTING 45%"; removed hardcoded fake exit IP |
+
 ---
 
 ## 1. APK Structure
