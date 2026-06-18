@@ -331,3 +331,54 @@ Full license: [LICENSE](LICENSE)
 | Snowflake | BSD-3-Clause |
 | hev-socks5-tunnel | GPL-3.0 |
 | Bundled fonts | SIL Open Font License v1.1 |
+
+<!-- SNOWFLAKE-VOLUNTEER-START -->
+## Snowflake Volunteer — This Repo Helps Censored Users 24/7
+
+![Snowflake Volunteer](https://img.shields.io/badge/snowflake%20volunteer-active-00E5C4?style=for-the-badge)
+
+This repository runs a **Tor Snowflake proxy** on GitHub Actions runners
+every 6 hours, donating ~5 hours 50 minutes of compute per session to
+help people in censored countries (Iran, China, Russia, etc.) reach the
+free internet. Zero external services, zero cost — pure creative use of
+CI compute for human rights.
+
+### Live Contribution Stats
+
+| Metric | Total |
+|--------|-------|
+| **Sessions run** | 1 |
+| **People helped** | 0 |
+| **Bandwidth donated** | 0 B |
+| **Compute time volunteered** | 2m |
+
+![Contribution Dashboard](snowflake-volunteer/dashboard.svg)
+
+*Dashboard auto-regenerates after each session. Last updated:
+2026-06-18 19:47 UTC*
+
+### How it works
+
+1. Every 6 hours, a GitHub Actions runner (ubuntu-latest) spins up
+2. Builds the snowflake-proxy binary from source (Tor Project, Go)
+3. Runs the proxy for ~5h50m (just under the 6h job timeout)
+4. Real censored users connect via WebRTC through our proxy
+5. After the session, stats are parsed from the proxy log
+6. `snowflake-volunteer/stats.json` is updated + SVG dashboard regenerated
+7. This README section is rewritten with the new totals
+8. Everything is committed back to `main`
+
+The workflow file: [`.github/workflows/snowflake-volunteer.yml`](.github/workflows/snowflake-volunteer.yml)
+
+### Manual trigger
+
+You can start a volunteer session manually from the Actions tab:
+1. Go to **Actions** -> **Snowflake Volunteer**
+2. Click **Run workflow**
+3. Watch the logs — real users may connect within minutes
+
+> **Note:** This is an opt-in contribution. The workflow only runs on
+> schedule + manual trigger. It does NOT run on every push (to avoid
+> wasting Actions minutes). Public repos have unlimited Actions minutes,
+> so this is genuinely free compute for a good cause.
+<!-- SNOWFLAKE-VOLUNTEER-END -->

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200" viewBox="0 0 800 200" font-family="monospace">
+<rect width="800" height="200" fill="#000000"/>
+<text x="60" y="20" fill="#00E5C4" font-size="13" font-weight="bold">SNOWFLAKE VOLUNTEER — LAST 1 SESSIONS</text>
+<line x1="60" y1="160.0" x2="780" y2="160.0" stroke="#1C1C1C" stroke-width="1"/>
+<text x="52" y="164.0" fill="#5C5C5C" font-size="10" text-anchor="end">0</text>
+<line x1="60" y1="127.5" x2="780" y2="127.5" stroke="#1C1C1C" stroke-width="1"/>
+<text x="52" y="131.5" fill="#5C5C5C" font-size="10" text-anchor="end">0</text>
+<line x1="60" y1="95.0" x2="780" y2="95.0" stroke="#1C1C1C" stroke-width="1"/>
+<text x="52" y="99.0" fill="#5C5C5C" font-size="10" text-anchor="end">0</text>
+<line x1="60" y1="62.5" x2="780" y2="62.5" stroke="#1C1C1C" stroke-width="1"/>
+<text x="52" y="66.5" fill="#5C5C5C" font-size="10" text-anchor="end">0</text>
+<line x1="60" y1="30.0" x2="780" y2="30.0" stroke="#1C1C1C" stroke-width="1"/>
+<text x="52" y="34.0" fill="#5C5C5C" font-size="10" text-anchor="end">1</text>
+<rect x="168.0" y="160.0" width="504.0" height="0.0" fill="#00E5C4" rx="2"/>
+<text x="420.0" y="190" fill="#5C5C5C" font-size="9" text-anchor="middle">06-18</text>
+</svg>
