@@ -386,7 +386,7 @@ You can start a volunteer session manually from the Actions tab:
 <!-- BRIDGE-HEALTH-START -->
 ## Bridge Health — AI-Monitored
 
-![Bridge Health](https://img.shields.io/badge/bridges%20alive-0/1-00E5C4?style=for-the-badge)
+![Bridge Health](https://img.shields.io/badge/bridges%20alive-0/6-00E5C4?style=for-the-badge)
 
 An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner
 via llama.cpp — no external API) tests every bundled bridge every 30
@@ -395,11 +395,16 @@ opens a PR to swap it for a working replacement.
 
 ### Live Status
 
-**Last check:** 2026-06-19T07:34:06+00:00 | **Total checks:** 1 | **Alive:** 0/1
+**Last check:** 2026-06-19T07:43:13+00:00 | **Total checks:** 2 | **Alive:** 0/6
 
 | Bridge | Type | Status | Bootstrap | Failures |
 |--------|------|--------|-----------|----------|
-| `snowflake 192.0.2.3:80 2B280B2...` | snowflake | ⏳ timeout | — | 1 |
+| `obfs4 193.11.166.194:10901 C7B...` | obfs4 | ⏳ timeout | — | 1 |
+| `obfs4 85.31.186.98:443 011F259...` | obfs4 | ⏳ timeout | — | 1 |
+| `obfs4 85.31.186.26:443 91D625E...` | obfs4 | ⏳ timeout | — | 1 |
+| `webtunnel 159.69.22.241:443 40...` | webtunnel | ⏳ timeout | — | 1 |
+| `webtunnel 37.218.240.2:443 668...` | webtunnel | ⏳ timeout | — | 1 |
+| `snowflake 192.0.2.3:80 2B280B2...` | snowflake | ⏳ timeout | — | 2 |
 
 ### How it works
 
