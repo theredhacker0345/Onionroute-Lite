@@ -92,21 +92,30 @@ def format_duration(seconds: int) -> str:
 
 
 def generate_svg(stats: list) -> str:
-    """Generate a dark-themed SVG bar chart of the last 30 sessions."""
+    """Generate a dark-themed SVG bar chart showing session DURATION
+    (always > 0 so bars are always visible) with clients helped as
+    text annotations above each bar.
+
+    Using duration instead of clients_helped ensures the dashboard
+    is never visually empty even when no censored users have connected
+    yet (which is the common case for new repos).
+    """
     recent = stats[-30:] if len(stats) >= 30 else stats
 
     width = 800
-    height = 200
+    height = 220
     padding_left = 60
     padding_right = 20
-    padding_top = 30
+    padding_top = 40
     padding_bottom = 40
     chart_width = width - padding_left - padding_right
     chart_height = height - padding_top - padding_bottom
 
-    max_clients = max((s["clients_helped"] for s in recent), default=1)
-    if max_clients == 0:
-        max_clients = 1
+    # Use duration_seconds for bar height (always > 0)
+    # Show clients_helped as text above each bar
+    max_duration = max((s.get("duration_seconds", 0) for s in recent), default=1)
+    if max_duration == 0:
+        max_duration = 1
 
     bar_count = len(recent)
     if bar_count == 0:
@@ -116,17 +125,29 @@ def generate_svg(stats: list) -> str:
         bar_width = chart_width / bar_count * 0.7
         bar_spacing = chart_width / bar_count * 0.3
 
+    # Calculate totals for the header
+    total_sessions = len(stats)
+    total_clients = sum(s.get("clients_helped", 0) for s in stats)
+    total_duration = sum(s.get("duration_seconds", 0) for s in stats)
+    total_hours = total_duration // 3600
+
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" font-family="monospace">',
         f'<rect width="{width}" height="{height}" fill="#000000"/>',
+        # Title
         f'<text x="{padding_left}" y="20" fill="#00E5C4" font-size="13" font-weight="bold">'
-        f'SNOWFLAKE VOLUNTEER — LAST {bar_count} SESSIONS</text>',
+        f'SNOWFLAKE VOLUNTEER — {total_sessions} SESSIONS, {total_clients} PEOPLE HELPED, {total_hours}h VOLUNTEERED</text>',
+        # Y-axis label
+        f'<text x="{padding_left}" y="35" fill="#5C5C5C" font-size="9">'
+        f'bar height = session duration (minutes)</text>',
     ]
 
+    # Grid lines (0, 25%, 50%, 75%, 100% of max_duration)
+    max_minutes = max_duration / 60
     for pct in [0, 25, 50, 75, 100]:
         y = padding_top + chart_height - (chart_height * pct / 100)
-        value = int(max_clients * pct / 100)
+        value_minutes = int(max_minutes * pct / 100)
         parts.append(
             f'<line x1="{padding_left}" y1="{y:.1f}" '
             f'x2="{width - padding_right}" y2="{y:.1f}" '
@@ -134,26 +155,46 @@ def generate_svg(stats: list) -> str:
         )
         parts.append(
             f'<text x="{padding_left - 8}" y="{y + 4:.1f}" '
-            f'fill="#5C5C5C" font-size="10" text-anchor="end">{value}</text>'
+            f'fill="#5C5C5C" font-size="10" text-anchor="end">{value_minutes}m</text>'
         )
 
+    # Bars
     for i, session in enumerate(recent):
         x = padding_left + i * (bar_width + bar_spacing) + bar_spacing / 2
-        clients = session["clients_helped"]
-        bar_h = (clients / max_clients) * chart_height if max_clients > 0 else 0
+        duration = session.get("duration_seconds", 0)
+        clients = session.get("clients_helped", 0)
+        bar_h = (duration / max_duration) * chart_height if max_duration > 0 else 0
         y = padding_top + chart_height - bar_h
 
+        # Bar color: jade green if clients > 0, dim gray if 0 clients
+        bar_color = "#00E5C4" if clients > 0 else "#2A2A2A"
         parts.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_h:.1f}" '
-            f'fill="#00E5C4" rx="2"/>'
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(bar_h, 2):.1f}" '
+            f'fill="{bar_color}" rx="2"/>'
         )
 
+        # Client count above bar (only if > 0, to avoid clutter)
+        if clients > 0:
+            parts.append(
+                f'<text x="{x + bar_width/2:.1f}" y="{y - 4:.1f}" '
+                f'fill="#00E5C4" font-size="10" text-anchor="middle" font-weight="bold">{clients}</text>'
+            )
+
+        # Date label (every 5th bar or last bar)
         if i % 5 == 0 or i == bar_count - 1:
             ts = session.get("timestamp", "")[:10]
             parts.append(
                 f'<text x="{x + bar_width/2:.1f}" y="{height - 10}" '
                 f'fill="#5C5C5C" font-size="9" text-anchor="middle">{ts[5:]}</text>'
             )
+
+    # If no clients yet, add a note
+    if total_clients == 0 and total_sessions > 0:
+        parts.append(
+            f'<text x="{width/2:.1f}" y="{height - 25}" fill="#5C5C5C" font-size="9" '
+            f'text-anchor="middle" font-style="italic">'
+            f'Awaiting first client connection — bars show compute time donated</text>'
+        )
 
     parts.append("</svg>")
     return "\n".join(parts)
@@ -169,6 +210,14 @@ def update_readme(stats: list) -> None:
     total_clients = sum(s["clients_helped"] for s in stats)
     total_bytes = sum(s["bytes_relayed"] for s in stats)
     total_duration = sum(s.get("duration_seconds", 0) for s in stats)
+
+    # Cache-buster for the SVG image URL. GitHub's camo proxy caches
+    # images by URL — if the URL doesn't change, GitHub serves the old
+    # cached SVG even after the file is updated. Appending ?v=<timestamp>
+    # forces a re-fetch on each update. The timestamp comes from the
+    # last session so it changes every time stats are updated.
+    last_ts = stats[-1].get("timestamp", "").replace(":", "").replace("-", "") if stats else ""
+    svg_url = f"snowflake-volunteer/dashboard.svg?v={last_ts}"
 
     badge_url = "https://img.shields.io/badge/snowflake%20volunteer-active-00E5C4?style=for-the-badge"
 
@@ -192,7 +241,7 @@ CI compute for human rights.
 | **Bandwidth donated** | {format_bytes(total_bytes)} |
 | **Compute time volunteered** | {format_duration(total_duration)} |
 
-![Contribution Dashboard](snowflake-volunteer/dashboard.svg)
+![Contribution Dashboard]({svg_url})
 
 *Dashboard auto-regenerates after each session. Last updated:
 {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}*

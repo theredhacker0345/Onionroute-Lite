@@ -352,10 +352,10 @@ CI compute for human rights.
 | **Bandwidth donated** | 0 B |
 | **Compute time volunteered** | 5h 52m |
 
-![Contribution Dashboard](snowflake-volunteer/dashboard.svg)
+![Contribution Dashboard](snowflake-volunteer/dashboard.svg?v=20260619T050639+0000)
 
 *Dashboard auto-regenerates after each session. Last updated:
-2026-06-19 05:06 UTC*
+2026-06-19 07:23 UTC*
 
 ### How it works
 
