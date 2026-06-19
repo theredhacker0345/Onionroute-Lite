@@ -137,23 +137,23 @@ class KindnessService : Service() {
                 return
             }
 
-            // Build command with capacity flag so proxy reports connection stats.
-            // Snowflake v2.x standalone proxy flags (see proxy/snowflake.go):
-            //   -broker URL    — broker URL (required)
-            //   -front DOMAIN  — front domain for broker connection
-            //   -ice LIST      — comma-separated STUN/TURN servers
-            //   -relay URL     — WebSocket relay URL (defaults to wss://snowflake.bamsoftware.com/)
-            //   -log LEVEL     — info|debug|warn|error
-            //   -capacity N    — max concurrent clients
-            //   -keep-local-addresses — include local interface candidates (default off)
+            // Build command with correct snowflake-proxy v2.10.1 flags.
+            // CORRECT FLAGS (from --help):
+            //   -broker URL     — broker URL (required)
+            //   -stun URL       — comma-separated STUN servers (NOT -ice)
+            //   -relay URL      — WebSocket relay URL (defaults to wss://snowflake.torproject.net/)
+            //   -capacity N     — max concurrent clients
+            //   -unsafe-logging — show IP addresses in logs for stats parsing
+            //
+            // DO NOT USE: -front (removed in v2), -ice (renamed to -stun),
+            //   -log info (takes filename not level)
             val processBuilder = ProcessBuilder(
                 proxyBinary.absolutePath,
                 "-broker", Constants.SNOWFLAKE_BROKER_URL,
-                "-front", Constants.SNOWFLAKE_FRONT_DOMAIN,
-                "-ice", Constants.SNOWFLAKE_ICE_SERVERS,
-                "-relay", "wss://snowflake.bamsoftware.com/",
-                "-log", "info",
-                "-capacity", "5"
+                "-stun", Constants.SNOWFLAKE_ICE_SERVERS,
+                "-relay", "wss://snowflake.torproject.net/",
+                "-capacity", "5",
+                "-unsafe-logging"
             )
 
             val appDataDir = filesDir.absolutePath

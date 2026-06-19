@@ -89,6 +89,29 @@ def parse_bridges_from_constants():
     return bridges
 
 
+def find_plugin_binary(transport: str, plugin_path: str) -> str:
+    """Find the transport plugin binary in a colon-separated path list.
+
+    For obfs4: looks for 'obfs4proxy'
+    For snowflake: looks for 'snowflake-client' or 'client'
+    """
+    plugin_name = "obfs4proxy" if transport == "obfs4" else "snowflake-client"
+    for dir_path in plugin_path.split(":"):
+        dir_path = dir_path.strip()
+        if not dir_path:
+            continue
+        # Check for the standard name
+        full_path = os.path.join(dir_path, plugin_name)
+        if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+            return full_path
+        # For snowflake, also check 'client' (Go install names it 'client')
+        if transport == "snowflake":
+            alt_path = os.path.join(dir_path, "client")
+            if os.path.isfile(alt_path) and os.access(alt_path, os.X_OK):
+                return alt_path
+    return None
+
+
 def test_single_bridge(bridge: dict, timeout: int, bridge_plugin_path: str = None) -> dict:
     """Test a single bridge by running Tor with it and waiting for bootstrap.
 
@@ -115,10 +138,22 @@ def test_single_bridge(bridge: dict, timeout: int, bridge_plugin_path: str = Non
         "UseBridges 1",
     ]
 
-    # Add transport plugin if needed (obfs4 needs the binary; snowflake too)
-    if transport in ("obfs4", "snowflake") and bridge_plugin_path:
-        plugin_name = "obfs4proxy" if transport == "obfs4" else "snowflake-client"
-        torrc_lines.append(f"ClientTransportPlugin {transport} exec {bridge_plugin_path}/{plugin_name}")
+    # Add transport plugin if needed (obfs4 + snowflake need binaries)
+    if transport in ("obfs4", "snowflake"):
+        plugin_binary = None
+        if bridge_plugin_path:
+            plugin_binary = find_plugin_binary(transport, bridge_plugin_path)
+        if plugin_binary:
+            torrc_lines.append(f"ClientTransportPlugin {transport} exec {plugin_binary}")
+        else:
+            return {
+                "transport": transport,
+                "line": bridge_line,
+                "status": "error",
+                "bootstrap_time": 0,
+                "error": f"{transport} transport plugin binary not found",
+                "timestamp": timestamp,
+            }
 
     torrc_lines.append(f"Bridge {bridge_line}")
 

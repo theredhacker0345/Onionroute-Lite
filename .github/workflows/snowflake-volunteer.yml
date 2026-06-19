@@ -101,13 +101,22 @@ jobs:
           echo ""
           # timeout exits with 124 when the time limit is hit — that's expected.
           # Use 'timeout --preserve-status' to keep the proxy's actual exit code.
+          #
+          # CORRECT FLAGS for snowflake-proxy v2.10.1 (from --help):
+          #   -broker URL   (required, defaults to snowflake-broker.torproject.net)
+          #   -stun URL     (NOT -ice; comma-separated STUN servers)
+          #   -relay URL    (defaults to wss://snowflake.torproject.net/)
+          #   -capacity N   (max concurrent clients)
+          #   -unsafe-logging (show IP addresses in logs for stats parsing)
+          #
+          # DO NOT USE: -front (removed in v2), -ice (renamed to -stun),
+          #   -log info (takes filename not level; omit = stderr)
           timeout --preserve-status "${SESSION_MINUTES}m" "$(go env GOPATH)/bin/proxy" \
             -broker https://snowflake-broker.torproject.net/ \
-            -front cdn.sstatic.net \
-            -ice stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478 \
-            -relay wss://snowflake.bamsoftware.com/ \
-            -log info \
+            -stun stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478 \
+            -relay wss://snowflake.torproject.net/ \
             -capacity 5 \
+            -unsafe-logging \
             2>&1 | tee proxy.log
           EXIT=$?
           echo ""
