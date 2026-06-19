@@ -151,6 +151,13 @@ def open_pr(decision: dict, branch_prefix: str = "bridge-health"):
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     branch = f"{branch_prefix}-{timestamp}"
 
+    # Set git identity — required for git commit to work.
+    # The workflow's "Commit health data" step sets this, but the
+    # open_pr function runs in a separate context (after checkout -b)
+    # where the config might not be set.
+    subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
+    subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=True)
+
     subprocess.run(["git", "checkout", "-b", branch], check=True)
 
     # Commit
