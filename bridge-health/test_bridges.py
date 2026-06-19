@@ -52,22 +52,23 @@ def parse_bridges_from_constants():
     content = CONSTANTS_FILE.read_text()
     bridges = []
 
-    # Extract obfs4 bridges: array of strings
+    # Extract obfs4 bridges — Kotlin listOf("...", "...")
+    # Also matches arrayOf() for backwards compatibility
     obfs4_match = re.search(
-        r'DEFAULT_OBFS4_BRIDGES\s*=\s*arrayOf\(\s*"([^"]+)"\s*(?:,\s*"([^"]+)"\s*)*\)',
-        content
+        r'DEFAULT_OBFS4_BRIDGES\s*=\s*(?:listOf|arrayOf)\((.*?)\)',
+        content, re.DOTALL
     )
     if obfs4_match:
-        for line in re.findall(r'"([^"]+)"', obfs4_match.group(0)):
+        for line in re.findall(r'"([^"]+)"', obfs4_match.group(1)):
             bridges.append({"transport": "obfs4", "line": line, "raw": line})
 
     # Extract webtunnel bridges
     wt_match = re.search(
-        r'DEFAULT_WEBTUNNEL_BRIDGES\s*=\s*arrayOf\(\s*"([^"]+)"\s*(?:,\s*"([^"]+)"\s*)*\)',
-        content
+        r'DEFAULT_WEBTUNNEL_BRIDGES\s*=\s*(?:listOf|arrayOf)\((.*?)\)',
+        content, re.DOTALL
     )
     if wt_match:
-        for line in re.findall(r'"([^"]+)"', wt_match.group(0)):
+        for line in re.findall(r'"([^"]+)"', wt_match.group(1)):
             bridges.append({"transport": "webtunnel", "line": line, "raw": line})
 
     # Extract snowflake bridge — it's embedded in the Bridge line in torrc
