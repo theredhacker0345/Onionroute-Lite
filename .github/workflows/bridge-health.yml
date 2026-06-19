@@ -73,6 +73,11 @@ jobs:
           go-version: '1.21'
           cache: false
 
+      - name: Export GOPATH
+        # Make GOPATH available to later steps (fetch_candidates.py needs it
+        # to find the snowflake-client binary built in the next step)
+        run: echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
+
       - name: Build snowflake-client
         # Build the snowflake client transport plugin from source.
         # Without this, Tor can't connect to snowflake bridges.
@@ -161,12 +166,20 @@ jobs:
           ls -lh "$MODEL_FILE"
 
       - name: Fetch replacement bridge candidates
-        # Query Tor Project's BridgeDB for fresh bridges of the
-        # transports that have dead bridges.
+        # Fetch REAL bridges from Tor Project's BridgeDB + Moat API,
+        # test each one with real Tor bootstrap, and only keep verified
+        # alive bridges as replacement candidates.
         if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
+        env:
+          GOPATH: ${{ env.GOPATH }}
+          PLUGIN_PATH: /usr/bin
         run: |
-          echo "=== Fetching replacement bridge candidates ==="
+          echo "=== Fetching REAL replacement bridges from Tor Project ==="
           python3 bridge-health/fetch_candidates.py
+
+          echo ""
+          echo "=== Verified alive candidates ==="
+          cat bridge-health/candidates.json
 
       - name: Build health data for AI
         # Combine current results + historical failure counts into
