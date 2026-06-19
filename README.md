@@ -343,14 +343,16 @@ An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner via llama
 
 **Last check:** `2026-06-19T08:19:10+00:00`
 
-| Bridge | Type | Status | Bootstrap | Failures |
-|--------|------|--------|-----------|----------|
-| `obfs4 193.11.166.194:10901 C7B...` | obfs4 | ⏳ timeout | — | 2 |
-| `obfs4 85.31.186.98:443 011F259...` | obfs4 | ⏳ timeout | — | 2 |
-| `obfs4 85.31.186.26:443 91D625E...` | obfs4 | ⏳ timeout | — | 2 |
-| `webtunnel 159.69.22.241:443 40...` | webtunnel | ⏳ timeout | — | 2 |
-| `webtunnel 37.218.240.2:443 668...` | webtunnel | ⏳ timeout | — | 2 |
-| `snowflake 192.0.2.3:80 2B280B2...` | snowflake | ⏳ timeout | — | 3 |
+| Bridge | Type | Status | Bootstrap | Failures | History |
+|--------|------|--------|-----------|----------|---------|
+| `193.11.166.194:10901` | obfs4 | ⏱️ timeout | — | 2 | ⬜🟨🟨 |
+| `85.31.186.98:443` | obfs4 | ⏱️ timeout | — | 2 | ⬜🟨🟨 |
+| `85.31.186.26:443` | obfs4 | ⏱️ timeout | — | 2 | ⬜🟨🟨 |
+| `159.69.22.241:443` | webtunnel | ⏱️ timeout | — | 2 | ⬜🟨🟨 |
+| `37.218.240.2:443` | webtunnel | ⏱️ timeout | — | 2 | ⬜🟨🟨 |
+| `192.0.2.3:80` | snowflake | ⏱️ timeout | — | **3** ⚠️ | 🟨🟨🟨 |
+
+*History: 🟩 alive · 🟨 timeout · 🟥 dead · 🟧 error · ⬜ no data (last 6 checks)*
 
 <details>
 <summary>How it works</summary>

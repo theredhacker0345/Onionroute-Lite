@@ -22,7 +22,12 @@ README_FILE = REPO_ROOT / "README.md"
 
 
 def render_health_table(health: dict) -> str:
-    """Generate the markdown health table from the latest check."""
+    """Generate the markdown health table from the latest check.
+
+    Includes a visual failure history bar (last 6 checks) using
+    colored square characters:
+      🟩 = alive    🟥 = dead    🟨 = timeout    ⬜ = no data
+    """
     checks = health.get("checks", [])
     if not checks:
         return "_(no health checks yet — first run pending)_"
@@ -34,29 +39,36 @@ def render_health_table(health: dict) -> str:
     if not bridges:
         return "_(no bridges found in Constants.kt)_"
 
+    # Build history lookup: for each bridge line, get last 6 statuses
+    recent_checks = checks[-6:] if len(checks) >= 6 else checks
+
     lines = [
-        "| Bridge | Type | Status | Bootstrap | Failures |",
-        "|--------|------|--------|-----------|----------|",
+        "| Bridge | Type | Status | Bootstrap | Failures | History |",
+        "|--------|------|--------|-----------|----------|---------|",
     ]
 
     for b in bridges:
         transport = b.get("transport", "?")
         line = b.get("line", "")
-        # Show first 30 chars of bridge line as identifier
-        bridge_id = line[:30] + "..." if len(line) > 30 else line
+        # Show a shorter bridge ID — just IP:port
+        import re
+        ip_match = re.search(r'(\d+\.\d+\.\d+\.\d+:\d+)', line)
+        bridge_id = ip_match.group(1) if ip_match else (line[:25] + "..." if len(line) > 25 else line)
         status = b.get("status", "?")
         bootstrap = b.get("bootstrap_time", 0)
         failures = failure_counts.get(line, 0)
 
-        # Status emoji
+        # Status with emoji
         if status == "alive":
-            status_str = "✓ alive"
+            status_str = "✅ alive"
         elif status == "dead":
-            status_str = f"✗ dead"
+            status_str = "❌ dead"
         elif status == "timeout":
-            status_str = "⏳ timeout"
+            status_str = "⏱️ timeout"
+        elif status == "error":
+            status_str = "⚠️ error"
         else:
-            status_str = f"? {status}"
+            status_str = f"❓ {status}"
 
         # Bootstrap time
         if bootstrap > 0:
@@ -64,10 +76,41 @@ def render_health_table(health: dict) -> str:
         else:
             bootstrap_str = "—"
 
-        # Failure history bar (last 6 checks)
+        # Failure count with visual indicator
+        if failures == 0:
+            failures_str = "0"
+        elif failures >= 3:
+            failures_str = f"**{failures}** ⚠️"
+        else:
+            failures_str = str(failures)
+
+        # History bar — last 6 checks for this bridge
+        history = ""
+        for check in recent_checks:
+            found = False
+            for cb in check.get("bridges", []):
+                if cb.get("line") == line:
+                    s = cb.get("status", "?")
+                    if s == "alive":
+                        history += "🟩"
+                    elif s == "dead":
+                        history += "🟥"
+                    elif s == "timeout":
+                        history += "🟨"
+                    else:
+                        history += "🟧"
+                    found = True
+                    break
+            if not found:
+                history += "⬜"
+
         lines.append(
-            f"| `{bridge_id}` | {transport} | {status_str} | {bootstrap_str} | {failures} |"
+            f"| `{bridge_id}` | {transport} | {status_str} | {bootstrap_str} | {failures_str} | {history} |"
         )
+
+    # Add legend
+    lines.append("")
+    lines.append("*History: 🟩 alive · 🟨 timeout · 🟥 dead · 🟧 error · ⬜ no data (last 6 checks)*")
 
     return "\n".join(lines)
 
