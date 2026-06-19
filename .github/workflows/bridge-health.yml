@@ -44,7 +44,6 @@ env:
   # Qwen 2.5 3B Instruct, Q4_K_M quantization, 2GB, Apache 2.0
   MODEL_FILE: qwen2.5-3b-instruct-q4_k_m.gguf
   MODEL_URL: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf
-  LLAMA_RELEASE: b4470
 
 jobs:
   monitor:
@@ -121,16 +120,23 @@ jobs:
           echo "need_ai=$NEED_AI" >> $GITHUB_OUTPUT
 
       - name: Install llama.cpp
-        # Download prebuilt llama.cpp binary — single file, no compilation.
-        # Cached via actions/cache so we only download once.
+        # Build llama.cpp from source — most reliable approach.
+        # Prebuilt binaries moved to a new repo and release format changed.
+        # Building from source takes ~3 min but is guaranteed to work.
+        # Cached via actions/cache on the build directory.
         if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
         run: |
-          echo "=== Installing llama.cpp ==="
-          wget -q https://github.com/ggerganov/llama.cpp/releases/download/${LLAMA_RELEASE}/llama-${LLAMA_RELEASE}-bin-ubuntu-x64.zip
-          unzip -q llama-${LLAMA_RELEASE}-bin-ubuntu-x64.zip
-          chmod +x llama-cli
-          ./llama-cli --version || true
-          echo "LLAMA_BIN=$PWD/llama-cli" >> $GITHUB_ENV
+          echo "=== Building llama.cpp from source ==="
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /tmp/llama.cpp
+          cd /tmp/llama.cpp
+          # Build with cmake — no GPU, CPU only, minimal build
+          cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j $(nproc) --target llama-cli
+          # Copy the binary to a known location
+          cp build/bin/llama-cli /usr/local/bin/llama-cli
+          chmod +x /usr/local/bin/llama-cli
+          llama-cli --version || true
+          echo "LLAMA_BIN=/usr/local/bin/llama-cli" >> $GITHUB_ENV
 
       - name: Cache AI model
         # Cache the 2GB Qwen model so we don't re-download every run.
