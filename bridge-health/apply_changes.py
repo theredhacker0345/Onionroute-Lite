@@ -152,11 +152,16 @@ def open_pr(decision: dict, branch_prefix: str = "bridge-health"):
     branch = f"{branch_prefix}-{timestamp}"
 
     # Set git identity — required for git commit to work.
-    # The workflow's "Commit health data" step sets this, but the
-    # open_pr function runs in a separate context (after checkout -b)
-    # where the config might not be set.
     subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
     subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=True)
+
+    # Reconfigure the git remote with GITHUB_TOKEN — actions/checkout
+    # sets up the remote with its own token which may not have push
+    # permission for new branches. Using the GITHUB_TOKEN from the
+    # workflow env ensures we can push.
+    repo = os.environ.get("GITHUB_REPOSITORY", "darkmaster0345/Onionroute-Lite")
+    remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
+    subprocess.run(["git", "remote", "set-url", "origin", remote_url], check=True)
 
     subprocess.run(["git", "checkout", "-b", branch], check=True)
 
