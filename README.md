@@ -382,3 +382,45 @@ You can start a volunteer session manually from the Actions tab:
 > wasting Actions minutes). Public repos have unlimited Actions minutes,
 > so this is genuinely free compute for a good cause.
 <!-- SNOWFLAKE-VOLUNTEER-END -->
+
+<!-- BRIDGE-HEALTH-START -->
+## Bridge Health — AI-Monitored
+
+![Bridge Health](https://img.shields.io/badge/bridges%20alive-0/1-00E5C4?style=for-the-badge)
+
+An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner
+via llama.cpp — no external API) tests every bundled bridge every 30
+minutes. If a bridge has been dead for 3+ consecutive checks, the AI
+opens a PR to swap it for a working replacement.
+
+### Live Status
+
+**Last check:** 2026-06-19T07:34:06+00:00 | **Total checks:** 1 | **Alive:** 0/1
+
+| Bridge | Type | Status | Bootstrap | Failures |
+|--------|------|--------|-----------|----------|
+| `snowflake 192.0.2.3:80 2B280B2...` | snowflake | ⏳ timeout | — | 1 |
+
+### How it works
+
+1. Every 30 min, a GitHub Actions runner installs `tor` + `llama.cpp`
+2. Tests each bridge in `Constants.kt` — real Tor bootstrap, 60s timeout
+3. If any bridge has 3+ consecutive failures, the AI agent decides:
+   - Fetch replacement bridges from Tor Project's BridgeDB
+   - Test each replacement live (must bootstrap in < 30s)
+   - Ask the local LLM: "should we swap? which replacement?"
+4. If the AI says swap, the workflow edits `Constants.kt` and opens a PR
+5. The PR description is written by the AI with evidence + reasoning
+6. You review and merge — the AI never auto-merges
+
+### AI details
+
+- **Model:** Qwen 2.5 3B Instruct (Q4_K_M, 2GB, Apache 2.0 license)
+- **Framework:** llama.cpp (single binary, no daemon, no GPU)
+- **Inference:** ~25s per decision on 4-core CPU
+- **Cost:** $0 — model is cached in `actions/cache`, no API calls
+- **Privacy:** All inference happens on GitHub's runner, no data leaves
+
+Workflow: [`.github/workflows/bridge-health.yml`](.github/workflows/bridge-health.yml)
+Health data: [`bridge-health/health.json`](bridge-health/health.json)
+<!-- BRIDGE-HEALTH-END -->

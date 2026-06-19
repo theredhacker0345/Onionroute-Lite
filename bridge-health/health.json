@@ -1,0 +1,20 @@
+{
+  "checks": [
+    {
+      "timestamp": "2026-06-19T07:34:06+00:00",
+      "bridges": [
+        {
+          "transport": "snowflake",
+          "line": "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://snowflake-broker.torproject.net/ fronts=cdn.sstatic.net ice=stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478",
+          "status": "timeout",
+          "bootstrap_time": 0,
+          "error": "stuck at 0% after 60s",
+          "timestamp": "2026-06-19T07:33:06Z"
+        }
+      ]
+    }
+  ],
+  "failure_counts": {
+    "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://snowflake-broker.torproject.net/ fronts=cdn.sstatic.net ice=stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478": 1
+  }
+}
