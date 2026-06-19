@@ -165,8 +165,9 @@ def open_pr(decision: dict, branch_prefix: str = "bridge-health"):
 
     subprocess.run(["git", "checkout", "-b", branch], check=True)
 
-    # Commit
-    subprocess.run(["git", "add", "-A"], check=True)
+    # Commit — ONLY add Constants.kt, NOT everything (git add -A would
+    # stage the 2GB model file which GitHub rejects at >100MB)
+    subprocess.run(["git", "add", "app/src/main/java/org/onionroute/lite/Constants.kt"], check=True)
     subprocess.run(
         ["git", "commit", "-m", decision.get("summary", "bridge health update")],
         check=True
