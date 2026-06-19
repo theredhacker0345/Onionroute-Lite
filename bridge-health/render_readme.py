@@ -84,30 +84,37 @@ def render_readme_section(health: dict) -> str:
     )
 
     health_table = render_health_table(health)
-
-    # Summary stats
     total_checks = len(checks)
 
+    # Dynamic badge color
+    if bridge_count > 0 and alive_count == bridge_count:
+        badge_text = f"{alive_count}/{bridge_count}%20alive"
+        badge_color = "00E5C4"
+    elif alive_count > 0:
+        badge_text = f"{alive_count}/{bridge_count}%20alive"
+        badge_color = "FFA500"
+    else:
+        badge_text = f"{alive_count}/{bridge_count}%20alive"
+        badge_color = "FF4444"
+
     section = f"""<!-- BRIDGE-HEALTH-START -->
-## Bridge Health — AI-Monitored
+## Bridge Health
 
-![Bridge Health](https://img.shields.io/badge/bridges%20alive-{alive_count}/{bridge_count}-00E5C4?style=for-the-badge)
+![Bridge Status](https://img.shields.io/badge/bridges-{badge_text}-{badge_color}?style=for-the-badge&labelColor=1A1A1A)
+![Checks](https://img.shields.io/badge/checks-{total_checks}-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![AI](https://img.shields.io/badge/AI-Qwen%202.5%203B-00E5C4?style=for-the-badge&labelColor=1A1A1A)
 
-An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner
-via llama.cpp — no external API) tests every bundled bridge every 30
-minutes. If a bridge has been dead for 3+ consecutive checks, the AI
-opens a PR to swap it for a working replacement.
+An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner via llama.cpp — no external API) tests every bundled bridge every 30 minutes. If a bridge has been dead for 3+ consecutive checks, the AI opens a PR to swap it for a working replacement.
 
-### Live Status
-
-**Last check:** {latest_check} | **Total checks:** {total_checks} | **Alive:** {alive_count}/{bridge_count}
+**Last check:** `{latest_check}`
 
 {health_table}
 
-### How it works
+<details>
+<summary>How it works</summary>
 
 1. Every 30 min, a GitHub Actions runner installs `tor` + `llama.cpp`
-2. Tests each bridge in `Constants.kt` — real Tor bootstrap, 60s timeout
+2. Tests each bridge in `Constants.kt` — real Tor bootstrap, 120s timeout
 3. If any bridge has 3+ consecutive failures, the AI agent decides:
    - Fetch replacement bridges from Tor Project's BridgeDB
    - Test each replacement live (must bootstrap in < 30s)
@@ -116,16 +123,11 @@ opens a PR to swap it for a working replacement.
 5. The PR description is written by the AI with evidence + reasoning
 6. You review and merge — the AI never auto-merges
 
-### AI details
-
-- **Model:** Qwen 2.5 3B Instruct (Q4_K_M, 2GB, Apache 2.0 license)
-- **Framework:** llama.cpp (single binary, no daemon, no GPU)
-- **Inference:** ~25s per decision on 4-core CPU
-- **Cost:** $0 — model is cached in `actions/cache`, no API calls
-- **Privacy:** All inference happens on GitHub's runner, no data leaves
+**AI details:** Qwen 2.5 3B Instruct (Q4_K_M, 2GB, Apache 2.0) via llama.cpp — ~25s per decision on 4-core CPU. Cost: $0. Model cached in `actions/cache`.
 
 Workflow: [`.github/workflows/bridge-health.yml`](.github/workflows/bridge-health.yml)
-Health data: [`bridge-health/health.json`](bridge-health/health.json)
+
+</details>
 <!-- BRIDGE-HEALTH-END -->"""
 
     return section

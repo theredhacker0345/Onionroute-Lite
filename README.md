@@ -333,69 +333,57 @@ Full license: [LICENSE](LICENSE)
 | Bundled fonts | SIL Open Font License v1.1 |
 
 <!-- SNOWFLAKE-VOLUNTEER-START -->
-## Snowflake Volunteer — This Repo Helps Censored Users 24/7
+## Snowflake Volunteer
 
-![Snowflake Volunteer](https://img.shields.io/badge/snowflake%20volunteer-active-00E5C4?style=for-the-badge)
+![Status](https://img.shields.io/badge/status-ARMED%20%26%20MONITORING-00E5C4?style=for-the-badge)
+![Sessions](https://img.shields.io/badge/sessions-3-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![People Helped](https://img.shields.io/badge/people%20helped-0-00E5C4?style=for-the-badge&labelColor=1A1A1A)
+![Time Donated](https://img.shields.io/badge/time%20donated-5h%2055m-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![Bandwidth](https://img.shields.io/badge/bandwidth-0%20B-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-This repository runs a **Tor Snowflake proxy** on GitHub Actions runners
-every 6 hours, donating ~5 hours 50 minutes of compute per session to
-help people in censored countries (Iran, China, Russia, etc.) reach the
-free internet. Zero external services, zero cost — pure creative use of
-CI compute for human rights.
+This repository runs a **Tor Snowflake proxy** on GitHub Actions runners every 6 hours, donating ~5h50m of compute per session to help people in censored countries bypass internet restrictions. Zero external services, zero cost — pure creative use of CI compute for human rights.
 
-### Live Contribution Stats
+![Dashboard](snowflake-volunteer/dashboard.svg?v=20260619T075922+0000)
 
-| Metric | Total |
-|--------|-------|
-| **Sessions run** | 3 |
-| **People helped** | 0 |
-| **Bandwidth donated** | 0 B |
-| **Compute time volunteered** | 5h 55m |
+> *Last updated: 2026-06-19 09:10 UTC · Auto-regenerates after each session*
 
-![Contribution Dashboard](snowflake-volunteer/dashboard.svg?v=20260619T075922+0000)
-
-*Dashboard auto-regenerates after each session. Last updated:
-2026-06-19 07:59 UTC*
-
-### How it works
+<details>
+<summary>How it works</summary>
 
 1. Every 6 hours, a GitHub Actions runner (ubuntu-latest) spins up
 2. Builds the snowflake-proxy binary from source (Tor Project, Go)
 3. Runs the proxy for ~5h50m (just under the 6h job timeout)
 4. Real censored users connect via WebRTC through our proxy
-5. After the session, stats are parsed from the proxy log
-6. `snowflake-volunteer/stats.json` is updated + SVG dashboard regenerated
-7. This README section is rewritten with the new totals
-8. Everything is committed back to `main`
+5. Stats are parsed from the proxy log and committed back to `main`
+6. This README section + the SVG dashboard auto-regenerate
 
-The workflow file: [`.github/workflows/snowflake-volunteer.yml`](.github/workflows/snowflake-volunteer.yml)
+Workflow: [`.github/workflows/snowflake-volunteer.yml`](.github/workflows/snowflake-volunteer.yml)
 
-### Manual trigger
+</details>
 
-You can start a volunteer session manually from the Actions tab:
+<details>
+<summary>Start a session manually</summary>
+
 1. Go to **Actions** -> **Snowflake Volunteer**
 2. Click **Run workflow**
-3. Watch the logs — real users may connect within minutes
+3. Set duration (default 350 min, max 350)
+4. Watch the logs — real users may connect within minutes
 
-> **Note:** This is an opt-in contribution. The workflow only runs on
-> schedule + manual trigger. It does NOT run on every push (to avoid
-> wasting Actions minutes). Public repos have unlimited Actions minutes,
-> so this is genuinely free compute for a good cause.
+> Public repos have unlimited Actions minutes, so this is genuinely free compute for a good cause.
+
+</details>
 <!-- SNOWFLAKE-VOLUNTEER-END -->
 
 <!-- BRIDGE-HEALTH-START -->
-## Bridge Health — AI-Monitored
+## Bridge Health
 
-![Bridge Health](https://img.shields.io/badge/bridges%20alive-0/6-00E5C4?style=for-the-badge)
+![Bridge Status](https://img.shields.io/badge/bridges-0/6%20alive-FF4444?style=for-the-badge&labelColor=1A1A1A)
+![Checks](https://img.shields.io/badge/checks-3-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![AI](https://img.shields.io/badge/AI-Qwen%202.5%203B-00E5C4?style=for-the-badge&labelColor=1A1A1A)
 
-An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner
-via llama.cpp — no external API) tests every bundled bridge every 30
-minutes. If a bridge has been dead for 3+ consecutive checks, the AI
-opens a PR to swap it for a working replacement.
+An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner via llama.cpp — no external API) tests every bundled bridge every 30 minutes. If a bridge has been dead for 3+ consecutive checks, the AI opens a PR to swap it for a working replacement.
 
-### Live Status
-
-**Last check:** 2026-06-19T08:19:10+00:00 | **Total checks:** 3 | **Alive:** 0/6
+**Last check:** `2026-06-19T08:19:10+00:00`
 
 | Bridge | Type | Status | Bootstrap | Failures |
 |--------|------|--------|-----------|----------|
@@ -406,10 +394,11 @@ opens a PR to swap it for a working replacement.
 | `webtunnel 37.218.240.2:443 668...` | webtunnel | ⏳ timeout | — | 2 |
 | `snowflake 192.0.2.3:80 2B280B2...` | snowflake | ⏳ timeout | — | 3 |
 
-### How it works
+<details>
+<summary>How it works</summary>
 
 1. Every 30 min, a GitHub Actions runner installs `tor` + `llama.cpp`
-2. Tests each bridge in `Constants.kt` — real Tor bootstrap, 60s timeout
+2. Tests each bridge in `Constants.kt` — real Tor bootstrap, 120s timeout
 3. If any bridge has 3+ consecutive failures, the AI agent decides:
    - Fetch replacement bridges from Tor Project's BridgeDB
    - Test each replacement live (must bootstrap in < 30s)
@@ -418,14 +407,9 @@ opens a PR to swap it for a working replacement.
 5. The PR description is written by the AI with evidence + reasoning
 6. You review and merge — the AI never auto-merges
 
-### AI details
-
-- **Model:** Qwen 2.5 3B Instruct (Q4_K_M, 2GB, Apache 2.0 license)
-- **Framework:** llama.cpp (single binary, no daemon, no GPU)
-- **Inference:** ~25s per decision on 4-core CPU
-- **Cost:** $0 — model is cached in `actions/cache`, no API calls
-- **Privacy:** All inference happens on GitHub's runner, no data leaves
+**AI details:** Qwen 2.5 3B Instruct (Q4_K_M, 2GB, Apache 2.0) via llama.cpp — ~25s per decision on 4-core CPU. Cost: $0. Model cached in `actions/cache`.
 
 Workflow: [`.github/workflows/bridge-health.yml`](.github/workflows/bridge-health.yml)
-Health data: [`bridge-health/health.json`](bridge-health/health.json)
+
+</details>
 <!-- BRIDGE-HEALTH-END -->

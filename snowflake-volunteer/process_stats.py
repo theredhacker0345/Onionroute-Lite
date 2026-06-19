@@ -92,27 +92,30 @@ def format_duration(seconds: int) -> str:
 
 
 def generate_svg(stats: list) -> str:
-    """Generate a dark-themed SVG bar chart showing session DURATION
-    (always > 0 so bars are always visible) with clients helped as
-    text annotations above each bar.
+    """Generate a professional dark-themed SVG dashboard.
 
-    Using duration instead of clients_helped ensures the dashboard
-    is never visually empty even when no censored users have connected
-    yet (which is the common case for new repos).
+    Design principles:
+    - Deep charcoal background (#0A0A0A) for depth, not harsh pure black
+    - Gradient-filled bars with glow effect when clients connected
+    - LIVE indicator showing the system is active
+    - Clear visual hierarchy: title > stats > chart > timeline
+    - Session duration as bar height (always visible)
+    - Client count as annotation (jade when >0, dim when 0)
+    - Dashed grid lines for subtle reference
+    - Rounded bar corners for modern aesthetic
     """
     recent = stats[-30:] if len(stats) >= 30 else stats
 
-    width = 800
-    height = 220
-    padding_left = 60
-    padding_right = 20
-    padding_top = 40
-    padding_bottom = 40
+    width = 820
+    height = 280
+    padding_left = 55
+    padding_right = 25
+    padding_top = 70  # More room for header
+    padding_bottom = 50
     chart_width = width - padding_left - padding_right
     chart_height = height - padding_top - padding_bottom
 
     # Use duration_seconds for bar height (always > 0)
-    # Show clients_helped as text above each bar
     max_duration = max((s.get("duration_seconds", 0) for s in recent), default=1)
     if max_duration == 0:
         max_duration = 1
@@ -122,43 +125,98 @@ def generate_svg(stats: list) -> str:
         bar_width = 0
         bar_spacing = 0
     else:
-        bar_width = chart_width / bar_count * 0.7
-        bar_spacing = chart_width / bar_count * 0.3
+        bar_width = chart_width / bar_count * 0.65
+        bar_spacing = chart_width / bar_count * 0.35
 
     # Calculate totals for the header
     total_sessions = len(stats)
     total_clients = sum(s.get("clients_helped", 0) for s in stats)
     total_duration = sum(s.get("duration_seconds", 0) for s in stats)
     total_hours = total_duration // 3600
+    total_minutes = (total_duration % 3600) // 60
+
+    # Status message
+    if total_clients > 0:
+        status_msg = f"{total_clients} people helped across {total_sessions} sessions"
+        status_color = "#00E5C4"
+    elif total_sessions > 0:
+        status_msg = f"Armed & monitoring — {total_sessions} sessions completed, awaiting first client"
+        status_color = "#888888"
+    else:
+        status_msg = "Initializing — first session pending"
+        status_color = "#555555"
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}" font-family="monospace">',
-        f'<rect width="{width}" height="{height}" fill="#000000"/>',
+        f'viewBox="0 0 {width} {height}" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif">',
+
+        # === Background with subtle gradient ===
+        f'<defs>',
+        f'<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">',
+        f'<stop offset="0%" stop-color="#0D0D0D"/>',
+        f'<stop offset="100%" stop-color="#080808"/>',
+        f'</linearGradient>',
+        # Bar gradient (with clients — jade glow)
+        f'<linearGradient id="barActive" x1="0" y1="0" x2="0" y2="1">',
+        f'<stop offset="0%" stop-color="#00E5C4"/>',
+        f'<stop offset="100%" stop-color="#006B5A"/>',
+        f'</linearGradient>',
+        # Bar gradient (no clients — dim teal)
+        f'<linearGradient id="barIdle" x1="0" y1="0" x2="0" y2="1">',
+        f'<stop offset="0%" stop-color="#1A3A35"/>',
+        f'<stop offset="100%" stop-color="#0D1F1C"/>',
+        f'</linearGradient>',
+        # Glow filter for active bars
+        f'<filter id="glow" x="-20%" y="-20%" width="140%" height="140%">',
+        f'<feGaussianBlur stdDeviation="3" result="blur"/>',
+        f'<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>',
+        f'</filter>',
+        f'</defs>',
+
+        f'<rect width="{width}" height="{height}" fill="url(#bg)" rx="8"/>',
+
+        # === Header bar ===
+        # LIVE indicator (pulsing circle + text)
+        f'<circle cx="20" cy="20" r="4" fill="#00E5C4">',
+        f'<animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>',
+        f'</circle>',
+        f'<text x="30" y="24" fill="#00E5C4" font-size="11" font-weight="600" letter-spacing="1.5">LIVE</text>',
+
         # Title
-        f'<text x="{padding_left}" y="20" fill="#00E5C4" font-size="13" font-weight="bold">'
-        f'SNOWFLAKE VOLUNTEER — {total_sessions} SESSIONS, {total_clients} PEOPLE HELPED, {total_hours}h VOLUNTEERED</text>',
-        # Y-axis label
-        f'<text x="{padding_left}" y="35" fill="#5C5C5C" font-size="9">'
-        f'bar height = session duration (minutes)</text>',
+        f'<text x="55" y="24" fill="#E0E0E0" font-size="14" font-weight="700">'
+        f'Snowflake Volunteer Dashboard</text>',
+
+        # Stats summary (right-aligned)
+        f'<text x="{width - padding_right}" y="24" fill="#888888" font-size="11" text-anchor="end" font-weight="500">'
+        f'{total_sessions} sessions  ·  {total_clients} helped  ·  {total_hours}h {total_minutes}m donated</text>',
+
+        # Divider line
+        f'<line x1="{padding_left}" y1="38" x2="{width - padding_right}" y2="38" '
+        f'stroke="#1A1A1A" stroke-width="1"/>',
+
+        # Subtitle
+        f'<text x="{padding_left}" y="55" fill="#555555" font-size="10">'
+        f'Session duration (minutes) — green bars indicate sessions where censored users connected</text>',
     ]
 
-    # Grid lines (0, 25%, 50%, 75%, 100% of max_duration)
+    # === Grid lines (dashed, subtle) ===
     max_minutes = max_duration / 60
     for pct in [0, 25, 50, 75, 100]:
         y = padding_top + chart_height - (chart_height * pct / 100)
         value_minutes = int(max_minutes * pct / 100)
+        # Dashed grid line
         parts.append(
             f'<line x1="{padding_left}" y1="{y:.1f}" '
             f'x2="{width - padding_right}" y2="{y:.1f}" '
-            f'stroke="#1C1C1C" stroke-width="1"/>'
+            f'stroke="#1A1A1A" stroke-width="1" stroke-dasharray="3,4"/>'
         )
+        # Y-axis label
         parts.append(
             f'<text x="{padding_left - 8}" y="{y + 4:.1f}" '
-            f'fill="#5C5C5C" font-size="10" text-anchor="end">{value_minutes}m</text>'
+            f'fill="#555555" font-size="9" text-anchor="end">{value_minutes}m</text>'
         )
 
-    # Bars
+    # === Bars ===
     for i, session in enumerate(recent):
         x = padding_left + i * (bar_width + bar_spacing) + bar_spacing / 2
         duration = session.get("duration_seconds", 0)
@@ -166,35 +224,48 @@ def generate_svg(stats: list) -> str:
         bar_h = (duration / max_duration) * chart_height if max_duration > 0 else 0
         y = padding_top + chart_height - bar_h
 
-        # Bar color: jade green if clients > 0, dim gray if 0 clients
-        bar_color = "#00E5C4" if clients > 0 else "#2A2A2A"
+        # Choose gradient based on whether clients connected
+        grad_id = "barActive" if clients > 0 else "barIdle"
+        filter_attr = ' filter="url(#glow)"' if clients > 0 else ''
+
+        # Bar with rounded top corners
         parts.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(bar_h, 2):.1f}" '
-            f'fill="{bar_color}" rx="2"/>'
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(bar_h, 3):.1f}" '
+            f'fill="url(#{grad_id})" rx="3"{filter_attr}/>'
         )
 
-        # Client count above bar (only if > 0, to avoid clutter)
+        # Duration label inside bar (if bar is tall enough)
+        if bar_h > 25:
+            duration_min = int(duration / 60)
+            if duration_min > 0:
+                label_color = "#000000" if clients > 0 else "#3A5A55"
+                parts.append(
+                    f'<text x="{x + bar_width/2:.1f}" y="{y + 15:.1f}" '
+                    f'fill="{label_color}" font-size="9" text-anchor="middle" font-weight="600">'
+                    f'{duration_min}m</text>'
+                )
+
+        # Client count above bar (only if > 0)
         if clients > 0:
             parts.append(
-                f'<text x="{x + bar_width/2:.1f}" y="{y - 4:.1f}" '
-                f'fill="#00E5C4" font-size="10" text-anchor="middle" font-weight="bold">{clients}</text>'
+                f'<text x="{x + bar_width/2:.1f}" y="{y - 5:.1f}" '
+                f'fill="#00E5C4" font-size="11" text-anchor="middle" font-weight="700">'
+                f'{clients}</text>'
             )
 
-        # Date label (every 5th bar or last bar)
-        if i % 5 == 0 or i == bar_count - 1:
-            ts = session.get("timestamp", "")[:10]
+        # Date label (first, every 5th, and last bar)
+        if i == 0 or i % 5 == 0 or i == bar_count - 1:
+            ts = session.get("timestamp", "")[:10]  # YYYY-MM-DD
             parts.append(
-                f'<text x="{x + bar_width/2:.1f}" y="{height - 10}" '
-                f'fill="#5C5C5C" font-size="9" text-anchor="middle">{ts[5:]}</text>'
+                f'<text x="{x + bar_width/2:.1f}" y="{height - 18}" '
+                f'fill="#555555" font-size="9" text-anchor="middle">{ts[5:]}</text>'
             )
 
-    # If no clients yet, add a note
-    if total_clients == 0 and total_sessions > 0:
-        parts.append(
-            f'<text x="{width/2:.1f}" y="{height - 25}" fill="#5C5C5C" font-size="9" '
-            f'text-anchor="middle" font-style="italic">'
-            f'Awaiting first client connection — bars show compute time donated</text>'
-        )
+    # === Status message (bottom) ===
+    parts.append(
+        f'<text x="{width/2:.0f}" y="{height - 5}" fill="{status_color}" font-size="10" '
+        f'text-anchor="middle" font-style="italic">{status_msg}</text>'
+    )
 
     parts.append("</svg>")
     return "\n".join(parts)
@@ -210,66 +281,61 @@ def update_readme(stats: list) -> None:
     total_clients = sum(s["clients_helped"] for s in stats)
     total_bytes = sum(s["bytes_relayed"] for s in stats)
     total_duration = sum(s.get("duration_seconds", 0) for s in stats)
+    total_hours = total_duration // 3600
+    total_minutes = (total_duration % 3600) // 60
 
-    # Cache-buster for the SVG image URL. GitHub's camo proxy caches
-    # images by URL — if the URL doesn't change, GitHub serves the old
-    # cached SVG even after the file is updated. Appending ?v=<timestamp>
-    # forces a re-fetch on each update. The timestamp comes from the
-    # last session so it changes every time stats are updated.
+    # Cache-buster for the SVG image URL
     last_ts = stats[-1].get("timestamp", "").replace(":", "").replace("-", "") if stats else ""
     svg_url = f"snowflake-volunteer/dashboard.svg?v={last_ts}"
 
-    badge_url = "https://img.shields.io/badge/snowflake%20volunteer-active-00E5C4?style=for-the-badge"
+    # Dynamic status badge
+    if total_clients > 0:
+        status_badge = "https://img.shields.io/badge/status-HELPING%20USERS-00E5C4?style=for-the-badge"
+    elif total_sessions > 0:
+        status_badge = "https://img.shields.io/badge/status-ARMED%20%26%20MONITORING-00E5C4?style=for-the-badge"
+    else:
+        status_badge = "https://img.shields.io/badge/status-INITIALIZING-888888?style=for-the-badge"
 
     section = f"""<!-- SNOWFLAKE-VOLUNTEER-START -->
-## Snowflake Volunteer — This Repo Helps Censored Users 24/7
+## Snowflake Volunteer
 
-![Snowflake Volunteer]({badge_url})
+![Status]({status_badge})
+![Sessions](https://img.shields.io/badge/sessions-{total_sessions}-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![People Helped](https://img.shields.io/badge/people%20helped-{total_clients}-00E5C4?style=for-the-badge&labelColor=1A1A1A)
+![Time Donated](https://img.shields.io/badge/time%20donated-{total_hours}h%20{total_minutes}m-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![Bandwidth](https://img.shields.io/badge/bandwidth-{format_bytes(total_bytes).replace("%20","%20").replace(" ","%20")}-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-This repository runs a **Tor Snowflake proxy** on GitHub Actions runners
-every 6 hours, donating ~5 hours 50 minutes of compute per session to
-help people in censored countries (Iran, China, Russia, etc.) reach the
-free internet. Zero external services, zero cost — pure creative use of
-CI compute for human rights.
+This repository runs a **Tor Snowflake proxy** on GitHub Actions runners every 6 hours, donating ~5h50m of compute per session to help people in censored countries bypass internet restrictions. Zero external services, zero cost — pure creative use of CI compute for human rights.
 
-### Live Contribution Stats
+![Dashboard]({svg_url})
 
-| Metric | Total |
-|--------|-------|
-| **Sessions run** | {total_sessions} |
-| **People helped** | {total_clients} |
-| **Bandwidth donated** | {format_bytes(total_bytes)} |
-| **Compute time volunteered** | {format_duration(total_duration)} |
+> *Last updated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} · Auto-regenerates after each session*
 
-![Contribution Dashboard]({svg_url})
-
-*Dashboard auto-regenerates after each session. Last updated:
-{datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}*
-
-### How it works
+<details>
+<summary>How it works</summary>
 
 1. Every 6 hours, a GitHub Actions runner (ubuntu-latest) spins up
 2. Builds the snowflake-proxy binary from source (Tor Project, Go)
 3. Runs the proxy for ~5h50m (just under the 6h job timeout)
 4. Real censored users connect via WebRTC through our proxy
-5. After the session, stats are parsed from the proxy log
-6. `snowflake-volunteer/stats.json` is updated + SVG dashboard regenerated
-7. This README section is rewritten with the new totals
-8. Everything is committed back to `main`
+5. Stats are parsed from the proxy log and committed back to `main`
+6. This README section + the SVG dashboard auto-regenerate
 
-The workflow file: [`.github/workflows/snowflake-volunteer.yml`](.github/workflows/snowflake-volunteer.yml)
+Workflow: [`.github/workflows/snowflake-volunteer.yml`](.github/workflows/snowflake-volunteer.yml)
 
-### Manual trigger
+</details>
 
-You can start a volunteer session manually from the Actions tab:
+<details>
+<summary>Start a session manually</summary>
+
 1. Go to **Actions** -> **Snowflake Volunteer**
 2. Click **Run workflow**
-3. Watch the logs — real users may connect within minutes
+3. Set duration (default 350 min, max 350)
+4. Watch the logs — real users may connect within minutes
 
-> **Note:** This is an opt-in contribution. The workflow only runs on
-> schedule + manual trigger. It does NOT run on every push (to avoid
-> wasting Actions minutes). Public repos have unlimited Actions minutes,
-> so this is genuinely free compute for a good cause.
+> Public repos have unlimited Actions minutes, so this is genuinely free compute for a good cause.
+
+</details>
 <!-- SNOWFLAKE-VOLUNTEER-END -->"""
 
     content = README_FILE.read_text()
