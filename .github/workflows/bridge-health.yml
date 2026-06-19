@@ -207,9 +207,12 @@ jobs:
           cat bridge-health/decision.json
 
       - name: Apply changes + open PR
-        # Apply the AI's decisions to Constants.kt and open a PR.
-        # The AI writes the PR title + body.
+        # Apply the deterministic swap decisions to Constants.kt and open a PR.
+        # MUST pass GITHUB_TOKEN so apply_changes.py can call the GitHub API
+        # to create the PR. Without this, the swap happens but no PR is opened.
         if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 bridge-health/apply_changes.py \
             bridge-health/decision.json \
