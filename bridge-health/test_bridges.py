@@ -179,9 +179,14 @@ def test_single_bridge(bridge: dict, timeout: int, bridge_plugin_path: str = Non
             }
 
         # Start Tor daemon
+        # CRITICAL: redirect stdout/stderr to DEVNULL, not PIPE.
+        # If we use PIPE and don't read it, the OS pipe buffer (~64KB)
+        # fills up and Tor blocks forever on its next write. This was
+        # causing the bridge test to hang for 30+ minutes.
+        # Logs are read from the log file (Log notice file <path>).
         proc = subprocess.Popen(
             [TOR_BIN, "-f", torrc_path],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
 
         # Monitor the log file for bootstrap progress
