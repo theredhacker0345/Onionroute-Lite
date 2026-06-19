@@ -105,7 +105,7 @@ jobs:
         run: |
           echo "=== Testing all bundled bridges ==="
           python3 bridge-health/test_bridges.py \
-            --timeout 120 \
+            --timeout 45 \
             --plugin-path "$(go env GOPATH)/bin:/usr/bin" \
             --output bridge-health/current_results.json
 

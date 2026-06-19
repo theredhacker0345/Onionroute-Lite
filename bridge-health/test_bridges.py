@@ -32,7 +32,8 @@ CONSTANTS_FILE = REPO_ROOT / "app" / "src" / "main" / "java" / "org" / "onionrou
 TOR_BIN = os.environ.get("TOR_BIN", "tor")
 
 # How long to wait for bootstrap before declaring failure.
-DEFAULT_TIMEOUT = 60  # seconds
+DEFAULT_TIMEOUT = 45  # seconds — short enough to identify dead bridges,
+                       # short enough that 6 bridges = 4.5 min max
 
 
 def parse_bridges_from_constants():
