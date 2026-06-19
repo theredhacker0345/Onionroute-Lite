@@ -347,15 +347,15 @@ CI compute for human rights.
 
 | Metric | Total |
 |--------|-------|
-| **Sessions run** | 1 |
+| **Sessions run** | 2 |
 | **People helped** | 0 |
 | **Bandwidth donated** | 0 B |
-| **Compute time volunteered** | 2m |
+| **Compute time volunteered** | 5h 52m |
 
 ![Contribution Dashboard](snowflake-volunteer/dashboard.svg)
 
 *Dashboard auto-regenerates after each session. Last updated:
-2026-06-18 19:47 UTC*
+2026-06-19 05:06 UTC*
 
 ### How it works
 
