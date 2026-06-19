@@ -6,6 +6,9 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.onionroute.lite.Constants
 import org.onionroute.lite.tor.BridgeConfig
 import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.theme.*
@@ -32,18 +36,16 @@ fun BridgeScreen(appState: OnionRouteAppState) {
     val context = LocalContext.current
     val bridgeConfig = remember { BridgeConfig(context) }
 
-    // Refresh custom bridges from BridgeConfig when screen is composed
-    var customBridges by remember {
-        mutableStateOf(bridgeConfig.getCustomBridges())
-    }
+    var customBridges by remember { mutableStateOf(bridgeConfig.getCustomBridges()) }
+
+    // Which bridge type section is expanded
+    var expandedType by remember { mutableStateOf<String?>(null) }
 
     // Dialog state
     var showImportDialog by remember { mutableStateOf(false) }
-    var showScanResultDialog by remember { mutableStateOf(false) }
-    var scannedText by remember { mutableStateOf("") }
     var importFeedback by remember { mutableStateOf("") }
 
-    // QR scanner launcher using ZXing-compatible intent
+    // QR scanner launcher
     val qrLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -52,13 +54,14 @@ fun BridgeScreen(appState: OnionRouteAppState) {
                 ?: result.data?.data?.toString()
                 ?: ""
             if (scanned.isNotEmpty()) {
-                scannedText = scanned
-                showScanResultDialog = true
+                val count = bridgeConfig.parseAndAddBridges(scanned)
+                customBridges = bridgeConfig.getCustomBridges()
+                appState.updateCustomBridges(customBridges)
+                importFeedback = if (count > 0) "Imported $count bridge(s) from QR" else "No valid bridges in QR"
             }
         }
     }
 
-    // ── Import dialog (manual paste) ─────────────────────────────
     if (showImportDialog) {
         BridgeImportDialog(
             onDismiss = { showImportDialog = false },
@@ -66,37 +69,8 @@ fun BridgeScreen(appState: OnionRouteAppState) {
                 val count = bridgeConfig.parseAndAddBridges(text)
                 customBridges = bridgeConfig.getCustomBridges()
                 appState.updateCustomBridges(customBridges)
-                if (count > 0) {
-                    importFeedback = "Imported $count bridge(s)"
-                    appState.onImportBridges?.invoke(customBridges)
-                } else {
-                    importFeedback = "No valid bridges found"
-                }
+                importFeedback = if (count > 0) "Imported $count bridge(s)" else "No valid bridges found"
                 showImportDialog = false
-            }
-        )
-    }
-
-    // ── Scan result confirmation dialog ──────────────────────────
-    if (showScanResultDialog) {
-        BridgeImportDialog(
-            initialText = scannedText,
-            onDismiss = {
-                showScanResultDialog = false
-                scannedText = ""
-            },
-            onImport = { text ->
-                val count = bridgeConfig.parseAndAddBridges(text)
-                customBridges = bridgeConfig.getCustomBridges()
-                appState.updateCustomBridges(customBridges)
-                if (count > 0) {
-                    importFeedback = "Imported $count bridge(s) from QR"
-                    appState.onImportBridges?.invoke(customBridges)
-                } else {
-                    importFeedback = "No valid bridges found in QR code"
-                }
-                showScanResultDialog = false
-                scannedText = ""
             }
         )
     }
@@ -110,7 +84,7 @@ fun BridgeScreen(appState: OnionRouteAppState) {
     ) {
         Spacer(modifier = Modifier.height(48.dp))
 
-        // Header with back button
+        // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -120,107 +94,181 @@ fun BridgeScreen(appState: OnionRouteAppState) {
                 color = OnionRouteColors.TextSecondary,
                 fontSize = 24.sp,
                 fontFamily = SyneFontFamily,
-                modifier = Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { appState.navigateBack() }
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { appState.navigateBack() }
             )
             Spacer(modifier = Modifier.width(16.dp))
             Text(
-                text = "BRIDGE CONFIG",
+                text = "BRIDGES",
                 style = OnionRouteTypography.HeadlineMedium.copy(color = OnionRouteColors.TextPrimary)
             )
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // ── Snowflake info ────────────────────────────────────────
-        Text(text = "SNOWFLAKE", style = OnionRouteTypography.SectionHeader)
-        Spacer(modifier = Modifier.height(8.dp))
-        BridgeInfoCard(
-            title = "Snowflake",
-            description = "Uses WebRTC to route through volunteer proxies. Best for bypassing censorship with minimal configuration.",
-            isActive = appState.isSnowflakeEnabled
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── obfs4 info ────────────────────────────────────────────
-        Text(text = "OBFS4", style = OnionRouteTypography.SectionHeader)
-        Spacer(modifier = Modifier.height(8.dp))
-        BridgeInfoCard(
-            title = "obfs4",
-            description = "Disguises Tor traffic as random-looking data. Default bridges are built-in. Custom bridges can be configured.",
-            isActive = appState.isObfs4Enabled
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── WebTunnel info ────────────────────────────────────────
-        Text(text = "WEBTUNNEL", style = OnionRouteTypography.SectionHeader)
-        Spacer(modifier = Modifier.height(8.dp))
-        BridgeInfoCard(
-            title = "WebTunnel",
-            description = "Mimics HTTPS traffic to evade deep packet inspection. No extra binary needed \u2014 uses direct HTTPS connections to bridge endpoints.",
-            isActive = appState.isWebTunnelEnabled
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── Default Bridges info ──────────────────────────────────
-        Text(text = "DEFAULT BRIDGES", style = OnionRouteTypography.SectionHeader)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Built-in obfs4 and WebTunnel bridges are provided by the Tor Project. No configuration required \u2014 just enable the transport in Settings.",
+            text = "Tap a bridge type to see available bridges. Add or remove bridges as needed.",
             style = OnionRouteTypography.BodyMedium.copy(color = OnionRouteColors.TextSecondary)
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // ══════════════════════════════════════════════════════════
-        // IMPORT BRIDGES section
-        // ══════════════════════════════════════════════════════════
-        Text(text = "IMPORT BRIDGES", style = OnionRouteTypography.SectionHeader)
+        // ── Snowflake section ──────────────────────────────────
+        BridgeTypeSection(
+            title = "Snowflake",
+            description = "WebRTC-based transport. Routes through volunteer proxies.",
+            isActive = appState.isSnowflakeEnabled,
+            isExpanded = expandedType == "snowflake",
+            onToggleExpand = {
+                expandedType = if (expandedType == "snowflake") null else "snowflake"
+            },
+            onToggle = { appState.updateSnowflake(!appState.isSnowflakeEnabled) }
+        ) {
+            // Snowflake uses a single built-in bridge configured in torrc
+            // No individual bridges to list — just show info
+            BridgeInfoRow(
+                label = "Built-in snowflake bridge",
+                value = "Configured automatically via Tor Project broker",
+                statusColor = if (appState.isSnowflakeEnabled) OnionRouteColors.Jade else OnionRouteColors.TextTertiary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // ── obfs4 section ──────────────────────────────────────
+        val obfs4Builtin = remember { Constants.DEFAULT_OBFS4_BRIDGES }
+        val obfs4Custom = customBridges.filter { it.startsWith("obfs4", ignoreCase = true) }
+
+        BridgeTypeSection(
+            title = "obfs4",
+            description = "Disguises Tor traffic as random data. ${obfs4Builtin.size} built-in + ${obfs4Custom.size} custom",
+            isActive = appState.isObfs4Enabled,
+            isExpanded = expandedType == "obfs4",
+            onToggleExpand = {
+                expandedType = if (expandedType == "obfs4") null else "obfs4"
+            },
+            onToggle = { appState.updateObfs4(!appState.isObfs4Enabled) }
+        ) {
+            // Built-in bridges
+            if (obfs4Builtin.isNotEmpty()) {
+                Text(
+                    text = "BUILT-IN (${obfs4Builtin.size})",
+                    style = OnionRouteTypography.SectionHeader,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                obfs4Builtin.forEach { bridge ->
+                    BridgeLineItem(bridgeLine = bridge, showDelete = false, onDelete = {})
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+
+            // Custom obfs4 bridges
+            if (obfs4Custom.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "CUSTOM (${obfs4Custom.size})",
+                    style = OnionRouteTypography.SectionHeader,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                obfs4Custom.forEach { bridge ->
+                    BridgeLineItem(
+                        bridgeLine = bridge,
+                        showDelete = true,
+                        onDelete = {
+                            val updated = customBridges.toMutableList()
+                            updated.remove(bridge)
+                            bridgeConfig.setCustomBridges(updated)
+                            customBridges = updated
+                            appState.updateCustomBridges(customBridges)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // ── WebTunnel section ──────────────────────────────────
+        val webtunnelBuiltin = remember { Constants.DEFAULT_WEBTUNNEL_BRIDGES }
+        val webtunnelCustom = customBridges.filter { it.startsWith("webtunnel", ignoreCase = true) }
+
+        BridgeTypeSection(
+            title = "WebTunnel",
+            description = "Mimics HTTPS traffic. ${webtunnelBuiltin.size} built-in + ${webtunnelCustom.size} custom",
+            isActive = appState.isWebTunnelEnabled,
+            isExpanded = expandedType == "webtunnel",
+            onToggleExpand = {
+                expandedType = if (expandedType == "webtunnel") null else "webtunnel"
+            },
+            onToggle = { appState.updateWebTunnel(!appState.isWebTunnelEnabled) }
+        ) {
+            if (webtunnelBuiltin.isNotEmpty()) {
+                Text(
+                    text = "BUILT-IN (${webtunnelBuiltin.size})",
+                    style = OnionRouteTypography.SectionHeader,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                webtunnelBuiltin.forEach { bridge ->
+                    BridgeLineItem(bridgeLine = bridge, showDelete = false, onDelete = {})
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+
+            if (webtunnelCustom.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "CUSTOM (${webtunnelCustom.size})",
+                    style = OnionRouteTypography.SectionHeader,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                webtunnelCustom.forEach { bridge ->
+                    BridgeLineItem(
+                        bridgeLine = bridge,
+                        showDelete = true,
+                        onDelete = {
+                            val updated = customBridges.toMutableList()
+                            updated.remove(bridge)
+                            bridgeConfig.setCustomBridges(updated)
+                            customBridges = updated
+                            appState.updateCustomBridges(customBridges)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // ── Add bridges section ────────────────────────────────
+        Text(text = "ADD BRIDGES", style = OnionRouteTypography.SectionHeader)
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Scan QR Code button
         ImportActionCard(
             label = "Scan QR Code",
-            subtitle = "Use an external QR scanner app to import bridge lines",
+            subtitle = "Import bridge lines from a QR code",
             onClick = {
                 val scanIntent = Intent("com.google.zxing.client.android.SCAN")
                 scanIntent.putExtra("SCAN_MODE", "QR_CODE_MODE")
                 try {
                     qrLauncher.launch(scanIntent)
                 } catch (e: ActivityNotFoundException) {
-                    // Fallback: try generic scan intent
-                    try {
-                        val genericIntent = Intent(Intent.ACTION_SEND)
-                        genericIntent.type = "text/plain"
-                        genericIntent.putExtra(Intent.EXTRA_TEXT, "")
-                        qrLauncher.launch(genericIntent)
-                    } catch (e2: ActivityNotFoundException) {
-                        Toast.makeText(
-                            context,
-                            "Install a QR scanner app (e.g. Binary Eye from F-Droid)",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
+                    Toast.makeText(context, "Install a QR scanner app (e.g. Binary Eye from F-Droid)", Toast.LENGTH_LONG).show()
                 }
             }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Paste Bridges button
         ImportActionCard(
-            label = "Paste Bridges",
-            subtitle = "Manually paste bridge lines from clipboard or text",
+            label = "Paste Bridge Lines",
+            subtitle = "Manually enter obfs4, snowflake, or webtunnel bridges",
             onClick = { showImportDialog = true }
         )
 
-        // Import feedback toast
+        // Import feedback
         if (importFeedback.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -228,35 +276,15 @@ fun BridgeScreen(appState: OnionRouteAppState) {
                 style = OnionRouteTypography.LabelMedium.copy(color = OnionRouteColors.Jade),
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
-            // Auto-clear feedback after a delay
             LaunchedEffect(importFeedback) {
                 kotlinx.coroutines.delay(3000)
                 importFeedback = ""
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── Custom Bridges list ───────────────────────────────────
+        // Clear all custom bridges
         if (customBridges.isNotEmpty()) {
-            Text(text = "CUSTOM BRIDGES", style = OnionRouteTypography.SectionHeader)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            customBridges.forEachIndexed { index, bridge ->
-                CustomBridgeItem(
-                    bridgeLine = bridge,
-                    index = index,
-                    onDelete = {
-                        bridgeConfig.removeCustomBridge(index)
-                        customBridges = bridgeConfig.getCustomBridges()
-                        appState.updateCustomBridges(customBridges)
-                    }
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-            }
-
-            // Clear all button
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -268,8 +296,8 @@ fun BridgeScreen(appState: OnionRouteAppState) {
                         indication = null
                     ) {
                         bridgeConfig.setCustomBridges(emptyList())
-                        customBridges = bridgeConfig.getCustomBridges()
-                        appState.updateCustomBridges(customBridges)
+                        customBridges = emptyList()
+                        appState.updateCustomBridges(emptyList())
                         importFeedback = "All custom bridges removed"
                     }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -282,32 +310,204 @@ fun BridgeScreen(appState: OnionRouteAppState) {
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(48.dp))
     }
 }
 
-// ── Bridge Info Card (existing component, unchanged) ────────────────
+// ── Bridge Type Section (expandable) ────────────────────────────────
 
 @Composable
-private fun BridgeInfoCard(title: String, description: String, isActive: Boolean) {
-    Box(
+private fun BridgeTypeSection(
+    title: String,
+    description: String,
+    isActive: Boolean,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(if (isActive) OnionRouteColors.JadeGlow else OnionRouteColors.Surface2)
-            .border(1.dp, if (isActive) OnionRouteColors.Jade.copy(alpha = 0.4f) else OnionRouteColors.BorderSubtle, RoundedCornerShape(12.dp))
-            .padding(16.dp)
+            .border(
+                1.dp,
+                if (isActive) OnionRouteColors.Jade.copy(alpha = 0.4f) else OnionRouteColors.BorderSubtle,
+                RoundedCornerShape(12.dp)
+            )
     ) {
-        Column {
+        // Header row — tap to expand/collapse
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onToggleExpand() }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isActive) "$title \u2014 ACTIVE" else title,
+                    style = OnionRouteTypography.BodyMedium.copy(
+                        color = if (isActive) OnionRouteColors.Jade else OnionRouteColors.TextPrimary
+                    )
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = description,
+                    style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextSecondary)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Enable/disable toggle
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isActive) OnionRouteColors.Jade.copy(alpha = 0.2f) else OnionRouteColors.Surface3)
+                    .border(
+                        1.dp,
+                        if (isActive) OnionRouteColors.Jade.copy(alpha = 0.5f) else OnionRouteColors.BorderSubtle,
+                        RoundedCornerShape(8.dp)
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onToggle() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isActive) "ON" else "OFF",
+                    style = OnionRouteTypography.LabelSmall.copy(
+                        color = if (isActive) OnionRouteColors.Jade else OnionRouteColors.TextTertiary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Expand/collapse indicator
             Text(
-                text = if (isActive) "$title \u2014 ACTIVE" else title,
-                style = OnionRouteTypography.BodyMedium.copy(
-                    color = if (isActive) OnionRouteColors.Jade else OnionRouteColors.TextPrimary
+                text = if (isExpanded) "\u25B2" else "\u25BC",
+                color = OnionRouteColors.TextTertiary,
+                fontSize = 10.sp
+            )
+        }
+
+        // Expanded content — list of bridges
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                content = content
+            )
+        }
+    }
+}
+
+// ── Bridge Line Item ────────────────────────────────────────────────
+
+@Composable
+private fun BridgeLineItem(
+    bridgeLine: String,
+    showDelete: Boolean,
+    onDelete: () -> Unit
+) {
+    val transport = when {
+        bridgeLine.startsWith("obfs4", ignoreCase = true) -> "obfs4"
+        bridgeLine.startsWith("snowflake", ignoreCase = true) -> "snowflake"
+        bridgeLine.startsWith("webtunnel", ignoreCase = true) -> "webtunnel"
+        bridgeLine.startsWith("meek", ignoreCase = true) -> "meek"
+        else -> "unknown"
+    }
+
+    // Extract IP:port for display
+    val ipMatch = Regex("""(\d+\.\d+\.\d+\.\d+:\d+)""").find(bridgeLine)
+    val displayId = ipMatch?.value ?: bridgeLine.take(30)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(OnionRouteColors.Surface1)
+            .border(1.dp, OnionRouteColors.BorderSubtle, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = displayId,
+                style = OnionRouteTypography.LabelMedium.copy(
+                    color = OnionRouteColors.TextPrimary,
+                    fontWeight = FontWeight.Medium
                 )
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = description,
+                text = bridgeLine.take(70) + if (bridgeLine.length > 70) "\u2026" else "",
+                style = OnionRouteTypography.LabelSmall.copy(
+                    color = OnionRouteColors.TextTertiary
+                )
+            )
+        }
+
+        if (showDelete) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "\u2715",
+                color = OnionRouteColors.StatusRed.copy(alpha = 0.7f),
+                fontSize = 14.sp,
+                fontFamily = JetBrainsMonoFontFamily,
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onDelete() }
+                    .padding(4.dp)
+            )
+        }
+    }
+}
+
+// ── Bridge Info Row ─────────────────────────────────────────────────
+
+@Composable
+private fun BridgeInfoRow(label: String, value: String, statusColor: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(OnionRouteColors.Surface1)
+            .border(1.dp, OnionRouteColors.BorderSubtle, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(statusColor)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(
+                text = label,
+                style = OnionRouteTypography.LabelMedium.copy(color = OnionRouteColors.TextPrimary)
+            )
+            Text(
+                text = value,
                 style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextSecondary)
             )
         }
@@ -359,73 +559,6 @@ private fun ImportActionCard(
     }
 }
 
-// ── Custom Bridge Item with delete ──────────────────────────────────
-
-@Composable
-private fun CustomBridgeItem(
-    bridgeLine: String,
-    index: Int,
-    onDelete: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(OnionRouteColors.Surface1)
-            .border(1.dp, OnionRouteColors.BorderSubtle, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            // Bridge type indicator + line
-            Column(modifier = Modifier.weight(1f)) {
-                // Transport type badge
-                val transport = when {
-                    bridgeLine.startsWith("obfs4", ignoreCase = true) -> "obfs4"
-                    bridgeLine.startsWith("snowflake", ignoreCase = true) -> "snowflake"
-                    bridgeLine.startsWith("webtunnel", ignoreCase = true) -> "webtunnel"
-                    bridgeLine.startsWith("meek", ignoreCase = true) -> "meek"
-                    else -> "unknown"
-                }
-
-                Text(
-                    text = transport.uppercase(),
-                    style = OnionRouteTypography.LabelSmall.copy(
-                        color = OnionRouteColors.Jade,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = bridgeLine.take(80) + if (bridgeLine.length > 80) "\u2026" else "",
-                    style = OnionRouteTypography.LabelSmall.copy(
-                        color = OnionRouteColors.TextTertiary
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Delete button
-            Text(
-                text = "\u2715",
-                color = OnionRouteColors.StatusRed.copy(alpha = 0.7f),
-                fontSize = 14.sp,
-                fontFamily = JetBrainsMonoFontFamily,
-                modifier = Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onDelete() }
-                    .padding(4.dp)
-            )
-        }
-    }
-}
-
 // ── Bridge Import Dialog ────────────────────────────────────────────
 
 @Composable
@@ -452,9 +585,7 @@ private fun BridgeImportDialog(
             Column {
                 Text(
                     text = "Paste bridge lines (one per line). Supported: obfs4, snowflake, webtunnel",
-                    style = OnionRouteTypography.LabelSmall.copy(
-                        color = OnionRouteColors.TextSecondary
-                    )
+                    style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextSecondary)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
@@ -463,15 +594,11 @@ private fun BridgeImportDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 120.dp, max = 240.dp),
-                    textStyle = OnionRouteTypography.LabelMedium.copy(
-                        color = OnionRouteColors.TextPrimary
-                    ),
+                    textStyle = OnionRouteTypography.LabelMedium.copy(color = OnionRouteColors.TextPrimary),
                     placeholder = {
                         Text(
                             text = "obfs4 192.168.1.1:443 FINGERPRINT cert=...\nwebtunnel 10.0.0.1:443 FINGERPRINT url=...",
-                            style = OnionRouteTypography.LabelSmall.copy(
-                                color = OnionRouteColors.TextTertiary
-                            )
+                            style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextTertiary)
                         )
                     },
                     colors = OutlinedTextFieldDefaults.colors(
@@ -491,28 +618,22 @@ private fun BridgeImportDialog(
                 style = OnionRouteTypography.BodyMedium.copy(
                     color = if (bridgeText.isNotBlank()) OnionRouteColors.Jade else OnionRouteColors.TextTertiary
                 ),
-                modifier = Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        if (bridgeText.isNotBlank()) {
-                            onImport(bridgeText)
-                        }
-                    }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    if (bridgeText.isNotBlank()) onImport(bridgeText)
+                }.padding(horizontal = 12.dp, vertical = 8.dp)
             )
         },
         dismissButton = {
             Text(
                 text = "CANCEL",
                 style = OnionRouteTypography.BodyMedium.copy(color = OnionRouteColors.TextSecondary),
-                modifier = Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onDismiss() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onDismiss() }.padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }
     )
