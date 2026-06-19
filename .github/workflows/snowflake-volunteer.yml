@@ -203,6 +203,8 @@ jobs:
           This commit represents real bandwidth donated to censored users
           via the Tor Snowflake proxy running on this GitHub Actions runner."
 
+            # Pull + rebase to handle concurrent pushes from bridge-health workflow
+            git pull --rebase origin main || true
             git push
             echo "[*] Pushed stats commit to main"
           fi
