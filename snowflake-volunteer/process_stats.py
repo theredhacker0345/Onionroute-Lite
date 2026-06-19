@@ -92,183 +92,166 @@ def format_duration(seconds: int) -> str:
 
 
 def generate_svg(stats: list) -> str:
-    """Generate a professional dark-themed SVG dashboard.
+    """Generate a GitHub-safe SVG dashboard header.
 
-    Design principles:
-    - Deep charcoal background (#0A0A0A) for depth, not harsh pure black
-    - Gradient-filled bars with glow effect when clients connected
-    - LIVE indicator showing the system is active
-    - Clear visual hierarchy: title > stats > chart > timeline
-    - Session duration as bar height (always visible)
-    - Client count as annotation (jade when >0, dim when 0)
-    - Dashed grid lines for subtle reference
-    - Rounded bar corners for modern aesthetic
+    GitHub strips <animate>, <filter>, <script> from SVGs in README.
+    This SVG uses ONLY safe elements (rect, text, line, gradient) so
+    it renders correctly on GitHub.
+
+    The actual chart is rendered by QuickChart.io (PNG, no sanitization)
+    and embedded separately in the README. This SVG is just the header
+    card with stats + status.
     """
-    recent = stats[-30:] if len(stats) >= 30 else stats
-
-    width = 820
-    height = 280
-    padding_left = 55
-    padding_right = 25
-    padding_top = 70  # More room for header
-    padding_bottom = 50
-    chart_width = width - padding_left - padding_right
-    chart_height = height - padding_top - padding_bottom
-
-    # Use duration_seconds for bar height (always > 0)
-    max_duration = max((s.get("duration_seconds", 0) for s in recent), default=1)
-    if max_duration == 0:
-        max_duration = 1
-
-    bar_count = len(recent)
-    if bar_count == 0:
-        bar_width = 0
-        bar_spacing = 0
-    else:
-        bar_width = chart_width / bar_count * 0.65
-        bar_spacing = chart_width / bar_count * 0.35
-
-    # Calculate totals for the header
     total_sessions = len(stats)
     total_clients = sum(s.get("clients_helped", 0) for s in stats)
     total_duration = sum(s.get("duration_seconds", 0) for s in stats)
     total_hours = total_duration // 3600
     total_minutes = (total_duration % 3600) // 60
+    total_bytes = sum(s.get("bytes_relayed", 0) for s in stats)
 
-    # Status message
+    width = 820
+    height = 100
+
+    # Status
     if total_clients > 0:
-        status_msg = f"{total_clients} people helped across {total_sessions} sessions"
+        status_text = "HELPING USERS"
         status_color = "#00E5C4"
     elif total_sessions > 0:
-        status_msg = f"Armed & monitoring — {total_sessions} sessions completed, awaiting first client"
-        status_color = "#888888"
+        status_text = "ARMED & MONITORING"
+        status_color = "#00E5C4"
     else:
-        status_msg = "Initializing — first session pending"
-        status_color = "#555555"
+        status_text = "INITIALIZING"
+        status_color = "#888888"
+
+    bw_str = format_bytes(total_bytes)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif">',
 
-        # === Background with subtle gradient ===
         f'<defs>',
-        f'<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">',
-        f'<stop offset="0%" stop-color="#0D0D0D"/>',
-        f'<stop offset="100%" stop-color="#080808"/>',
+        f'<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">',
+        f'<stop offset="0%" stop-color="#0D1F1C"/>',
+        f'<stop offset="100%" stop-color="#0A0A0A"/>',
         f'</linearGradient>',
-        # Bar gradient (with clients — jade glow)
-        f'<linearGradient id="barActive" x1="0" y1="0" x2="0" y2="1">',
+        f'<linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">',
         f'<stop offset="0%" stop-color="#00E5C4"/>',
         f'<stop offset="100%" stop-color="#006B5A"/>',
         f'</linearGradient>',
-        # Bar gradient (no clients — dim teal)
-        f'<linearGradient id="barIdle" x1="0" y1="0" x2="0" y2="1">',
-        f'<stop offset="0%" stop-color="#1A3A35"/>',
-        f'<stop offset="100%" stop-color="#0D1F1C"/>',
-        f'</linearGradient>',
-        # Glow filter for active bars
-        f'<filter id="glow" x="-20%" y="-20%" width="140%" height="140%">',
-        f'<feGaussianBlur stdDeviation="3" result="blur"/>',
-        f'<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>',
-        f'</filter>',
         f'</defs>',
 
-        f'<rect width="{width}" height="{height}" fill="url(#bg)" rx="8"/>',
+        # Background
+        f'<rect width="{width}" height="{height}" fill="url(#bg)" rx="10"/>',
 
-        # === Header bar ===
-        # LIVE indicator (pulsing circle + text)
-        f'<circle cx="20" cy="20" r="4" fill="#00E5C4">',
-        f'<animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>',
-        f'</circle>',
-        f'<text x="30" y="24" fill="#00E5C4" font-size="11" font-weight="600" letter-spacing="1.5">LIVE</text>',
+        # Left accent bar
+        f'<rect x="0" y="0" width="5" height="{height}" fill="url(#accent)" rx="2"/>',
+
+        # Status indicator (solid circle — no animation, GitHub-safe)
+        f'<circle cx="30" cy="28" r="5" fill="{status_color}"/>',
+        f'<text x="42" y="32" fill="{status_color}" font-size="11" font-weight="700" letter-spacing="1">{status_text}</text>',
 
         # Title
-        f'<text x="55" y="24" fill="#E0E0E0" font-size="14" font-weight="700">'
-        f'Snowflake Volunteer Dashboard</text>',
+        f'<text x="30" y="58" fill="#E0E0E0" font-size="16" font-weight="700">Snowflake Volunteer</text>',
+        f'<text x="30" y="75" fill="#666666" font-size="10">Helping censored users bypass internet restrictions 24/7</text>',
 
-        # Stats summary (right-aligned)
-        f'<text x="{width - padding_right}" y="24" fill="#888888" font-size="11" text-anchor="end" font-weight="500">'
-        f'{total_sessions} sessions  ·  {total_clients} helped  ·  {total_hours}h {total_minutes}m donated</text>',
+        # Stats grid (right side)
+        # Sessions
+        f'<text x="430" y="28" fill="#666" font-size="9" font-weight="600" letter-spacing="0.5">SESSIONS</text>',
+        f'<text x="430" y="48" fill="#E0E0E0" font-size="20" font-weight="700">{total_sessions}</text>',
 
-        # Divider line
-        f'<line x1="{padding_left}" y1="38" x2="{width - padding_right}" y2="38" '
-        f'stroke="#1A1A1A" stroke-width="1"/>',
+        # People helped
+        f'<text x="540" y="28" fill="#666" font-size="9" font-weight="600" letter-spacing="0.5">HELPED</text>',
+        f'<text x="540" y="48" fill="#00E5C4" font-size="20" font-weight="700">{total_clients}</text>',
 
-        # Subtitle
-        f'<text x="{padding_left}" y="55" fill="#555555" font-size="10">'
-        f'Session duration (minutes) — green bars indicate sessions where censored users connected</text>',
+        # Time donated
+        f'<text x="620" y="28" fill="#666" font-size="9" font-weight="600" letter-spacing="0.5">DONATED</text>',
+        f'<text x="620" y="48" fill="#E0E0E0" font-size="20" font-weight="700">{total_hours}h{total_minutes}m</text>',
+
+        # Bandwidth
+        f'<text x="720" y="28" fill="#666" font-size="9" font-weight="600" letter-spacing="0.5">BANDWIDTH</text>',
+        f'<text x="720" y="48" fill="#E0E0E0" font-size="14" font-weight="700">{bw_str}</text>',
+
+        # Divider
+        f'<line x1="30" y1="85" x2="{width-20}" y2="85" stroke="#1A2A28" stroke-width="1"/>',
+
+        # Footer
+        f'<text x="30" y="95" fill="#444" font-size="8">Runs every 6h on GitHub Actions · 0 external services · $0 cost</text>',
     ]
-
-    # === Grid lines (dashed, subtle) ===
-    max_minutes = max_duration / 60
-    for pct in [0, 25, 50, 75, 100]:
-        y = padding_top + chart_height - (chart_height * pct / 100)
-        value_minutes = int(max_minutes * pct / 100)
-        # Dashed grid line
-        parts.append(
-            f'<line x1="{padding_left}" y1="{y:.1f}" '
-            f'x2="{width - padding_right}" y2="{y:.1f}" '
-            f'stroke="#1A1A1A" stroke-width="1" stroke-dasharray="3,4"/>'
-        )
-        # Y-axis label
-        parts.append(
-            f'<text x="{padding_left - 8}" y="{y + 4:.1f}" '
-            f'fill="#555555" font-size="9" text-anchor="end">{value_minutes}m</text>'
-        )
-
-    # === Bars ===
-    for i, session in enumerate(recent):
-        x = padding_left + i * (bar_width + bar_spacing) + bar_spacing / 2
-        duration = session.get("duration_seconds", 0)
-        clients = session.get("clients_helped", 0)
-        bar_h = (duration / max_duration) * chart_height if max_duration > 0 else 0
-        y = padding_top + chart_height - bar_h
-
-        # Choose gradient based on whether clients connected
-        grad_id = "barActive" if clients > 0 else "barIdle"
-        filter_attr = ' filter="url(#glow)"' if clients > 0 else ''
-
-        # Bar with rounded top corners
-        parts.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{max(bar_h, 3):.1f}" '
-            f'fill="url(#{grad_id})" rx="3"{filter_attr}/>'
-        )
-
-        # Duration label inside bar (if bar is tall enough)
-        if bar_h > 25:
-            duration_min = int(duration / 60)
-            if duration_min > 0:
-                label_color = "#000000" if clients > 0 else "#3A5A55"
-                parts.append(
-                    f'<text x="{x + bar_width/2:.1f}" y="{y + 15:.1f}" '
-                    f'fill="{label_color}" font-size="9" text-anchor="middle" font-weight="600">'
-                    f'{duration_min}m</text>'
-                )
-
-        # Client count above bar (only if > 0)
-        if clients > 0:
-            parts.append(
-                f'<text x="{x + bar_width/2:.1f}" y="{y - 5:.1f}" '
-                f'fill="#00E5C4" font-size="11" text-anchor="middle" font-weight="700">'
-                f'{clients}</text>'
-            )
-
-        # Date label (first, every 5th, and last bar)
-        if i == 0 or i % 5 == 0 or i == bar_count - 1:
-            ts = session.get("timestamp", "")[:10]  # YYYY-MM-DD
-            parts.append(
-                f'<text x="{x + bar_width/2:.1f}" y="{height - 18}" '
-                f'fill="#555555" font-size="9" text-anchor="middle">{ts[5:]}</text>'
-            )
-
-    # === Status message (bottom) ===
-    parts.append(
-        f'<text x="{width/2:.0f}" y="{height - 5}" fill="{status_color}" font-size="10" '
-        f'text-anchor="middle" font-style="italic">{status_msg}</text>'
-    )
 
     parts.append("</svg>")
     return "\n".join(parts)
+
+
+def generate_quickchart_url(stats: list) -> str:
+    """Generate a QuickChart.io URL for the bar chart.
+
+    QuickChart renders PNG images from URL params — no SVG sanitization
+    issues, renders perfectly in GitHub README. Free, no API key.
+
+    Chart shows session duration (bars) + client count (overlay).
+    """
+    import urllib.parse
+
+    recent = stats[-30:] if len(stats) >= 30 else stats
+    if not recent:
+        return ""
+
+    labels = [s.get("timestamp", "")[5:10] for s in recent]  # MM-DD
+    durations = [round(s.get("duration_seconds", 0) / 60, 1) for s in recent]  # minutes
+    clients = [s.get("clients_helped", 0) for s in recent]
+
+    # Bar colors: jade for sessions with clients, dark teal for idle
+    bg_colors = ["#00E5C4" if c > 0 else "#1A3A35" for c in clients]
+
+    chart_config = {
+        "type": "bar",
+        "data": {
+            "labels": labels,
+            "datasets": [{
+                "label": "Session Duration (min)",
+                "data": durations,
+                "backgroundColor": bg_colors,
+                "borderColor": "#00E5C4",
+                "borderWidth": 0,
+                "borderRadius": 4,
+            }]
+        },
+        "options": {
+            "plugins": {
+                "title": {
+                    "display": True,
+                    "text": "Session History — Duration (minutes)",
+                    "color": "#888888",
+                    "font": {"size": 13, "family": "sans-serif"}
+                },
+                "legend": {"display": False},
+                "datalabels": {
+                    "display": True,
+                    "color": "#00E5C4",
+                    "anchor": "end",
+                    "align": "top",
+                    "font": {"size": 10, "weight": "bold"},
+                    "formatter": "function(ctx) { return ctx.dataset.data[ctx.dataIndex] > 0 ? ctx.dataset.data[ctx.dataIndex] + 'm' : ''; }"
+                }
+            },
+            "scales": {
+                "x": {
+                    "ticks": {"color": "#666666", "font": {"size": 9}},
+                    "grid": {"color": "#1A1A1A", "display": False}
+                },
+                "y": {
+                    "ticks": {"color": "#666666", "font": {"size": 9}},
+                    "grid": {"color": "#1A1A1A"}
+                }
+            },
+            "layout": {"padding": {"top": 20, "bottom": 5, "left": 5, "right": 10}},
+            "backgroundColor": "#0A0A0A"
+        }
+    }
+
+    config_json = json.dumps(chart_config, separators=(',', ':'))
+    encoded = urllib.parse.quote(config_json)
+    return f"https://quickchart.io/chart?w=820&h=250&bkg=%230A0A0A&c={encoded}"
 
 
 def update_readme(stats: list) -> None:
@@ -288,6 +271,12 @@ def update_readme(stats: list) -> None:
     last_ts = stats[-1].get("timestamp", "").replace(":", "").replace("-", "") if stats else ""
     svg_url = f"snowflake-volunteer/dashboard.svg?v={last_ts}"
 
+    # QuickChart URL for the bar chart (dynamic, PNG, no sanitization)
+    chart_url = generate_quickchart_url(stats)
+    # Add cache-buster to chart URL too
+    if chart_url:
+        chart_url = f"{chart_url}&v={last_ts}"
+
     # Dynamic status badge
     if total_clients > 0:
         status_badge = "https://img.shields.io/badge/status-HELPING%20USERS-00E5C4?style=for-the-badge"
@@ -295,6 +284,9 @@ def update_readme(stats: list) -> None:
         status_badge = "https://img.shields.io/badge/status-ARMED%20%26%20MONITORING-00E5C4?style=for-the-badge"
     else:
         status_badge = "https://img.shields.io/badge/status-INITIALIZING-888888?style=for-the-badge"
+
+    # Chart image markdown — only if we have data
+    chart_md = f'\n![Session History Chart]({chart_url})\n' if chart_url else ''
 
     section = f"""<!-- SNOWFLAKE-VOLUNTEER-START -->
 ## Snowflake Volunteer
@@ -305,11 +297,9 @@ def update_readme(stats: list) -> None:
 ![Time Donated](https://img.shields.io/badge/time%20donated-{total_hours}h%20{total_minutes}m-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 ![Bandwidth](https://img.shields.io/badge/bandwidth-{format_bytes(total_bytes).replace("%20","%20").replace(" ","%20")}-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-This repository runs a **Tor Snowflake proxy** on GitHub Actions runners every 6 hours, donating ~5h50m of compute per session to help people in censored countries bypass internet restrictions. Zero external services, zero cost — pure creative use of CI compute for human rights.
-
-![Dashboard]({svg_url})
-
-> *Last updated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} · Auto-regenerates after each session*
+![Dashboard Header]({svg_url})
+{chart_md}
+> *Last updated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} · Auto-regenerates after each session · Chart by [QuickChart.io](https://quickchart.io)*
 
 <details>
 <summary>How it works</summary>
@@ -319,7 +309,7 @@ This repository runs a **Tor Snowflake proxy** on GitHub Actions runners every 6
 3. Runs the proxy for ~5h50m (just under the 6h job timeout)
 4. Real censored users connect via WebRTC through our proxy
 5. Stats are parsed from the proxy log and committed back to `main`
-6. This README section + the SVG dashboard auto-regenerate
+6. This README section + the SVG header + QuickChart chart auto-regenerate
 
 Workflow: [`.github/workflows/snowflake-volunteer.yml`](.github/workflows/snowflake-volunteer.yml)
 

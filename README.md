@@ -341,11 +341,11 @@ Full license: [LICENSE](LICENSE)
 ![Time Donated](https://img.shields.io/badge/time%20donated-5h%2055m-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 ![Bandwidth](https://img.shields.io/badge/bandwidth-0%20B-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-This repository runs a **Tor Snowflake proxy** on GitHub Actions runners every 6 hours, donating ~5h50m of compute per session to help people in censored countries bypass internet restrictions. Zero external services, zero cost — pure creative use of CI compute for human rights.
+![Dashboard Header](snowflake-volunteer/dashboard.svg?v=20260619T075922+0000)
 
-![Dashboard](snowflake-volunteer/dashboard.svg?v=20260619T075922+0000)
+![Session History Chart](https://quickchart.io/chart?w=820&h=250&bkg=%230A0A0A&c=%7B%22type%22%3A%22bar%22%2C%22data%22%3A%7B%22labels%22%3A%5B%2206-18%22%2C%2206-19%22%2C%2206-19%22%5D%2C%22datasets%22%3A%5B%7B%22label%22%3A%22Session%20Duration%20%28min%29%22%2C%22data%22%3A%5B2.0%2C350.0%2C3.0%5D%2C%22backgroundColor%22%3A%5B%22%231A3A35%22%2C%22%231A3A35%22%2C%22%231A3A35%22%5D%2C%22borderColor%22%3A%22%2300E5C4%22%2C%22borderWidth%22%3A0%2C%22borderRadius%22%3A4%7D%5D%7D%2C%22options%22%3A%7B%22plugins%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22Session%20History%20%5Cu2014%20Duration%20%28minutes%29%22%2C%22color%22%3A%22%23888888%22%2C%22font%22%3A%7B%22size%22%3A13%2C%22family%22%3A%22sans-serif%22%7D%7D%2C%22legend%22%3A%7B%22display%22%3Afalse%7D%2C%22datalabels%22%3A%7B%22display%22%3Atrue%2C%22color%22%3A%22%2300E5C4%22%2C%22anchor%22%3A%22end%22%2C%22align%22%3A%22top%22%2C%22font%22%3A%7B%22size%22%3A10%2C%22weight%22%3A%22bold%22%7D%2C%22formatter%22%3A%22function%28ctx%29%20%7B%20return%20ctx.dataset.data%5Bctx.dataIndex%5D%20%3E%200%20%3F%20ctx.dataset.data%5Bctx.dataIndex%5D%20%2B%20%27m%27%20%3A%20%27%27%3B%20%7D%22%7D%7D%2C%22scales%22%3A%7B%22x%22%3A%7B%22ticks%22%3A%7B%22color%22%3A%22%23666666%22%2C%22font%22%3A%7B%22size%22%3A9%7D%7D%2C%22grid%22%3A%7B%22color%22%3A%22%231A1A1A%22%2C%22display%22%3Afalse%7D%7D%2C%22y%22%3A%7B%22ticks%22%3A%7B%22color%22%3A%22%23666666%22%2C%22font%22%3A%7B%22size%22%3A9%7D%7D%2C%22grid%22%3A%7B%22color%22%3A%22%231A1A1A%22%7D%7D%7D%2C%22layout%22%3A%7B%22padding%22%3A%7B%22top%22%3A20%2C%22bottom%22%3A5%2C%22left%22%3A5%2C%22right%22%3A10%7D%7D%2C%22backgroundColor%22%3A%22%230A0A0A%22%7D%7D&v=20260619T075922+0000)
 
-> *Last updated: 2026-06-19 09:10 UTC · Auto-regenerates after each session*
+> *Last updated: 2026-06-19 09:20 UTC · Auto-regenerates after each session · Chart by [QuickChart.io](https://quickchart.io)*
 
 <details>
 <summary>How it works</summary>
@@ -355,7 +355,7 @@ This repository runs a **Tor Snowflake proxy** on GitHub Actions runners every 6
 3. Runs the proxy for ~5h50m (just under the 6h job timeout)
 4. Real censored users connect via WebRTC through our proxy
 5. Stats are parsed from the proxy log and committed back to `main`
-6. This README section + the SVG dashboard auto-regenerate
+6. This README section + the SVG header + QuickChart chart auto-regenerate
 
 Workflow: [`.github/workflows/snowflake-volunteer.yml`](.github/workflows/snowflake-volunteer.yml)
 
