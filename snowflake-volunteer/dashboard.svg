@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="220" viewBox="0 0 800 220" font-family="monospace">
 <rect width="800" height="220" fill="#000000"/>
-<text x="60" y="20" fill="#00E5C4" font-size="13" font-weight="bold">SNOWFLAKE VOLUNTEER — 2 SESSIONS, 0 PEOPLE HELPED, 5h VOLUNTEERED</text>
+<text x="60" y="20" fill="#00E5C4" font-size="13" font-weight="bold">SNOWFLAKE VOLUNTEER — 3 SESSIONS, 0 PEOPLE HELPED, 5h VOLUNTEERED</text>
 <text x="60" y="35" fill="#5C5C5C" font-size="9">bar height = session duration (minutes)</text>
 <line x1="60" y1="180.0" x2="780" y2="180.0" stroke="#1C1C1C" stroke-width="1"/>
 <text x="52" y="184.0" fill="#5C5C5C" font-size="10" text-anchor="end">0m</text>
@@ -12,9 +12,10 @@
 <text x="52" y="79.0" fill="#5C5C5C" font-size="10" text-anchor="end">262m</text>
 <line x1="60" y1="40.0" x2="780" y2="40.0" stroke="#1C1C1C" stroke-width="1"/>
 <text x="52" y="44.0" fill="#5C5C5C" font-size="10" text-anchor="end">350m</text>
-<rect x="114.0" y="179.2" width="252.0" height="2.0" fill="#2A2A2A" rx="2"/>
-<text x="240.0" y="210" fill="#5C5C5C" font-size="9" text-anchor="middle">06-18</text>
-<rect x="474.0" y="40.0" width="252.0" height="140.0" fill="#2A2A2A" rx="2"/>
-<text x="600.0" y="210" fill="#5C5C5C" font-size="9" text-anchor="middle">06-19</text>
+<rect x="96.0" y="179.2" width="168.0" height="2.0" fill="#2A2A2A" rx="2"/>
+<text x="180.0" y="210" fill="#5C5C5C" font-size="9" text-anchor="middle">06-18</text>
+<rect x="336.0" y="40.0" width="168.0" height="140.0" fill="#2A2A2A" rx="2"/>
+<rect x="576.0" y="178.8" width="168.0" height="2.0" fill="#2A2A2A" rx="2"/>
+<text x="660.0" y="210" fill="#5C5C5C" font-size="9" text-anchor="middle">06-19</text>
 <text x="400.0" y="195" fill="#5C5C5C" font-size="9" text-anchor="middle" font-style="italic">Awaiting first client connection — bars show compute time donated</text>
 </svg>
