@@ -395,16 +395,16 @@ opens a PR to swap it for a working replacement.
 
 ### Live Status
 
-**Last check:** 2026-06-19T07:43:13+00:00 | **Total checks:** 2 | **Alive:** 0/6
+**Last check:** 2026-06-19T08:19:10+00:00 | **Total checks:** 3 | **Alive:** 0/6
 
 | Bridge | Type | Status | Bootstrap | Failures |
 |--------|------|--------|-----------|----------|
-| `obfs4 193.11.166.194:10901 C7B...` | obfs4 | ⏳ timeout | — | 1 |
-| `obfs4 85.31.186.98:443 011F259...` | obfs4 | ⏳ timeout | — | 1 |
-| `obfs4 85.31.186.26:443 91D625E...` | obfs4 | ⏳ timeout | — | 1 |
-| `webtunnel 159.69.22.241:443 40...` | webtunnel | ⏳ timeout | — | 1 |
-| `webtunnel 37.218.240.2:443 668...` | webtunnel | ⏳ timeout | — | 1 |
-| `snowflake 192.0.2.3:80 2B280B2...` | snowflake | ⏳ timeout | — | 2 |
+| `obfs4 193.11.166.194:10901 C7B...` | obfs4 | ⏳ timeout | — | 2 |
+| `obfs4 85.31.186.98:443 011F259...` | obfs4 | ⏳ timeout | — | 2 |
+| `obfs4 85.31.186.26:443 91D625E...` | obfs4 | ⏳ timeout | — | 2 |
+| `webtunnel 159.69.22.241:443 40...` | webtunnel | ⏳ timeout | — | 2 |
+| `webtunnel 37.218.240.2:443 668...` | webtunnel | ⏳ timeout | — | 2 |
+| `snowflake 192.0.2.3:80 2B280B2...` | snowflake | ⏳ timeout | — | 3 |
 
 ### How it works
 
