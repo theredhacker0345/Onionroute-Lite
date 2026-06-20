@@ -81,3 +81,4 @@ package-lock.json
 Thumbs.db
 Desktop.ini
 *.gguf
+ci-results/
