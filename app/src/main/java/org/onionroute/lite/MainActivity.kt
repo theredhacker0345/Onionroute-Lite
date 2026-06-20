@@ -134,7 +134,8 @@ class MainActivity : ComponentActivity() {
             p.edit().putBoolean(Constants.PREF_AUTO_START, enabled).apply()
         }
         appState.onImportBridges = { bridges ->
-            val bridgeConfig = BridgeConfig(this)
+            // Reuse the bridgeConfig instance created earlier in onCreate
+            // (don't shadow it with a new instance here).
             bridgeConfig.setCustomBridges(bridges)
         }
         appState.onConnectToggle = {

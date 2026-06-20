@@ -425,14 +425,6 @@ private fun BridgeLineItem(
     showDelete: Boolean,
     onDelete: () -> Unit
 ) {
-    val transport = when {
-        bridgeLine.startsWith("obfs4", ignoreCase = true) -> "obfs4"
-        bridgeLine.startsWith("snowflake", ignoreCase = true) -> "snowflake"
-        bridgeLine.startsWith("webtunnel", ignoreCase = true) -> "webtunnel"
-        bridgeLine.startsWith("meek", ignoreCase = true) -> "meek"
-        else -> "unknown"
-    }
-
     // Extract IP:port for display
     val ipMatch = Regex("""(\d+\.\d+\.\d+\.\d+:\d+)""").find(bridgeLine)
     val displayId = ipMatch?.value ?: bridgeLine.take(30)

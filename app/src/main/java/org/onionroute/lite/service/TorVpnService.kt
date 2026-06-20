@@ -43,7 +43,6 @@ class TorVpnService : VpnService() {
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "onionroute_vpn"
-        const val ACTION_VPN_ALWAYS_ON = "org.onionroute.lite.VPN_ALWAYS_ON"
     }
 
     // ── Service Lifecycle ─────────────────────────────────────────
@@ -64,7 +63,7 @@ class TorVpnService : VpnService() {
 
         when (intent?.action) {
             Constants.ACTION_STOP_VPN -> stopVpn()
-            ACTION_VPN_ALWAYS_ON, Constants.ACTION_VPN_ALWAYS_ON -> startVpn(isAlwaysOn = true)
+            Constants.ACTION_VPN_ALWAYS_ON -> startVpn(isAlwaysOn = true)
             else -> startVpn()
         }
 
