@@ -162,13 +162,16 @@ def commit_swap_to_main(decision: dict):
     # Make sure we're on main
     subprocess.run(["git", "checkout", "main"], check=True)
 
-    # Pull latest (in case other workflows pushed)
-    subprocess.run(["git", "pull", "--rebase", "origin", "main"],
-                   check=True, capture_output=True,
-                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-
-    # Stage ONLY Constants.kt (NOT the 2GB model file)
+    # Stage ONLY Constants.kt FIRST (before pull — the file was already
+    # modified by apply_swap_to_constants above)
     subprocess.run(["git", "add", "app/src/main/java/org/onionroute/lite/Constants.kt"], check=True)
+
+    # Stash any other changes, pull, then pop
+    subprocess.run(["git", "stash"], capture_output=True)
+    subprocess.run(["git", "pull", "--rebase", "origin", "main"],
+                   capture_output=True,
+                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    subprocess.run(["git", "stash", "pop"], capture_output=True)
 
     # Build commit message from AI decision
     summary = decision.get("summary", "swap dead bridge(s)")
