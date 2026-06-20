@@ -8,6 +8,9 @@ package org.onionroute.lite
  */
 object Constants {
 
+    // ── App Info ──────────────────────────────────────────────
+    const val APP_VERSION = "1.0.0"
+
     // ── Tor Network Ports ──────────────────────────────────────
     const val TOR_SOCKS_PORT = 9050
     const val TOR_HTTP_PORT = 8118

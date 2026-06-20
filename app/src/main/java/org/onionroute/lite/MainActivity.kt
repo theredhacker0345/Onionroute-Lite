@@ -12,6 +12,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.onionroute.lite.service.KindnessService
 import org.onionroute.lite.service.TorService
 import org.onionroute.lite.service.TorVpnService
@@ -70,6 +73,15 @@ class MainActivity : ComponentActivity() {
         // Load custom bridges from BridgeConfig
         val bridgeConfig = BridgeConfig(this)
         appState.updateCustomBridges(bridgeConfig.getCustomBridges())
+
+        // ── Fetch alive bridges from GitHub in background ──────
+        // BridgeUpdater fetches alive_bridges.json (CI-verified working
+        // bridges) from the repo's raw URL. Falls back to cache →
+        // hardcoded bridges. No user data sent, no tracking.
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            val bridgeUpdater = org.onionroute.lite.tor.BridgeUpdater(this@MainActivity)
+            bridgeUpdater.fetchBridges()
+        }
 
         // ── Restore camouflage icon preference ────────────────────
         val savedIconKey = prefs.getString(Constants.PREF_APP_ICON, "default") ?: "default"

@@ -189,6 +189,10 @@ class TorProcessManager(private val context: Context) {
         val snowflakePath = getBinaryPath(Constants.BINARY_SNOWFLAKE)
         val obfs4Path = getBinaryPath(Constants.BINARY_OBFS4PROXY)
 
+        // BridgeUpdater — fetches alive bridges from GitHub at runtime.
+        // Falls back to hardcoded bridges in Constants.kt if fetch fails.
+        val bridgeUpdater = BridgeUpdater(context)
+
         val torrcContent = buildString {
             appendLine("# OnionRoute Lite torrc — auto-generated")
             appendLine()
@@ -225,7 +229,16 @@ class TorProcessManager(private val context: Context) {
             if (useSnowflake && snowflakePath != null) {
                 appendLine("# Snowflake bridge configuration")
                 appendLine("ClientTransportPlugin snowflake exec $snowflakePath")
-                appendLine("Bridge snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=${Constants.SNOWFLAKE_BROKER_URL} fronts=${Constants.SNOWFLAKE_FRONT_DOMAIN} ice=${Constants.SNOWFLAKE_ICE_SERVERS}")
+                // Use runtime-fetched bridges if available, fall back to hardcoded
+                val snowflakeBridges = bridgeUpdater.getBridges("snowflake")
+                if (snowflakeBridges.isNotEmpty()) {
+                    Log.i(tag, "Using ${snowflakeBridges.size} snowflake bridges from BridgeUpdater")
+                    snowflakeBridges.forEach { bridge ->
+                        appendLine("Bridge $bridge")
+                    }
+                } else {
+                    appendLine("Bridge snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=${Constants.SNOWFLAKE_BROKER_URL} fronts=${Constants.SNOWFLAKE_FRONT_DOMAIN} ice=${Constants.SNOWFLAKE_ICE_SERVERS}")
+                }
                 appendLine("UseBridges 1")
                 appendLine()
             } else if (useSnowflake && snowflakePath == null) {
@@ -237,8 +250,18 @@ class TorProcessManager(private val context: Context) {
             if (useObfs4 && obfs4Path != null) {
                 appendLine("# obfs4 bridge configuration")
                 appendLine("ClientTransportPlugin obfs4 exec $obfs4Path")
-                Constants.DEFAULT_OBFS4_BRIDGES.forEach { bridge ->
-                    appendLine("Bridge $bridge")
+                // Use runtime-fetched bridges if available, fall back to hardcoded
+                val obfs4Bridges = bridgeUpdater.getBridges("obfs4")
+                if (obfs4Bridges.isNotEmpty()) {
+                    Log.i(tag, "Using ${obfs4Bridges.size} obfs4 bridges from BridgeUpdater")
+                    obfs4Bridges.forEach { bridge ->
+                        appendLine("Bridge $bridge")
+                    }
+                } else {
+                    Log.i(tag, "No runtime obfs4 bridges — using hardcoded")
+                    Constants.DEFAULT_OBFS4_BRIDGES.forEach { bridge ->
+                        appendLine("Bridge $bridge")
+                    }
                 }
                 appendLine("UseBridges 1")
                 appendLine()
@@ -249,8 +272,18 @@ class TorProcessManager(private val context: Context) {
 
             if (useWebTunnel) {
                 appendLine("# WebTunnel bridge configuration")
-                Constants.DEFAULT_WEBTUNNEL_BRIDGES.forEach { bridge ->
-                    appendLine("Bridge $bridge")
+                // Use runtime-fetched bridges if available, fall back to hardcoded
+                val webtunnelBridges = bridgeUpdater.getBridges("webtunnel")
+                if (webtunnelBridges.isNotEmpty()) {
+                    Log.i(tag, "Using ${webtunnelBridges.size} webtunnel bridges from BridgeUpdater")
+                    webtunnelBridges.forEach { bridge ->
+                        appendLine("Bridge $bridge")
+                    }
+                } else {
+                    Log.i(tag, "No runtime webtunnel bridges — using hardcoded")
+                    Constants.DEFAULT_WEBTUNNEL_BRIDGES.forEach { bridge ->
+                        appendLine("Bridge $bridge")
+                    }
                 }
                 appendLine("UseBridges 1")
                 appendLine()
