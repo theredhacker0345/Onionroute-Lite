@@ -3,33 +3,33 @@
     "transport": "obfs4",
     "line": "obfs4 80.96.58.89:9130 09F8EE9BBF2224564255A69C75D2BDED0C11ED69 cert=eDeANY48aUHUkN93TkyqqOpWfu7CFUcyR8q6SwbRcg1pLPgWL8GPpt&#43;&#43;DakdOkgeqmQrUg iat-mode=0",
     "status": "alive",
-    "bootstrap_time": 0.13,
+    "bootstrap_time": 0.16,
     "error": null,
-    "timestamp": "2026-06-20T09:09:14Z"
+    "timestamp": "2026-06-20T11:25:57Z"
   },
   {
     "transport": "obfs4",
     "line": "obfs4 129.151.27.14:3721 159E2EE0E954B669865AAF963EA534884850E6AD cert=Yngpf&#43;xcO4yraE/51Q3Kl6k2&#43;mQvaK2wPk&#43;HsP4cDs5zLJU83gyajohigzmTSoMEfyBUDg iat-mode=0",
     "status": "alive",
-    "bootstrap_time": 0.06,
+    "bootstrap_time": 0.07,
     "error": null,
-    "timestamp": "2026-06-20T09:09:15Z"
+    "timestamp": "2026-06-20T11:25:57Z"
   },
   {
     "transport": "obfs4",
     "line": "obfs4 82.64.193.83:12867 294AF2AD929814DB41F9AB6A8B9D0E17C6EFA6B7 cert=ixnzOa7SUh45eHpgKJJwSCuRV17DxLgLYWb4qtLgqsJbD32yfNB9cfDSvgi7XANsUhO&#43;aw iat-mode=0",
     "status": "alive",
-    "bootstrap_time": 0.08,
+    "bootstrap_time": 0.1,
     "error": null,
-    "timestamp": "2026-06-20T09:09:15Z"
+    "timestamp": "2026-06-20T11:25:57Z"
   },
   {
     "transport": "webtunnel",
     "line": "webtunnel 159.69.22.241:443 40D1E0A98733F1E3E0548BD2F2B3C7B6B08C93B7 url=https://wt-1.broker.torproject.org/webtunnel/line/5a5a6463-05a0-4c44-bef7-40e3e2e128f2 ver=0.4.0",
     "status": "alive",
-    "bootstrap_time": 0.09,
+    "bootstrap_time": 0.11,
     "error": null,
-    "timestamp": "2026-06-20T09:09:15Z"
+    "timestamp": "2026-06-20T11:25:57Z"
   },
   {
     "transport": "webtunnel",
@@ -37,7 +37,7 @@
     "status": "timeout",
     "bootstrap_time": 0,
     "error": "TCP connect to 37.218.240.2:443 timed out (5s)",
-    "timestamp": "2026-06-20T09:09:15Z"
+    "timestamp": "2026-06-20T11:25:57Z"
   },
   {
     "transport": "snowflake",
@@ -45,6 +45,6 @@
     "status": "timeout",
     "bootstrap_time": 0,
     "error": "TCP connect to 192.0.2.3:80 timed out (5s)",
-    "timestamp": "2026-06-20T09:09:20Z"
+    "timestamp": "2026-06-20T11:26:02Z"
   }
 ]
