@@ -1,250 +1,120 @@
 # ══════════════════════════════════════════════════════════════
-# AI Bridge Health Monitor — GitHub Actions + Local LLM
+# Bridge Health Monitor — Pure Python, No AI
 # ══════════════════════════════════════════════════════════════
+# Every 15 minutes:
+#   1. TCP-test all bridges in Constants.kt (5s each)
+#   2. For dead bridges: fetch replacements from BridgeDB
+#   3. TCP-test candidates
+#   4. Swap dead for alive in Constants.kt
+#   5. Write alive_bridges.json (fetched by the app at runtime)
+#   6. Update README health table
+#   7. Commit to main
 #
-# Every 30 minutes, this workflow:
-#   1. Installs Tor + llama.cpp on the runner
-#   2. Tests each bundled bridge in Constants.kt (real Tor bootstrap)
-#   3. If any bridge has been dead 3+ checks, downloads Qwen 2.5 3B
-#      model (cached), runs local AI inference to decide swap
-#   4. If AI says swap: edits Constants.kt + opens a PR (AI writes
-#      the PR description)
-#   5. Always: updates health.json + README health table
-#
-# Cost: $0. No external API calls. AI runs on the runner's CPU.
+# No AI, no llama.cpp, no 2GB model, no Tor install, no Go.
+# Total runtime: ~2 min.
 # ══════════════════════════════════════════════════════════════
 
-name: Bridge Health AI
+name: Bridge Health
 
 on:
   schedule:
-    # Every 30 minutes
-    - cron: '*/30 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
-    # Manual trigger for testing
-    inputs:
-      skip_ai:
-        description: 'Skip AI inference (just test bridges + update README)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: bridge-health
   cancel-in-progress: false
 
-env:
-  # Qwen 2.5 3B Instruct, Q4_K_M quantization, 2GB, Apache 2.0
-  MODEL_FILE: qwen2.5-3b-instruct-q4_k_m.gguf
-  MODEL_URL: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf
-
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Tor + obfs4proxy
-        # Install Tor AND obfs4proxy (the obfs4 transport plugin).
-        # Without obfs4proxy, Tor can't connect to ANY obfs4 bridge —
-        # they all timeout. This was the root cause of all bridges
-        # failing in the first test runs.
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq tor obfs4proxy
-          which tor
-          which obfs4proxy
-          tor --version | head -1
-          obfs4proxy --version 2>&1 | head -1 || true
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-          cache: false
-
-      - name: Export GOPATH
-        # Make GOPATH available to later steps (fetch_candidates.py needs it
-        # to find the snowflake-client binary built in the next step)
-        run: echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
-
-      - name: Build snowflake-client
-        # Build the snowflake client transport plugin from source.
-        # Without this, Tor can't connect to snowflake bridges.
-        run: |
-          echo "=== Building snowflake-client v2.10.1 ==="
-          go install gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2/client@v2.10.1
-          # The binary is at $(go env GOPATH)/bin/client
-          # Rename it to snowflake-client for clarity
-          cp "$(go env GOPATH)/bin/client" "$(go env GOPATH)/bin/snowflake-client"
-          ls -lh "$(go env GOPATH)/bin/snowflake-client"
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: pip install requests
-
-      - name: Test all bridges
-        # The core test — real Tor bootstrap against each bridge.
-        # Now with transport plugins installed (obfs4proxy + snowflake-client).
-        # 120s timeout — bridges need time to download consensus + build circuits.
-        # Output: bridge-health/current_results.json
+      - name: Test all bridges (TCP check)
         run: |
           echo "=== Testing all bundled bridges ==="
           python3 bridge-health/test_bridges.py \
-            --timeout 45 \
-            --plugin-path "$(go env GOPATH)/bin:/usr/bin" \
+            --timeout 5 \
             --output bridge-health/current_results.json
-
           echo ""
-          echo "=== Results ==="
           cat bridge-health/current_results.json
 
-      - name: Check if any bridges need AI judgment
-        # Only run the AI if at least one bridge has 3+ failures.
-        # This saves ~3 min of runner time on most checks (when all
-        # bridges are alive).
-        id: need_ai
+      - name: Check if swaps needed
+        id: need_swap
         run: |
           python3 bridge-health/check_need_ai.py
-          NEED_AI=$(cat bridge-health/need_ai.txt)
-          echo "need_ai=$NEED_AI"
-          echo "need_ai=$NEED_AI" >> $GITHUB_OUTPUT
+          NEED=$(cat bridge-health/need_ai.txt)
+          echo "need_swap=$NEED"
+          echo "need_swap=$NEED" >> $GITHUB_OUTPUT
 
-      - name: Install llama.cpp
-        # Build llama.cpp from source — most reliable approach.
-        # Prebuilt binaries moved to a new repo and release format changed.
-        # Building from source takes ~3 min but is guaranteed to work.
-        # Cached via actions/cache on the build directory.
-        if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
-        run: |
-          echo "=== Building llama.cpp from source ==="
-          git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /tmp/llama.cpp
-          cd /tmp/llama.cpp
-          # Build with cmake — no GPU, CPU only, minimal build
-          cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release -j $(nproc) --target llama-cli
-          # Copy the binary to a known location
-          cp build/bin/llama-cli /usr/local/bin/llama-cli
-          chmod +x /usr/local/bin/llama-cli
-          llama-cli --version || true
-          echo "LLAMA_BIN=/usr/local/bin/llama-cli" >> $GITHUB_ENV
-
-      - name: Cache AI model
-        # Cache the 2GB Qwen model so we don't re-download every run.
-        # Cache key includes the model filename so it invalidates if
-        # we ever switch models.
-        if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.MODEL_FILE }}
-          key: ai-model-${{ env.MODEL_FILE }}-v1
-
-      - name: Download AI model
-        # Only downloads if cache miss. 2GB file, ~40s on GitHub's network.
-        if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
-        run: |
-          if [ ! -f "$MODEL_FILE" ]; then
-            echo "=== Downloading $MODEL_FILE (2GB, first time only) ==="
-            wget -q --show-progress "$MODEL_URL" -O "$MODEL_FILE"
-          else
-            echo "=== Using cached $MODEL_FILE ==="
-          fi
-          ls -lh "$MODEL_FILE"
-
-      - name: Fetch replacement bridge candidates
-        # Fetch REAL bridges from Tor Project's BridgeDB + Moat API,
-        # test each one with real Tor bootstrap, and only keep verified
-        # alive bridges as replacement candidates.
-        if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
-        env:
-          GOPATH: ${{ env.GOPATH }}
-          PLUGIN_PATH: /usr/bin
-        run: |
-          echo "=== Fetching REAL replacement bridges from Tor Project ==="
-          python3 bridge-health/fetch_candidates.py
-
-          echo ""
-          echo "=== Verified alive candidates ==="
-          cat bridge-health/candidates.json
-
-      - name: Build health data for AI
-        # Combine current results + historical failure counts into
-        # a single JSON that the AI agent reads.
-        if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
-        run: |
-          python3 bridge-health/build_health_data.py
-
-      - name: Run AI agent
-        # The AI decides whether to swap any bridges.
-        # Uses Qwen 2.5 3B via llama.cpp — 100% local, no API.
-        if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
-        run: |
-          echo "=== Running AI agent (Qwen 2.5 3B via llama.cpp) ==="
-          echo "=== This takes ~30s for model load + inference ==="
-          python3 bridge-health/agent.py \
-            bridge-health/health_data.json \
-            bridge-health/candidates.json \
-            --llama-bin "$LLAMA_BIN" \
-            --model "$MODEL_FILE" \
-            --output bridge-health/decision.json
-
-          echo ""
-          echo "=== AI Decision ==="
-          cat bridge-health/decision.json
-
-      - name: Apply changes + open PR
-        # Apply the deterministic swap decisions to Constants.kt and open a PR.
-        # MUST pass GITHUB_TOKEN so apply_changes.py can call the GitHub API
-        # to create the PR. Without this, the swap happens but no PR is opened.
-        if: steps.need_ai.outputs.need_ai == 'true' && github.event.inputs.skip_ai != 'true'
+      - name: Fetch replacements + swap + commit to main
+        if: steps.need_swap.outputs.need_swap == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # fetch_candidates.py does everything:
+          # 1. Fetches bridges from BridgeDB (5 requests per transport)
+          # 2. TCP-tests all candidates
+          # 3. Makes deterministic swap decisions
+          # 4. Writes decision.json
+          python3 bridge-health/fetch_candidates.py
+
+          # apply_changes.py executes the swaps + commits to main
           python3 bridge-health/apply_changes.py \
             bridge-health/decision.json \
             bridge-health/current_results.json \
             --apply --open-pr
 
-      - name: Update health.json + README (no AI path)
-        # Even if no AI was needed, always record health data and
-        # update the README table.
-        if: steps.need_ai.outputs.need_ai != 'true' || github.event.inputs.skip_ai == 'true'
+      - name: No swaps needed — update health.json only
+        if: steps.need_swap.outputs.need_swap != 'true'
         run: |
-          # Create a no-action decision so apply_changes.py just
-          # updates health.json without touching Constants.kt
           python3 bridge-health/make_no_action_decision.py
           python3 bridge-health/apply_changes.py \
             bridge-health/decision.json \
             bridge-health/current_results.json
 
-      - name: Update README health table (always)
+      - name: Write alive_bridges.json (always)
+        run: |
+          python3 bridge-health/write_alive_bridges.py
+          echo ""
+          echo "=== alive_bridges.json ==="
+          cat bridge-health/alive_bridges.json
+
+      - name: Update README health table
         run: |
           python3 bridge-health/render_readme.py
 
-      - name: Commit health data + README to main
-        # Always commit health.json + README updates back to main.
-        # PRs (for bridge swaps) are handled separately by apply_changes.py.
-        # Use git pull --rebase before push to handle race conditions with
-        # other workflows (snowflake volunteer) that may push concurrently.
+      - name: Commit to main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add bridge-health/health.json README.md
+          # Reconfigure remote with GITHUB_TOKEN
+          repo="${{ github.repository }}"
+          token="${{ secrets.GITHUB_TOKEN }}"
+          git remote set-url origin "https://x-access-token:${token}@github.com/${repo}.git"
+
+          git add bridge-health/health.json \
+                 bridge-health/alive_bridges.json \
+                 bridge-health/current_results.json \
+                 README.md
+
+          # Also add Constants.kt if it was modified by a swap
+          git add app/src/main/java/org/onionroute/lite/Constants.kt 2>/dev/null || true
 
           if git diff --cached --quiet; then
             echo "[*] No changes to commit"
@@ -255,15 +125,14 @@ jobs:
 
           Auto-generated by .github/workflows/bridge-health.yml"
 
-            # Pull + rebase to handle concurrent pushes from other workflows
             git pull --rebase origin main || true
-            git push
-            echo "[*] Pushed health update to main"
+            git push origin main
+            echo "[*] Pushed to main"
           fi
 
       - name: Summary
         if: always()
         run: |
-          echo "## Bridge Health Check Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Bridge Health Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           python3 bridge-health/summary.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
