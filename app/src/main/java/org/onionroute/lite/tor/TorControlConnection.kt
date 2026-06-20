@@ -268,13 +268,17 @@ class TorControlConnection(private val context: Context) {
     /**
      * Listener thread — the ONLY reader from inputStream after connect().
      * Routes responses to pending GETINFO requests or event callbacks.
+     *
+     * Exits cleanly when the socket is closed (readLineFromStream returns
+     * null on EOF). On exit, unblocks any pending GETINFO/SIGNAL latches
+     * so callers don't wait the full timeout after a disconnect.
      */
     private fun listenForEvents() {
         try {
             val stream = inputStream ?: return
 
             while (isConnected && !Thread.currentThread().isInterrupted) {
-                val line = readLineFromStream(stream)
+                val line = readLineFromStream(stream) ?: break  // null = EOF
                 if (line.isEmpty()) continue
 
                 when {
@@ -325,6 +329,13 @@ class TorControlConnection(private val context: Context) {
                     }
                 }
             }
+            // Loop exited — either EOF, interrupted, or isConnected=false.
+            // Unblock any pending GETINFO/SIGNAL callers so they don't wait
+            // the full 5-10s timeout. They'll see null/false (no response
+            // value stored) which is the correct "disconnected" behaviour.
+            for ((_, latch) in pendingResponses) {
+                latch.countDown()
+            }
         } catch (e: InterruptedException) {
             Log.d(tag, "Event listener interrupted")
         } catch (e: Exception) {
@@ -335,12 +346,25 @@ class TorControlConnection(private val context: Context) {
         }
     }
 
-    private fun readLineFromStream(stream: InputStream): String {
+    /**
+     * Reads a line terminated by \n from the stream.
+     * Returns null on EOF (so the caller can distinguish "blank line" from
+     * "stream closed"). Returns empty string for a blank line.
+     *
+     * The previous implementation returned "" on EOF, which caused the
+     * listener loop to spin forever (continue on empty) consuming 100% CPU
+     * after the Tor process died and the socket closed.
+     */
+    private fun readLineFromStream(stream: InputStream): String? {
         val sb = StringBuilder()
         while (true) {
             val b = stream.read()
-            if (b == -1 || b == 10) break
-            if (b != 13) sb.append(b.toChar())
+            if (b == -1) {
+                // EOF — if we have accumulated data, return it; otherwise null
+                return if (sb.isEmpty()) null else sb.toString()
+            }
+            if (b == 10) break  // \n
+            if (b != 13) sb.append(b.toChar())  // skip \r
         }
         return sb.toString()
     }

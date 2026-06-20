@@ -224,6 +224,33 @@ class TorService : Service() {
                 }
             }
 
+            // Defensive: if Tor finished bootstrapping BEFORE we subscribed to
+            // BOOTSTRAP events (e.g. very fast direct connection on a clean
+            // network — Tor can reach 100% in under a second), we would miss
+            // the BOOTSTRAP PROGRESS=100 event and time out at 120s. Query the
+            // current bootstrap phase via GETINFO; if it's already 100%, count
+            // down the latch immediately.
+            try {
+                val phase = torControlConnection?.getInfo("status/bootstrap-phase")
+                if (phase != null) {
+                    // Response format: NOTICE BOOTSTRAP PROGRESS=100 TAG=done ...
+                    val progressMatch = Regex("PROGRESS=(\\d+)").find(phase)
+                    val currentProgress = progressMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    if (currentProgress >= 100) {
+                        Log.i(tag, "Tor already bootstrapped to 100% before subscription — counting down")
+                        lastProgress.set(100)
+                        bootstrapLatch.countDown()
+                    } else if (currentProgress > 0) {
+                        Log.i(tag, "Tor is mid-bootstrap at $currentProgress% (caught up via GETINFO)")
+                        lastProgress.set(currentProgress)
+                        broadcastBootstrapProgress(currentProgress)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(tag, "GETINFO status/bootstrap-phase failed (non-fatal): ${e.message}")
+                // Non-fatal — we'll just wait for the BOOTSTRAP event
+            }
+
             // Wait up to 120 seconds for Tor to reach 100% bootstrap.
             // Tor on a clean connection typically bootstraps in 5–30s; 120s
             // gives headroom for slow networks or bridge connections.
