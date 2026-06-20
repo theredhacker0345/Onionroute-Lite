@@ -32,7 +32,7 @@ class BridgeUpdater(private val context: Context) {
         private const val BRIDGES_URL =
             "https://raw.githubusercontent.com/darkmaster0345/Onionroute-Lite/main/bridge-health/alive_bridges.json"
         private const val CACHE_FILE = "alive_bridges.json"
-        private const val CACHE_MAX_AGE_MS = TimeUnit.HOURS.toMillis(24) // 24h cache validity
+        private val CACHE_MAX_AGE_MS = TimeUnit.HOURS.toMillis(24) // 24h cache validity
     }
 
     /** Cached bridges grouped by transport type. */
