@@ -177,13 +177,26 @@ class TorControlConnection(private val context: Context) {
         onStatusEvent = onStatus
         onBootstrapEvent = onBootstrap
 
-        // Subscribe to BW, CIRC, STATUS_CLIENT, and BOOTSTRAP events.
-        // IMPORTANT: send SETEVENTS BEFORE starting the listener thread so
-        // the 250 OK response is the first thing the listener reads. The
-        // listener's 250-OK handler will see no pending request and just
-        // skip — which is correct.
-        Log.d(tag, "Subscribing to events: SETEVENTS BW CIRC STATUS_CLIENT BOOTSTRAP")
-        sendCommand("SETEVENTS BW CIRC STATUS_CLIENT BOOTSTRAP\r\n")
+        // Subscribe to async events.
+        //
+        // IMPORTANT: Tor's control port does NOT have a standalone "BOOTSTRAP"
+        // event type. Bootstrap progress is delivered as a STATUS_CLIENT event
+        // with a BOOTSTRAP severity:
+        //   650 STATUS_CLIENT NOTICE BOOTSTRAP PROGRESS=100 TAG=done
+        //
+        // The previous code subscribed to "BOOTSTRAP" as if it were a separate
+        // event type, which caused Tor to reject the entire SETEVENTS command:
+        //   552 Unrecognized event "BOOTSTRAP"
+        // When SETEVENTS is rejected, NO events are subscribed — not even BW
+        // or CIRC. This is why the listener never received any 650 events and
+        // the app declared "Tor bootstrap timed out at 0%" even though Tor
+        // had actually finished bootstrapping.
+        //
+        // Fix: subscribe only to BW, CIRC, and STATUS_CLIENT. Bootstrap
+        // progress is parsed from STATUS_CLIENT events (see parseStatusEvent
+        // below).
+        Log.d(tag, "Subscribing to events: SETEVENTS BW CIRC STATUS_CLIENT")
+        sendCommand("SETEVENTS BW CIRC STATUS_CLIENT\r\n")
         Log.d(tag, "SETEVENTS command sent, starting listener thread")
 
         // Start listener thread — this is the ONLY thread that reads from inputStream
@@ -321,8 +334,17 @@ class TorControlConnection(private val context: Context) {
                     // Async events (650 ...)
                     line.startsWith("650 BW ") -> parseBandwidthEvent(line)
                     line.startsWith("650 CIRC ") -> onCircuitEvent?.invoke(line)
-                    line.startsWith("650 STATUS_CLIENT ") -> onStatusEvent?.invoke(line)
-                    line.startsWith("650 BOOTSTRAP ") -> parseBootstrapEvent(line)
+                    // STATUS_CLIENT events include BOOTSTRAP progress notices:
+                    //   650 STATUS_CLIENT NOTICE BOOTSTRAP PROGRESS=100 TAG=done
+                    // We route these to BOTH onStatusEvent (raw line) AND
+                    // parseBootstrapEvent (extracts PROGRESS + TAG) so the
+                    // TorService bootstrap latch can fire when PROGRESS=100.
+                    line.startsWith("650 STATUS_CLIENT ") -> {
+                        onStatusEvent?.invoke(line)
+                        if (line.contains(" BOOTSTRAP ")) {
+                            parseBootstrapEvent(line)
+                        }
+                    }
 
                     // GETINFO responses (250-keyword=value or 250 OK)
                     line.startsWith("250-") -> {
