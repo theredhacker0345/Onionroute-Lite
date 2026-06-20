@@ -129,8 +129,8 @@ object Constants {
     // ── Default obfs4 Bridges ─────────────────────────────────
     val DEFAULT_OBFS4_BRIDGES = listOf(
         "obfs4 80.96.58.89:9130 09F8EE9BBF2224564255A69C75D2BDED0C11ED69 cert=eDeANY48aUHUkN93TkyqqOpWfu7CFUcyR8q6SwbRcg1pLPgWL8GPpt&#43;&#43;DakdOkgeqmQrUg iat-mode=0",
-        "obfs4 85.31.186.98:443 011F2592C5B56EE5423E624B4A7035B5B3D0B946 cert=Ov4fCC6MxR7GQx8w5Y0CJnDGp5QktT1x5JslU6HHUI8f9Ys0nCGRtQ iat-mode=0",
-        "obfs4 85.31.186.26:443 91D625E7104B036D6E45C93E9B7D6FBA0929F510 cert=V0Jj8fCVAaW0Y7gFQThH3x2gUOCWsGs6MSX8F3q+0nY3GQPQ/V5Kwo iat-mode=0"
+        "obfs4 129.151.27.14:3721 159E2EE0E954B669865AAF963EA534884850E6AD cert=Yngpf&#43;xcO4yraE/51Q3Kl6k2&#43;mQvaK2wPk&#43;HsP4cDs5zLJU83gyajohigzmTSoMEfyBUDg iat-mode=0",
+        "obfs4 82.64.193.83:12867 294AF2AD929814DB41F9AB6A8B9D0E17C6EFA6B7 cert=ixnzOa7SUh45eHpgKJJwSCuRV17DxLgLYWb4qtLgqsJbD32yfNB9cfDSvgi7XANsUhO&#43;aw iat-mode=0"
     )
 
     // ── Default WebTunnel Bridges ─────────────────────────────
