@@ -82,3 +82,4 @@ Thumbs.db
 Desktop.ini
 *.gguf
 ci-results/
+ci-results-v2/
