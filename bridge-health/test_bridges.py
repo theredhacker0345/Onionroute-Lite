@@ -224,12 +224,15 @@ def test_single_bridge(bridge: dict, timeout: int, bridge_plugin_path: str = Non
 
         elapsed = time.time() - start_time
 
-        # Kill Tor
+        # Kill Tor — MUST ensure the process is fully dead before
+        # returning, otherwise the next bridge test may conflict
+        # (port 9051 still in use, etc.)
         try:
             proc.terminate()
             proc.wait(timeout=5)
         except Exception:
             proc.kill()
+            proc.wait(timeout=5)  # Ensure SIGKILL is processed
 
         if bootstrap_done:
             return {
