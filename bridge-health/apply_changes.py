@@ -173,6 +173,9 @@ def commit_swap_to_main(decision: dict):
                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     subprocess.run(["git", "stash", "pop"], capture_output=True)
 
+    # Re-stage after stash pop (stash pop restores as unstaged)
+    subprocess.run(["git", "add", "app/src/main/java/org/onionroute/lite/Constants.kt"], check=True)
+
     # Build commit message from AI decision
     summary = decision.get("summary", "swap dead bridge(s)")
     pr_body = decision.get("pr_body", "")
