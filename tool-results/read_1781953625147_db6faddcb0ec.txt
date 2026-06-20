@@ -1,0 +1,544 @@
+     1→I/onionroute.lite( 6900): Late-enabling -Xcheck:jni
+     2→W/onionroute.lite( 6900): Unexpected CPU variant for x86: x86_64.
+     3→W/onionroute.lite( 6900): Known variants: atom, sandybridge, silvermont, kabylake, default
+     4→D/CompatibilityChangeReporter( 6900): Compat change id reported: 171979766; UID 10172; state: ENABLED
+     5→W/ziparchive( 6900): Unable to open '/data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/base.dm': No such file or directory
+     6→W/ziparchive( 6900): Unable to open '/data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/base.dm': No such file or directory
+     7→D/nativeloader( 6900): Configuring classloader-namespace for other apk /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/base.apk. target_sdk_version=34, uses_libraries=, library_path=/data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64:/data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/org.onionroute.lite
+     8→V/GraphicsEnvironment( 6900): ANGLE Developer option for 'org.onionroute.lite' set to: 'default'
+     9→V/GraphicsEnvironment( 6900): ANGLE GameManagerService for org.onionroute.lite: false
+    10→V/GraphicsEnvironment( 6900): Neither updatable production driver nor prerelease driver is supported.
+    11→D/NetworkSecurityConfig( 6900): Using Network Security Config from resource network_security_config debugBuild: true
+    12→D/NetworkSecurityConfig( 6900): Using Network Security Config from resource network_security_config debugBuild: true
+    13→D/libEGL  ( 6900): loaded /vendor/lib64/egl/libEGL_emulation.so
+    14→D/libEGL  ( 6900): loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+    15→D/libEGL  ( 6900): loaded /vendor/lib64/egl/libGLESv2_emulation.so
+    16→W/onionroute.lite( 6900): Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+    17→W/onionroute.lite( 6900): Common causes for lock verification issues are non-optimized dex code
+    18→W/onionroute.lite( 6900): and incorrect proguard optimizations.
+    19→W/onionroute.lite( 6900): Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+    20→W/onionroute.lite( 6900): Method java.lang.Object androidx.compose.runtime.snapshots.SnapshotStateList.mutate(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+    21→W/onionroute.lite( 6900): Method void androidx.compose.runtime.snapshots.SnapshotStateList.update(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+    22→W/onionroute.lite( 6900): Method void androidx.compose.runtime.snapshots.SnapshotStateList.update$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+    23→D/HostConnection( 6900): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_YUV_Cache ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_sync_buffer_data ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_multi_configs ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+    24→W/OpenGLRenderer( 6900): Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+    25→W/OpenGLRenderer( 6900): Failed to initialize 101010-2 format, error = EGL_SUCCESS
+    26→D/EGL_emulation( 6900): eglCreateContext: 0x79366548f4d0: maj 3 min 0 rcv 3
+    27→D/EGL_emulation( 6900): eglMakeCurrent: 0x79366548f4d0: ver 3 0 (tinfo 0x793880b26080) (first time)
+    28→I/Gralloc4( 6900): mapper 4.x is not supported
+    29→W/Gralloc4( 6900): allocator 4.x is not supported
+    30→D/HostConnection( 6900): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_YUV_Cache ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_sync_buffer_data ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_multi_configs ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+    31→W/Parcel  ( 6900): Expecting binder but got null!
+    32→I/Choreographer( 6900): Skipped 31 frames!  The application may be doing too much work on its main thread.
+    33→D/EGL_emulation( 6900): app_time_stats: avg=836.52ms min=3.27ms max=2263.83ms count=3
+    34→D/TorService( 6900): TorService created
+    35→D/CompatibilityChangeReporter( 6900): Compat change id reported: 160794467; UID 10172; state: ENABLED
+    36→I/TorService( 6900): Starting Tor daemon…
+    37→D/TorService( 6900): Status broadcast: CONNECTING
+    38→D/TorProcessManager( 6900): Found native binary: libtor.so (5474648 bytes, executable=true)
+    39→D/TorProcessManager( 6900): Found native binary: libobfs4proxy.so (5953240 bytes, executable=true)
+    40→D/TorProcessManager( 6900): Found native binary: libsnowflake.so (21072120 bytes, executable=true)
+    41→D/TorProcessManager( 6900): Found native binary: libsnowflake-proxy.so (17539320 bytes, executable=true)
+    42→D/TorProcessManager( 6900): Found native binary: libtun2socks.so (343808 bytes, executable=true)
+    43→W/TorProcessManager( 6900): GeoIP file not found — country-based routing unavailable
+    44→D/TorProcessManager( 6900): Generated torrc at /data/user/0/org.onionroute.lite/files/torrc
+    45→I/TorProcessManager( 6900): Tor config verified — launching daemon from /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libtor.so
+    46→I/TorProcessManager( 6900): Tor process started (PID: -1)
+    47→D/TorControlConnection( 6900): Connecting to Tor control port 9051…
+    48→D/TrafficStats( 6900): tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+    49→I/TorControlConnection( 6900): Authenticated to Tor control port
+    50→I/BandwidthTracker( 6900): BandwidthTracker started
+    51→D/TorService( 6900): Status broadcast: CONNECTED
+    52→I/TorService( 6900): Tor started successfully
+    53→I/onionroute.lite( 6900): Compiler allocated 4533KB to compile void android.view.ViewRootImpl.performTraversals()
+    54→D/EGL_emulation( 6900): app_time_stats: avg=12.00ms min=1.10ms max=189.68ms count=48
+    55→D/ProfileInstaller( 6900): Installing profile for org.onionroute.lite
+    56→D/EGL_emulation( 6900): app_time_stats: avg=55.90ms min=1.30ms max=982.54ms count=31
+    57→D/EGL_emulation( 6900): app_time_stats: avg=494.34ms min=5.06ms max=983.63ms count=2
+    58→D/EGL_emulation( 6900): app_time_stats: avg=327.12ms min=5.29ms max=962.63ms count=3
+    59→D/EGL_emulation( 6900): app_time_stats: avg=991.90ms min=983.86ms max=999.93ms count=2
+    60→D/EGL_emulation( 6900): app_time_stats: avg=1017.40ms min=1017.40ms max=1017.40ms count=1
+    61→D/EGL_emulation( 6900): app_time_stats: avg=991.10ms min=984.73ms max=997.47ms count=2
+    62→D/EGL_emulation( 6900): app_time_stats: avg=999.98ms min=999.98ms max=999.98ms count=1
+    63→D/EGL_emulation( 6900): app_time_stats: avg=1006.61ms min=1006.61ms max=1006.61ms count=1
+    64→I/TorService( 6900): obfs4 enabled
+    65→I/TorService( 6900): Stopping Tor daemon…
+    66→I/BandwidthTracker( 6900): BandwidthTracker stopped
+    67→D/TorControlConnection( 6900): Disconnected from control port
+    68→I/TorProcessManager( 6900): Tor process stopped
+    69→I/TorService( 6900): Tor stopped
+    70→D/TorProcessManager( 6900): Process monitor interrupted
+    71→I/TorService( 6900): Starting Tor daemon…
+    72→D/TorService( 6900): Status broadcast: CONNECTING
+    73→D/TorProcessManager( 6900): Found native binary: libtor.so (5474648 bytes, executable=true)
+    74→D/TorProcessManager( 6900): Found native binary: libobfs4proxy.so (5953240 bytes, executable=true)
+    75→D/EGL_emulation( 6900): app_time_stats: avg=684.84ms min=376.75ms max=992.93ms count=2
+    76→D/TorProcessManager( 6900): Found native binary: libsnowflake.so (21072120 bytes, executable=true)
+    77→D/TorProcessManager( 6900): Found native binary: libsnowflake-proxy.so (17539320 bytes, executable=true)
+    78→D/TorProcessManager( 6900): Found native binary: libtun2socks.so (343808 bytes, executable=true)
+    79→W/TorProcessManager( 6900): GeoIP file not found — country-based routing unavailable
+    80→D/TorProcessManager( 6900): Generated torrc at /data/user/0/org.onionroute.lite/files/torrc
+    81→I/TorProcessManager( 6900): Tor config verified — launching daemon from /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libtor.so
+    82→I/TorProcessManager( 6900): Tor process started (PID: -1)
+    83→D/TorControlConnection( 6900): Connecting to Tor control port 9051…
+    84→D/TrafficStats( 6900): tagSocket(94) with statsTag=0xffffffff, statsUid=-1
+    85→I/TorControlConnection( 6900): Authenticated to Tor control port
+    86→I/BandwidthTracker( 6900): BandwidthTracker started
+    87→D/TorService( 6900): Status broadcast: CONNECTED
+    88→I/TorService( 6900): Tor started successfully
+    89→D/EGL_emulation( 6900): app_time_stats: avg=4.05ms min=1.13ms max=17.62ms count=61
+    90→D/KindnessService( 6900): KindnessService created
+    91→I/KindnessService( 6900): Starting Snowflake proxy…
+    92→D/KindnessService( 6900): Found snowflake-proxy binary: /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so
+    93→D/KindnessService( 6900): Kindness status broadcast: active
+    94→I/KindnessService( 6900): Snowflake proxy started (PID: -1)
+    95→D/CompatibilityChangeReporter( 6900): Compat change id reported: 171228096; UID 10172; state: ENABLED
+    96→D/KindnessService( 6900): Proxy: flag provided but not defined: -front
+    97→D/KindnessService( 6900): Proxy: Usage of /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so:
+    98→D/KindnessService( 6900): Proxy:   -allow-non-tls-relay
+    99→D/KindnessService( 6900): Proxy:        allow this proxy to pass client's data to the relay in an unencrypted form.
+   100→D/KindnessService( 6900): Proxy:        This is only useful if the relay doesn't support encryption, e.g. for testing / development purposes.
+   101→D/KindnessService( 6900): Proxy:   -allow-proxying-to-private-addresses
+   102→D/KindnessService( 6900): Proxy:        allow forwarding client connections to private IP addresses.
+   103→D/KindnessService( 6900): Proxy:        Useful when a Snowflake server (relay) is hosted on the same private network as this proxy.
+   104→D/KindnessService( 6900): Proxy:   -allowed-relay-hostname-pattern string
+   105→D/KindnessService( 6900): Proxy:        this proxy will only be allowed to forward client connections to relays (servers) whose URL matches this pattern.
+   106→D/KindnessService( 6900): Proxy:        Note that a pattern "example.com$" will match "subdomain.example.com" as well as "other-domain-example.com".
+   107→D/KindnessService( 6900): Proxy:        In order to only match "example.com", prefix the pattern with "^": "^example.com$" (default "snowflake.torproject.net$")
+   108→D/KindnessService( 6900): Proxy:   -broker URL
+   109→D/KindnessService( 6900): Proxy:        The URL of the broker server that the proxy will be using to find clients (default "https://snowflake-broker.torproject.net/")
+   110→D/KindnessService( 6900): Proxy:   -capacity uint
+   111→D/KindnessService( 6900): Proxy:        maximum concurrent clients (default is to accept an unlimited number of clients)
+   112→D/KindnessService( 6900): Proxy:   -disable-stats-logger
+   113→D/KindnessService( 6900): Proxy:        disable the exposing mechanism for stats using logs
+   114→D/KindnessService( 6900): Proxy:   -ephemeral-ports-range range
+   115→D/KindnessService( 6900): Proxy:        Set the range of ports used for client connections (format:"<min>:<max>").
+   116→D/KindnessService( 6900): Proxy:        If omitted, the ports will be chosen automatically.
+   117→D/KindnessService( 6900): Proxy:   -keep-local-addresses
+   118→D/KindnessService( 6900): Proxy:        keep local LAN address ICE candidates.
+   119→D/KindnessService( 6900): Proxy:        This is usually pointless because Snowflake clients don't usually reside on the same local network as the proxy.
+   120→D/KindnessService( 6900): Proxy:   -log filename
+   121→D/KindnessService( 6900): Proxy:        log filename. If not specified, logs will be output to stderr (console).
+   122→D/KindnessService( 6900): Proxy:   -log-local-time
+   123→D/KindnessService( 6900): Proxy:        Use local time for logging (default: UTC)
+   124→D/KindnessService( 6900): Proxy:   -metrics
+   125→D/KindnessService( 6900): Proxy:        enable the exposing mechanism for stats using metrics
+   126→D/KindnessService( 6900): Proxy:   -metrics-address address
+   127→D/KindnessService( 6900): Proxy:        set listen address for metrics service (default "localhost")
+   128→D/KindnessService( 6900): Proxy:   -metrics-port int
+   129→D/KindnessService( 6900): Proxy:        set port for the metrics service (default 9999)
+   130→D/KindnessService( 6900): Proxy:   -nat-probe-server URL
+   131→D/KindnessService( 6900): Proxy:        The URL of the server that this proxy will use to check its network NAT type.
+   132→D/KindnessService( 6900): Proxy:        Determining NAT type helps to understand whether this proxy is compatible with certain clients' NAT (default "https://snowflake-broker.torproject.net:8443/probe")
+   133→D/KindnessService( 6900): Proxy:   -nat-retest-interval duration
+   134→D/KindnessService( 6900): Proxy:        the time interval between NAT type is retests (see "nat-probe-server"). 0s disables retest. Valid time units are "s", "m", "h". (default 24h0m0s)
+   135→D/KindnessService( 6900): Proxy:   -outbound-address address
+   136→D/KindnessService( 6900): Proxy:        prefer the given address as outbound address for client connections
+   137→D/KindnessService( 6900): Proxy:   -poll-interval duration
+   138→D/KindnessService( 6900): Proxy:        how often to ask the broker for a new client. Keep in mind that asking for a client will not always result in getting one. Minumum value is 2s. Valid time units are "ms", "s", "m", "h". (default 5s)
+   139→D/KindnessService( 6900): Proxy:   -relay URL
+   140→D/KindnessService( 6900): Proxy:        The default URL of the server (relay) that this proxy will forward client connections to, in case the broker itself did not specify the said URL (default "wss://snowflake.torproject.net/")
+   141→D/KindnessService( 6900): Proxy:   -stun URL
+   142→D/KindnessService( 6900): Proxy:        Comma-separated STUN server URLs that this proxy will use will use to, among some other things, determine its public IP address (default "stun:stun.l.google.com:19302,stun:stun.voip.blackberry.com:3478")
+   143→D/KindnessService( 6900): Proxy:   -summary-interval duration
+   144→D/KindnessService( 6900): Proxy:        the time interval between summary log outputs, 0s disables summaries. Valid time units are "s", "m", "h". (default 1h0m0s)
+   145→D/KindnessService( 6900): Proxy:   -unsafe-logging
+   146→D/KindnessService( 6900): Proxy:        keep IP addresses and other sensitive info in the logs
+   147→D/KindnessService( 6900): Proxy:   -verbose
+   148→D/KindnessService( 6900): Proxy:        increase log verbosity
+   149→D/KindnessService( 6900): Proxy:   -version
+   150→D/KindnessService( 6900): Proxy:        display version info to stderr and quit
+   151→W/KindnessService( 6900): Snowflake proxy exited with code 2
+   152→I/KindnessService( 6900): Attempting Snowflake proxy restart (attempt 1, wait 5000ms)…
+   153→D/EGL_emulation( 6900): app_time_stats: avg=157.88ms min=1.18ms max=816.38ms count=8
+   154→D/EGL_emulation( 6900): app_time_stats: avg=18.94ms min=1.29ms max=46.79ms count=43
+   155→D/EGL_emulation( 6900): app_time_stats: avg=23.00ms min=5.98ms max=34.03ms count=40
+   156→D/EGL_emulation( 6900): app_time_stats: avg=25.28ms min=12.06ms max=33.38ms count=40
+   157→I/KindnessService( 6900): Starting Snowflake proxy…
+   158→D/KindnessService( 6900): Found snowflake-proxy binary: /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so
+   159→D/KindnessService( 6900): Kindness status broadcast: active
+   160→I/KindnessService( 6900): Snowflake proxy started (PID: -1)
+   161→D/KindnessService( 6900): Proxy: flag provided but not defined: -front
+   162→D/KindnessService( 6900): Proxy: Usage of /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so:
+   163→D/KindnessService( 6900): Proxy:   -allow-non-tls-relay
+   164→D/KindnessService( 6900): Proxy:        allow this proxy to pass client's data to the relay in an unencrypted form.
+   165→D/KindnessService( 6900): Proxy:        This is only useful if the relay doesn't support encryption, e.g. for testing / development purposes.
+   166→D/KindnessService( 6900): Proxy:   -allow-proxying-to-private-addresses
+   167→D/KindnessService( 6900): Proxy:        allow forwarding client connections to private IP addresses.
+   168→D/KindnessService( 6900): Proxy:        Useful when a Snowflake server (relay) is hosted on the same private network as this proxy.
+   169→D/KindnessService( 6900): Proxy:   -allowed-relay-hostname-pattern string
+   170→D/KindnessService( 6900): Proxy:        this proxy will only be allowed to forward client connections to relays (servers) whose URL matches this pattern.
+   171→D/KindnessService( 6900): Proxy:        Note that a pattern "example.com$" will match "subdomain.example.com" as well as "other-domain-example.com".
+   172→D/KindnessService( 6900): Proxy:        In order to only match "example.com", prefix the pattern with "^": "^example.com$" (default "snowflake.torproject.net$")
+   173→D/KindnessService( 6900): Proxy:   -broker URL
+   174→D/KindnessService( 6900): Proxy:        The URL of the broker server that the proxy will be using to find clients (default "https://snowflake-broker.torproject.net/")
+   175→D/KindnessService( 6900): Proxy:   -capacity uint
+   176→D/KindnessService( 6900): Proxy:        maximum concurrent clients (default is to accept an unlimited number of clients)
+   177→D/KindnessService( 6900): Proxy:   -disable-stats-logger
+   178→D/KindnessService( 6900): Proxy:        disable the exposing mechanism for stats using logs
+   179→D/KindnessService( 6900): Proxy:   -ephemeral-ports-range range
+   180→D/KindnessService( 6900): Proxy:        Set the range of ports used for client connections (format:"<min>:<max>").
+   181→D/KindnessService( 6900): Proxy:        If omitted, the ports will be chosen automatically.
+   182→D/KindnessService( 6900): Proxy:   -keep-local-addresses
+   183→D/KindnessService( 6900): Proxy:        keep local LAN address ICE candidates.
+   184→D/KindnessService( 6900): Proxy:        This is usually pointless because Snowflake clients don't usually reside on the same local network as the proxy.
+   185→D/KindnessService( 6900): Proxy:   -log filename
+   186→D/KindnessService( 6900): Proxy:        log filename. If not specified, logs will be output to stderr (console).
+   187→D/KindnessService( 6900): Proxy:   -log-local-time
+   188→D/KindnessService( 6900): Proxy:        Use local time for logging (default: UTC)
+   189→D/KindnessService( 6900): Proxy:   -metrics
+   190→D/KindnessService( 6900): Proxy:        enable the exposing mechanism for stats using metrics
+   191→D/KindnessService( 6900): Proxy:   -metrics-address address
+   192→D/KindnessService( 6900): Proxy:        set listen address for metrics service (default "localhost")
+   193→D/KindnessService( 6900): Proxy:   -metrics-port int
+   194→D/KindnessService( 6900): Proxy:        set port for the metrics service (default 9999)
+   195→D/KindnessService( 6900): Proxy:   -nat-probe-server URL
+   196→D/KindnessService( 6900): Proxy:        The URL of the server that this proxy will use to check its network NAT type.
+   197→D/KindnessService( 6900): Proxy:        Determining NAT type helps to understand whether this proxy is compatible with certain clients' NAT (default "https://snowflake-broker.torproject.net:8443/probe")
+   198→D/KindnessService( 6900): Proxy:   -nat-retest-interval duration
+   199→D/KindnessService( 6900): Proxy:        the time interval between NAT type is retests (see "nat-probe-server"). 0s disables retest. Valid time units are "s", "m", "h". (default 24h0m0s)
+   200→D/KindnessService( 6900): Proxy:   -outbound-address address
+   201→D/KindnessService( 6900): Proxy:        prefer the given address as outbound address for client connections
+   202→D/KindnessService( 6900): Proxy:   -poll-interval duration
+   203→D/KindnessService( 6900): Proxy:        how often to ask the broker for a new client. Keep in mind that asking for a client will not always result in getting one. Minumum value is 2s. Valid time units are "ms", "s", "m", "h". (default 5s)
+   204→D/KindnessService( 6900): Proxy:   -relay URL
+   205→D/KindnessService( 6900): Proxy:        The default URL of the server (relay) that this proxy will forward client connections to, in case the broker itself did not specify the said URL (default "wss://snowflake.torproject.net/")
+   206→D/KindnessService( 6900): Proxy:   -stun URL
+   207→D/KindnessService( 6900): Proxy:        Comma-separated STUN server URLs that this proxy will use will use to, among some other things, determine its public IP address (default "stun:stun.l.google.com:19302,stun:stun.voip.blackberry.com:3478")
+   208→D/KindnessService( 6900): Proxy:   -summary-interval duration
+   209→D/KindnessService( 6900): Proxy:        the time interval between summary log outputs, 0s disables summaries. Valid time units are "s", "m", "h". (default 1h0m0s)
+   210→D/KindnessService( 6900): Proxy:   -unsafe-logging
+   211→D/KindnessService( 6900): Proxy:        keep IP addresses and other sensitive info in the logs
+   212→D/KindnessService( 6900): Proxy:   -verbose
+   213→D/KindnessService( 6900): Proxy:        increase log verbosity
+   214→D/KindnessService( 6900): Proxy:   -version
+   215→D/KindnessService( 6900): Proxy:        display version info to stderr and quit
+   216→W/KindnessService( 6900): Snowflake proxy exited with code 2
+   217→I/KindnessService( 6900): Attempting Snowflake proxy restart (attempt 2, wait 10000ms)…
+   218→I/KindnessService( 6900): Starting Snowflake proxy…
+   219→D/KindnessService( 6900): Found snowflake-proxy binary: /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so
+   220→D/KindnessService( 6900): Kindness status broadcast: active
+   221→I/KindnessService( 6900): Snowflake proxy started (PID: -1)
+   222→D/KindnessService( 6900): Proxy: flag provided but not defined: -front
+   223→D/KindnessService( 6900): Proxy: Usage of /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so:
+   224→D/KindnessService( 6900): Proxy:   -allow-non-tls-relay
+   225→D/KindnessService( 6900): Proxy:        allow this proxy to pass client's data to the relay in an unencrypted form.
+   226→D/KindnessService( 6900): Proxy:        This is only useful if the relay doesn't support encryption, e.g. for testing / development purposes.
+   227→D/KindnessService( 6900): Proxy:   -allow-proxying-to-private-addresses
+   228→D/KindnessService( 6900): Proxy:        allow forwarding client connections to private IP addresses.
+   229→D/KindnessService( 6900): Proxy:        Useful when a Snowflake server (relay) is hosted on the same private network as this proxy.
+   230→D/KindnessService( 6900): Proxy:   -allowed-relay-hostname-pattern string
+   231→D/KindnessService( 6900): Proxy:        this proxy will only be allowed to forward client connections to relays (servers) whose URL matches this pattern.
+   232→D/KindnessService( 6900): Proxy:        Note that a pattern "example.com$" will match "subdomain.example.com" as well as "other-domain-example.com".
+   233→D/KindnessService( 6900): Proxy:        In order to only match "example.com", prefix the pattern with "^": "^example.com$" (default "snowflake.torproject.net$")
+   234→D/KindnessService( 6900): Proxy:   -broker URL
+   235→D/KindnessService( 6900): Proxy:        The URL of the broker server that the proxy will be using to find clients (default "https://snowflake-broker.torproject.net/")
+   236→D/KindnessService( 6900): Proxy:   -capacity uint
+   237→D/KindnessService( 6900): Proxy:        maximum concurrent clients (default is to accept an unlimited number of clients)
+   238→D/KindnessService( 6900): Proxy:   -disable-stats-logger
+   239→D/KindnessService( 6900): Proxy:        disable the exposing mechanism for stats using logs
+   240→D/KindnessService( 6900): Proxy:   -ephemeral-ports-range range
+   241→D/KindnessService( 6900): Proxy:        Set the range of ports used for client connections (format:"<min>:<max>").
+   242→D/KindnessService( 6900): Proxy:        If omitted, the ports will be chosen automatically.
+   243→D/KindnessService( 6900): Proxy:   -keep-local-addresses
+   244→D/KindnessService( 6900): Proxy:        keep local LAN address ICE candidates.
+   245→D/KindnessService( 6900): Proxy:        This is usually pointless because Snowflake clients don't usually reside on the same local network as the proxy.
+   246→D/KindnessService( 6900): Proxy:   -log filename
+   247→D/KindnessService( 6900): Proxy:        log filename. If not specified, logs will be output to stderr (console).
+   248→D/KindnessService( 6900): Proxy:   -log-local-time
+   249→D/KindnessService( 6900): Proxy:        Use local time for logging (default: UTC)
+   250→D/KindnessService( 6900): Proxy:   -metrics
+   251→D/KindnessService( 6900): Proxy:        enable the exposing mechanism for stats using metrics
+   252→D/KindnessService( 6900): Proxy:   -metrics-address address
+   253→D/KindnessService( 6900): Proxy:        set listen address for metrics service (default "localhost")
+   254→D/KindnessService( 6900): Proxy:   -metrics-port int
+   255→D/KindnessService( 6900): Proxy:        set port for the metrics service (default 9999)
+   256→D/KindnessService( 6900): Proxy:   -nat-probe-server URL
+   257→D/KindnessService( 6900): Proxy:        The URL of the server that this proxy will use to check its network NAT type.
+   258→D/KindnessService( 6900): Proxy:        Determining NAT type helps to understand whether this proxy is compatible with certain clients' NAT (default "https://snowflake-broker.torproject.net:8443/probe")
+   259→D/KindnessService( 6900): Proxy:   -nat-retest-interval duration
+   260→D/KindnessService( 6900): Proxy:        the time interval between NAT type is retests (see "nat-probe-server"). 0s disables retest. Valid time units are "s", "m", "h". (default 24h0m0s)
+   261→D/KindnessService( 6900): Proxy:   -outbound-address address
+   262→D/KindnessService( 6900): Proxy:        prefer the given address as outbound address for client connections
+   263→D/KindnessService( 6900): Proxy:   -poll-interval duration
+   264→D/KindnessService( 6900): Proxy:        how often to ask the broker for a new client. Keep in mind that asking for a client will not always result in getting one. Minumum value is 2s. Valid time units are "ms", "s", "m", "h". (default 5s)
+   265→D/KindnessService( 6900): Proxy:   -relay URL
+   266→D/KindnessService( 6900): Proxy:        The default URL of the server (relay) that this proxy will forward client connections to, in case the broker itself did not specify the said URL (default "wss://snowflake.torproject.net/")
+   267→D/KindnessService( 6900): Proxy:   -stun URL
+   268→D/KindnessService( 6900): Proxy:        Comma-separated STUN server URLs that this proxy will use will use to, among some other things, determine its public IP address (default "stun:stun.l.google.com:19302,stun:stun.voip.blackberry.com:3478")
+   269→D/KindnessService( 6900): Proxy:   -summary-interval duration
+   270→D/KindnessService( 6900): Proxy:        the time interval between summary log outputs, 0s disables summaries. Valid time units are "s", "m", "h". (default 1h0m0s)
+   271→D/KindnessService( 6900): Proxy:   -unsafe-logging
+   272→D/KindnessService( 6900): Proxy:        keep IP addresses and other sensitive info in the logs
+   273→D/KindnessService( 6900): Proxy:   -verbose
+   274→D/KindnessService( 6900): Proxy:        increase log verbosity
+   275→D/KindnessService( 6900): Proxy:   -version
+   276→D/KindnessService( 6900): Proxy:        display version info to stderr and quit
+   277→W/KindnessService( 6900): Snowflake proxy exited with code 2
+   278→I/KindnessService( 6900): Attempting Snowflake proxy restart (attempt 3, wait 20000ms)…
+   279→I/KindnessService( 6900): Starting Snowflake proxy…
+   280→D/KindnessService( 6900): Found snowflake-proxy binary: /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so
+   281→D/KindnessService( 6900): Kindness status broadcast: active
+   282→I/KindnessService( 6900): Snowflake proxy started (PID: -1)
+   283→D/KindnessService( 6900): Proxy: flag provided but not defined: -front
+   284→D/KindnessService( 6900): Proxy: Usage of /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so:
+   285→D/KindnessService( 6900): Proxy:   -allow-non-tls-relay
+   286→D/KindnessService( 6900): Proxy:        allow this proxy to pass client's data to the relay in an unencrypted form.
+   287→D/KindnessService( 6900): Proxy:        This is only useful if the relay doesn't support encryption, e.g. for testing / development purposes.
+   288→D/KindnessService( 6900): Proxy:   -allow-proxying-to-private-addresses
+   289→D/KindnessService( 6900): Proxy:        allow forwarding client connections to private IP addresses.
+   290→D/KindnessService( 6900): Proxy:        Useful when a Snowflake server (relay) is hosted on the same private network as this proxy.
+   291→D/KindnessService( 6900): Proxy:   -allowed-relay-hostname-pattern string
+   292→D/KindnessService( 6900): Proxy:        this proxy will only be allowed to forward client connections to relays (servers) whose URL matches this pattern.
+   293→D/KindnessService( 6900): Proxy:        Note that a pattern "example.com$" will match "subdomain.example.com" as well as "other-domain-example.com".
+   294→D/KindnessService( 6900): Proxy:        In order to only match "example.com", prefix the pattern with "^": "^example.com$" (default "snowflake.torproject.net$")
+   295→D/KindnessService( 6900): Proxy:   -broker URL
+   296→D/KindnessService( 6900): Proxy:        The URL of the broker server that the proxy will be using to find clients (default "https://snowflake-broker.torproject.net/")
+   297→D/KindnessService( 6900): Proxy:   -capacity uint
+   298→D/KindnessService( 6900): Proxy:        maximum concurrent clients (default is to accept an unlimited number of clients)
+   299→D/KindnessService( 6900): Proxy:   -disable-stats-logger
+   300→D/KindnessService( 6900): Proxy:        disable the exposing mechanism for stats using logs
+   301→D/KindnessService( 6900): Proxy:   -ephemeral-ports-range range
+   302→D/KindnessService( 6900): Proxy:        Set the range of ports used for client connections (format:"<min>:<max>").
+   303→D/KindnessService( 6900): Proxy:        If omitted, the ports will be chosen automatically.
+   304→D/KindnessService( 6900): Proxy:   -keep-local-addresses
+   305→D/KindnessService( 6900): Proxy:        keep local LAN address ICE candidates.
+   306→D/KindnessService( 6900): Proxy:        This is usually pointless because Snowflake clients don't usually reside on the same local network as the proxy.
+   307→D/KindnessService( 6900): Proxy:   -log filename
+   308→D/KindnessService( 6900): Proxy:        log filename. If not specified, logs will be output to stderr (console).
+   309→D/KindnessService( 6900): Proxy:   -log-local-time
+   310→D/KindnessService( 6900): Proxy:        Use local time for logging (default: UTC)
+   311→D/KindnessService( 6900): Proxy:   -metrics
+   312→D/KindnessService( 6900): Proxy:        enable the exposing mechanism for stats using metrics
+   313→D/KindnessService( 6900): Proxy:   -metrics-address address
+   314→D/KindnessService( 6900): Proxy:        set listen address for metrics service (default "localhost")
+   315→D/KindnessService( 6900): Proxy:   -metrics-port int
+   316→D/KindnessService( 6900): Proxy:        set port for the metrics service (default 9999)
+   317→D/KindnessService( 6900): Proxy:   -nat-probe-server URL
+   318→D/KindnessService( 6900): Proxy:        The URL of the server that this proxy will use to check its network NAT type.
+   319→D/KindnessService( 6900): Proxy:        Determining NAT type helps to understand whether this proxy is compatible with certain clients' NAT (default "https://snowflake-broker.torproject.net:8443/probe")
+   320→D/KindnessService( 6900): Proxy:   -nat-retest-interval duration
+   321→D/KindnessService( 6900): Proxy:        the time interval between NAT type is retests (see "nat-probe-server"). 0s disables retest. Valid time units are "s", "m", "h". (default 24h0m0s)
+   322→D/KindnessService( 6900): Proxy:   -outbound-address address
+   323→D/KindnessService( 6900): Proxy:        prefer the given address as outbound address for client connections
+   324→D/KindnessService( 6900): Proxy:   -poll-interval duration
+   325→D/KindnessService( 6900): Proxy:        how often to ask the broker for a new client. Keep in mind that asking for a client will not always result in getting one. Minumum value is 2s. Valid time units are "ms", "s", "m", "h". (default 5s)
+   326→D/KindnessService( 6900): Proxy:   -relay URL
+   327→D/KindnessService( 6900): Proxy:        The default URL of the server (relay) that this proxy will forward client connections to, in case the broker itself did not specify the said URL (default "wss://snowflake.torproject.net/")
+   328→D/KindnessService( 6900): Proxy:   -stun URL
+   329→D/KindnessService( 6900): Proxy:        Comma-separated STUN server URLs that this proxy will use will use to, among some other things, determine its public IP address (default "stun:stun.l.google.com:19302,stun:stun.voip.blackberry.com:3478")
+   330→D/KindnessService( 6900): Proxy:   -summary-interval duration
+   331→D/KindnessService( 6900): Proxy:        the time interval between summary log outputs, 0s disables summaries. Valid time units are "s", "m", "h". (default 1h0m0s)
+   332→D/KindnessService( 6900): Proxy:   -unsafe-logging
+   333→D/KindnessService( 6900): Proxy:        keep IP addresses and other sensitive info in the logs
+   334→D/KindnessService( 6900): Proxy:   -verbose
+   335→D/KindnessService( 6900): Proxy:        increase log verbosity
+   336→D/KindnessService( 6900): Proxy:   -version
+   337→D/KindnessService( 6900): Proxy:        display version info to stderr and quit
+   338→W/KindnessService( 6900): Snowflake proxy exited with code 2
+   339→I/KindnessService( 6900): Attempting Snowflake proxy restart (attempt 4, wait 40000ms)…
+   340→D/EGL_emulation( 6900): app_time_stats: avg=28.15ms min=6.67ms max=93.57ms count=38
+   341→D/EGL_emulation( 6900): app_time_stats: avg=23.08ms min=2.01ms max=43.77ms count=40
+   342→D/EGL_emulation( 6900): app_time_stats: avg=23.11ms min=7.93ms max=39.52ms count=40
+   343→D/EGL_emulation( 6900): app_time_stats: avg=23.37ms min=2.23ms max=42.80ms count=40
+   344→D/EGL_emulation( 6900): app_time_stats: avg=21.84ms min=2.12ms max=36.21ms count=39
+   345→D/EGL_emulation( 6900): app_time_stats: avg=22.71ms min=2.31ms max=40.93ms count=40
+   346→D/EGL_emulation( 6900): app_time_stats: avg=21.48ms min=2.42ms max=40.40ms count=40
+   347→D/EGL_emulation( 6900): app_time_stats: avg=23.21ms min=7.22ms max=35.96ms count=39
+   348→D/EGL_emulation( 6900): app_time_stats: avg=100.83ms min=1.10ms max=3373.86ms count=40
+   349→D/CompatibilityChangeReporter( 6900): Compat change id reported: 78294732; UID 10172; state: ENABLED
+   350→D/CompatibilityChangeReporter( 6900): Compat change id reported: 147798919; UID 10172; state: ENABLED
+   351→D/TorVpnService( 6900): TorVpnService created
+   352→I/TorVpnService( 6900): Starting VPN tunnel…
+   353→I/TorVpnService( 6900): tun2socks started — fd=100, proxy=127.0.0.1:9050, dns=127.0.0.1:5400
+   354→I/TorVpnService( 6900): VPN started successfully
+   355→I/TorService( 6900): Snowflake enabled
+   356→I/TorService( 6900): Stopping Tor daemon…
+   357→I/BandwidthTracker( 6900): BandwidthTracker stopped
+   358→D/TorControlConnection( 6900): Disconnected from control port
+   359→I/TorProcessManager( 6900): Tor process stopped
+   360→I/TorService( 6900): Tor stopped
+   361→D/TorProcessManager( 6900): Process monitor interrupted
+   362→I/TorService( 6900): Starting Tor daemon…
+   363→D/TorService( 6900): Status broadcast: CONNECTING
+   364→D/EGL_emulation( 6900): app_time_stats: avg=8100.76ms min=8100.76ms max=8100.76ms count=1
+   365→D/TorProcessManager( 6900): Found native binary: libtor.so (5474648 bytes, executable=true)
+   366→D/TorProcessManager( 6900): Found native binary: libobfs4proxy.so (5953240 bytes, executable=true)
+   367→D/TorProcessManager( 6900): Found native binary: libsnowflake.so (21072120 bytes, executable=true)
+   368→D/TorProcessManager( 6900): Found native binary: libsnowflake-proxy.so (17539320 bytes, executable=true)
+   369→D/TorProcessManager( 6900): Found native binary: libtun2socks.so (343808 bytes, executable=true)
+   370→W/TorProcessManager( 6900): GeoIP file not found — country-based routing unavailable
+   371→D/TorProcessManager( 6900): Generated torrc at /data/user/0/org.onionroute.lite/files/torrc
+   372→I/TorProcessManager( 6900): Tor config verified — launching daemon from /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libtor.so
+   373→I/TorProcessManager( 6900): Tor process started (PID: -1)
+   374→D/TorControlConnection( 6900): Connecting to Tor control port 9051…
+   375→D/TrafficStats( 6900): tagSocket(94) with statsTag=0xffffffff, statsUid=-1
+   376→I/TorControlConnection( 6900): Authenticated to Tor control port
+   377→I/BandwidthTracker( 6900): BandwidthTracker started
+   378→D/TorService( 6900): Status broadcast: CONNECTED
+   379→I/TorService( 6900): Tor started successfully
+   380→I/TorService( 6900): WebTunnel enabled
+   381→I/TorService( 6900): Stopping Tor daemon…
+   382→I/BandwidthTracker( 6900): BandwidthTracker stopped
+   383→D/TorControlConnection( 6900): Disconnected from control port
+   384→D/TorProcessManager( 6900): Process monitor interrupted
+   385→I/TorProcessManager( 6900): Tor process stopped
+   386→I/TorService( 6900): Tor stopped
+   387→I/TorService( 6900): Starting Tor daemon…
+   388→D/TorService( 6900): Status broadcast: CONNECTING
+   389→D/TorProcessManager( 6900): Found native binary: libtor.so (5474648 bytes, executable=true)
+   390→D/EGL_emulation( 6900): app_time_stats: avg=1390.30ms min=1390.30ms max=1390.30ms count=1
+   391→D/TorProcessManager( 6900): Found native binary: libobfs4proxy.so (5953240 bytes, executable=true)
+   392→D/TorProcessManager( 6900): Found native binary: libsnowflake.so (21072120 bytes, executable=true)
+   393→D/TorProcessManager( 6900): Found native binary: libsnowflake-proxy.so (17539320 bytes, executable=true)
+   394→D/TorProcessManager( 6900): Found native binary: libtun2socks.so (343808 bytes, executable=true)
+   395→W/TorProcessManager( 6900): GeoIP file not found — country-based routing unavailable
+   396→D/TorProcessManager( 6900): Generated torrc at /data/user/0/org.onionroute.lite/files/torrc
+   397→I/TorProcessManager( 6900): Tor config verified — launching daemon from /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libtor.so
+   398→I/TorProcessManager( 6900): Tor process started (PID: -1)
+   399→D/TorControlConnection( 6900): Connecting to Tor control port 9051…
+   400→D/TrafficStats( 6900): tagSocket(96) with statsTag=0xffffffff, statsUid=-1
+   401→I/TorControlConnection( 6900): Authenticated to Tor control port
+   402→I/BandwidthTracker( 6900): BandwidthTracker started
+   403→D/TorService( 6900): Status broadcast: CONNECTED
+   404→I/TorService( 6900): Tor started successfully
+   405→D/EGL_emulation( 6900): app_time_stats: avg=4320.80ms min=4320.80ms max=4320.80ms count=1
+   406→D/EGL_emulation( 6900): app_time_stats: avg=80.89ms min=1.57ms max=1000.91ms count=14
+   407→D/EGL_emulation( 6900): app_time_stats: avg=1001.57ms min=1001.57ms max=1001.57ms count=1
+   408→D/EGL_emulation( 6900): app_time_stats: avg=1005.60ms min=1005.60ms max=1005.60ms count=1
+   409→D/EGL_emulation( 6900): app_time_stats: avg=1004.15ms min=1004.15ms max=1004.15ms count=1
+   410→I/KindnessService( 6900): Starting Snowflake proxy…
+   411→D/KindnessService( 6900): Found snowflake-proxy binary: /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so
+   412→D/KindnessService( 6900): Kindness status broadcast: active
+   413→I/KindnessService( 6900): Snowflake proxy started (PID: -1)
+   414→D/KindnessService( 6900): Proxy: flag provided but not defined: -front
+   415→D/KindnessService( 6900): Proxy: Usage of /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so:
+   416→D/KindnessService( 6900): Proxy:   -allow-non-tls-relay
+   417→D/KindnessService( 6900): Proxy:        allow this proxy to pass client's data to the relay in an unencrypted form.
+   418→D/KindnessService( 6900): Proxy:        This is only useful if the relay doesn't support encryption, e.g. for testing / development purposes.
+   419→D/KindnessService( 6900): Proxy:   -allow-proxying-to-private-addresses
+   420→D/KindnessService( 6900): Proxy:        allow forwarding client connections to private IP addresses.
+   421→D/KindnessService( 6900): Proxy:        Useful when a Snowflake server (relay) is hosted on the same private network as this proxy.
+   422→D/KindnessService( 6900): Proxy:   -allowed-relay-hostname-pattern string
+   423→D/KindnessService( 6900): Proxy:        this proxy will only be allowed to forward client connections to relays (servers) whose URL matches this pattern.
+   424→D/KindnessService( 6900): Proxy:        Note that a pattern "example.com$" will match "subdomain.example.com" as well as "other-domain-example.com".
+   425→D/KindnessService( 6900): Proxy:        In order to only match "example.com", prefix the pattern with "^": "^example.com$" (default "snowflake.torproject.net$")
+   426→D/KindnessService( 6900): Proxy:   -broker URL
+   427→D/KindnessService( 6900): Proxy:        The URL of the broker server that the proxy will be using to find clients (default "https://snowflake-broker.torproject.net/")
+   428→D/KindnessService( 6900): Proxy:   -capacity uint
+   429→D/KindnessService( 6900): Proxy:        maximum concurrent clients (default is to accept an unlimited number of clients)
+   430→D/KindnessService( 6900): Proxy:   -disable-stats-logger
+   431→D/KindnessService( 6900): Proxy:        disable the exposing mechanism for stats using logs
+   432→D/KindnessService( 6900): Proxy:   -ephemeral-ports-range range
+   433→D/KindnessService( 6900): Proxy:        Set the range of ports used for client connections (format:"<min>:<max>").
+   434→D/KindnessService( 6900): Proxy:        If omitted, the ports will be chosen automatically.
+   435→D/KindnessService( 6900): Proxy:   -keep-local-addresses
+   436→D/KindnessService( 6900): Proxy:        keep local LAN address ICE candidates.
+   437→D/KindnessService( 6900): Proxy:        This is usually pointless because Snowflake clients don't usually reside on the same local network as the proxy.
+   438→D/KindnessService( 6900): Proxy:   -log filename
+   439→D/KindnessService( 6900): Proxy:        log filename. If not specified, logs will be output to stderr (console).
+   440→D/KindnessService( 6900): Proxy:   -log-local-time
+   441→D/KindnessService( 6900): Proxy:        Use local time for logging (default: UTC)
+   442→D/KindnessService( 6900): Proxy:   -metrics
+   443→D/KindnessService( 6900): Proxy:        enable the exposing mechanism for stats using metrics
+   444→D/KindnessService( 6900): Proxy:   -metrics-address address
+   445→D/KindnessService( 6900): Proxy:        set listen address for metrics service (default "localhost")
+   446→D/KindnessService( 6900): Proxy:   -metrics-port int
+   447→D/KindnessService( 6900): Proxy:        set port for the metrics service (default 9999)
+   448→D/KindnessService( 6900): Proxy:   -nat-probe-server URL
+   449→D/KindnessService( 6900): Proxy:        The URL of the server that this proxy will use to check its network NAT type.
+   450→D/KindnessService( 6900): Proxy:        Determining NAT type helps to understand whether this proxy is compatible with certain clients' NAT (default "https://snowflake-broker.torproject.net:8443/probe")
+   451→D/KindnessService( 6900): Proxy:   -nat-retest-interval duration
+   452→D/KindnessService( 6900): Proxy:        the time interval between NAT type is retests (see "nat-probe-server"). 0s disables retest. Valid time units are "s", "m", "h". (default 24h0m0s)
+   453→D/KindnessService( 6900): Proxy:   -outbound-address address
+   454→D/KindnessService( 6900): Proxy:        prefer the given address as outbound address for client connections
+   455→D/KindnessService( 6900): Proxy:   -poll-interval duration
+   456→D/KindnessService( 6900): Proxy:        how often to ask the broker for a new client. Keep in mind that asking for a client will not always result in getting one. Minumum value is 2s. Valid time units are "ms", "s", "m", "h". (default 5s)
+   457→D/KindnessService( 6900): Proxy:   -relay URL
+   458→D/KindnessService( 6900): Proxy:        The default URL of the server (relay) that this proxy will forward client connections to, in case the broker itself did not specify the said URL (default "wss://snowflake.torproject.net/")
+   459→D/KindnessService( 6900): Proxy:   -stun URL
+   460→D/KindnessService( 6900): Proxy:        Comma-separated STUN server URLs that this proxy will use will use to, among some other things, determine its public IP address (default "stun:stun.l.google.com:19302,stun:stun.voip.blackberry.com:3478")
+   461→D/KindnessService( 6900): Proxy:   -summary-interval duration
+   462→D/KindnessService( 6900): Proxy:        the time interval between summary log outputs, 0s disables summaries. Valid time units are "s", "m", "h". (default 1h0m0s)
+   463→D/KindnessService( 6900): Proxy:   -unsafe-logging
+   464→D/KindnessService( 6900): Proxy:        keep IP addresses and other sensitive info in the logs
+   465→D/KindnessService( 6900): Proxy:   -verbose
+   466→D/KindnessService( 6900): Proxy:        increase log verbosity
+   467→D/KindnessService( 6900): Proxy:   -version
+   468→D/KindnessService( 6900): Proxy:        display version info to stderr and quit
+   469→W/KindnessService( 6900): Snowflake proxy exited with code 2
+   470→I/KindnessService( 6900): Attempting Snowflake proxy restart (attempt 5, wait 80000ms)…
+   471→I/TorService( 6900): Stopping Tor daemon…
+   472→I/BandwidthTracker( 6900): BandwidthTracker stopped
+   473→D/TorControlConnection( 6900): Disconnected from control port
+   474→D/TorProcessManager( 6900): Process monitor interrupted
+   475→I/TorProcessManager( 6900): Tor process stopped
+   476→I/TorService( 6900): Tor stopped
+   477→D/TorService( 6900): Status broadcast: DISCONNECTED
+   478→D/EGL_emulation( 6900): app_time_stats: avg=670.45ms min=14.28ms max=965.36ms count=4
+   479→I/TorVpnService( 6900): Stopping VPN tunnel…
+   480→I/TorVpnService( 6900): VPN stopped
+   481→D/TorService( 6900): VPN stop signal received
+   482→D/TorService( 6900): VPN stop signal received
+   483→I/KindnessService( 6900): Starting Snowflake proxy…
+   484→D/KindnessService( 6900): Found snowflake-proxy binary: /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so
+   485→D/KindnessService( 6900): Kindness status broadcast: active
+   486→I/KindnessService( 6900): Snowflake proxy started (PID: -1)
+   487→D/KindnessService( 6900): Proxy: flag provided but not defined: -front
+   488→D/KindnessService( 6900): Proxy: Usage of /data/app/~~i_mfe9UV7EIfeeLWAfiVfg==/org.onionroute.lite-Zxl8k39K3_BQlV2FKmzTBQ==/lib/x86_64/libsnowflake-proxy.so:
+   489→D/KindnessService( 6900): Proxy:   -allow-non-tls-relay
+   490→D/KindnessService( 6900): Proxy:        allow this proxy to pass client's data to the relay in an unencrypted form.
+   491→D/KindnessService( 6900): Proxy:        This is only useful if the relay doesn't support encryption, e.g. for testing / development purposes.
+   492→D/KindnessService( 6900): Proxy:   -allow-proxying-to-private-addresses
+   493→D/KindnessService( 6900): Proxy:        allow forwarding client connections to private IP addresses.
+   494→D/KindnessService( 6900): Proxy:        Useful when a Snowflake server (relay) is hosted on the same private network as this proxy.
+   495→D/KindnessService( 6900): Proxy:   -allowed-relay-hostname-pattern string
+   496→D/KindnessService( 6900): Proxy:        this proxy will only be allowed to forward client connections to relays (servers) whose URL matches this pattern.
+   497→D/KindnessService( 6900): Proxy:        Note that a pattern "example.com$" will match "subdomain.example.com" as well as "other-domain-example.com".
+   498→D/KindnessService( 6900): Proxy:        In order to only match "example.com", prefix the pattern with "^": "^example.com$" (default "snowflake.torproject.net$")
+   499→D/KindnessService( 6900): Proxy:   -broker URL
+   500→D/KindnessService( 6900): Proxy:        The URL of the broker server that the proxy will be using to find clients (default "https://snowflake-broker.torproject.net/")
+   501→D/KindnessService( 6900): Proxy:   -capacity uint
+   502→D/KindnessService( 6900): Proxy:        maximum concurrent clients (default is to accept an unlimited number of clients)
+   503→D/KindnessService( 6900): Proxy:   -disable-stats-logger
+   504→D/KindnessService( 6900): Proxy:        disable the exposing mechanism for stats using logs
+   505→D/KindnessService( 6900): Proxy:   -ephemeral-ports-range range
+   506→D/KindnessService( 6900): Proxy:        Set the range of ports used for client connections (format:"<min>:<max>").
+   507→D/KindnessService( 6900): Proxy:        If omitted, the ports will be chosen automatically.
+   508→D/KindnessService( 6900): Proxy:   -keep-local-addresses
+   509→D/KindnessService( 6900): Proxy:        keep local LAN address ICE candidates.
+   510→D/KindnessService( 6900): Proxy:        This is usually pointless because Snowflake clients don't usually reside on the same local network as the proxy.
+   511→D/KindnessService( 6900): Proxy:   -log filename
+   512→D/KindnessService( 6900): Proxy:        log filename. If not specified, logs will be output to stderr (console).
+   513→D/KindnessService( 6900): Proxy:   -log-local-time
+   514→D/KindnessService( 6900): Proxy:        Use local time for logging (default: UTC)
+   515→D/KindnessService( 6900): Proxy:   -metrics
+   516→D/KindnessService( 6900): Proxy:        enable the exposing mechanism for stats using metrics
+   517→D/KindnessService( 6900): Proxy:   -metrics-address address
+   518→D/KindnessService( 6900): Proxy:        set listen address for metrics service (default "localhost")
+   519→D/KindnessService( 6900): Proxy:   -metrics-port int
+   520→D/KindnessService( 6900): Proxy:        set port for the metrics service (default 9999)
+   521→D/KindnessService( 6900): Proxy:   -nat-probe-server URL
+   522→D/KindnessService( 6900): Proxy:        The URL of the server that this proxy will use to check its network NAT type.
+   523→D/KindnessService( 6900): Proxy:        Determining NAT type helps to understand whether this proxy is compatible with certain clients' NAT (default "https://snowflake-broker.torproject.net:8443/probe")
+   524→D/KindnessService( 6900): Proxy:   -nat-retest-interval duration
+   525→D/KindnessService( 6900): Proxy:        the time interval between NAT type is retests (see "nat-probe-server"). 0s disables retest. Valid time units are "s", "m", "h". (default 24h0m0s)
+   526→D/KindnessService( 6900): Proxy:   -outbound-address address
+   527→D/KindnessService( 6900): Proxy:        prefer the given address as outbound address for client connections
+   528→D/KindnessService( 6900): Proxy:   -poll-interval duration
+   529→D/KindnessService( 6900): Proxy:        how often to ask the broker for a new client. Keep in mind that asking for a client will not always result in getting one. Minumum value is 2s. Valid time units are "ms", "s", "m", "h". (default 5s)
+   530→D/KindnessService( 6900): Proxy:   -relay URL
+   531→D/KindnessService( 6900): Proxy:        The default URL of the server (relay) that this proxy will forward client connections to, in case the broker itself did not specify the said URL (default "wss://snowflake.torproject.net/")
+   532→D/KindnessService( 6900): Proxy:   -stun URL
+   533→D/KindnessService( 6900): Proxy:        Comma-separated STUN server URLs that this proxy will use will use to, among some other things, determine its public IP address (default "stun:stun.l.google.com:19302,stun:stun.voip.blackberry.com:3478")
+   534→D/KindnessService( 6900): Proxy:   -summary-interval duration
+   535→D/KindnessService( 6900): Proxy:        the time interval between summary log outputs, 0s disables summaries. Valid time units are "s", "m", "h". (default 1h0m0s)
+   536→D/KindnessService( 6900): Proxy:   -unsafe-logging
+   537→D/KindnessService( 6900): Proxy:        keep IP addresses and other sensitive info in the logs
+   538→D/KindnessService( 6900): Proxy:   -verbose
+   539→D/KindnessService( 6900): Proxy:        increase log verbosity
+   540→D/KindnessService( 6900): Proxy:   -version
+   541→D/KindnessService( 6900): Proxy:        display version info to stderr and quit
+   542→W/KindnessService( 6900): Snowflake proxy exited with code 2
+   543→I/KindnessService( 6900): Attempting Snowflake proxy restart (attempt 6, wait 160000ms)…
+   544→
