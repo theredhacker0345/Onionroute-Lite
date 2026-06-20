@@ -186,41 +186,43 @@ def main():
     candidates = []
 
     for transport in fetch_transports:
-        # Try BridgeDB first
-        bridge_lines = fetch_bridges_from_bridgedb(transport)
+        # Make MULTIPLE requests to BridgeDB — it returns different bridges
+        # each time. We need multiple alive replacements per transport
+        # because there may be multiple dead bridges of the same type.
+        all_bridge_lines = []
+        for attempt in range(3):  # 3 requests = up to 6 bridges per transport
+            lines = fetch_bridges_from_bridgedb(transport)
+            for line in lines:
+                if line not in all_bridge_lines:  # dedup
+                    all_bridge_lines.append(line)
+            if len(all_bridge_lines) >= 6:  # enough candidates
+                break
 
-        # Fall back to Moat if BridgeDB returned nothing
-        if not bridge_lines:
-            bridge_lines = fetch_bridges_from_moat(transport)
+        if not all_bridge_lines:
+            all_bridge_lines = fetch_bridges_from_moat(transport)
 
-        if not bridge_lines:
+        if not all_bridge_lines:
             print(f"[!] No {transport} bridges found from any source", file=sys.stderr)
             continue
 
-        # Test each candidate (limit to 2 — we only need ONE alive bridge per transport)
-        tested = 0
-        max_test = 2
-        for line in bridge_lines:
-            if tested >= max_test:
-                print(f"[*] Tested {max_test} {transport} candidates, stopping", file=sys.stderr)
-                break
+        print(f"[*] Testing {len(all_bridge_lines)} {transport} candidates...", file=sys.stderr)
 
-            print(f"[*] Testing candidate {tested+1}: {line[:60]}...", file=sys.stderr)
-            result = test_candidate_bridge(line, transport, plugin_path, timeout=90)
+        # Test ALL candidates — don't stop after finding 1 alive.
+        # We need as many alive replacements as there are dead bridges.
+        for i, line in enumerate(all_bridge_lines):
+            print(f"[*] Testing candidate {i+1}/{len(all_bridge_lines)}: {line[:60]}...", file=sys.stderr)
+            result = test_candidate_bridge(line, transport, plugin_path, timeout=10)
 
             if result["status"] == "alive":
-                print(f"    ✓ ALIVE — bootstrap in {result['bootstrap_time']}s", file=sys.stderr)
+                print(f"    ✓ ALIVE — {result['bootstrap_time']}s", file=sys.stderr)
                 candidates.append({
                     "transport": transport,
                     "line": line,
                     "bootstrap_time": result["bootstrap_time"],
                     "source": "BridgeDB",
                 })
-                # Found a working replacement — one is enough per transport
-                break
             else:
                 print(f"    ✗ {result['status']} — {result.get('error', 'unknown')}", file=sys.stderr)
-                tested += 1
 
     # Write candidates
     Path("bridge-health/candidates.json").write_text(json.dumps(candidates, indent=2))
