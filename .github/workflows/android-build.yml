@@ -427,12 +427,20 @@ jobs:
           timeout 30 adb logcat -v time -v thread *:V 2>/dev/null > /tmp/logcat_startup.txt || true
           echo "Logcat startup size: $(stat -c%s /tmp/logcat_startup.txt 2>/dev/null || echo 0) bytes"
 
-          # Tap the Connect button (center of screen on Pixel 6 emulator)
-          # The Connect button is a 200dp circle centered on screen.
-          # On a 1080x2400 Pixel 6 display, center = (540, 1200)
+          # Tap the Connect button (large circular button at top-center).
+          # On a 1080x2400 Pixel 6 emulator with ~420 dpi (1dp ≈ 2.625px),
+          # the button is at approximately:
+          #   y = 48dp (top spacer) + ~30dp (top bar) + 8dp + ~11sp (subtitle)
+          #       + 48dp + 100dp (button radius) ≈ 245dp ≈ 643px
+          # Tap at (540, 640) — center of the screen horizontally, just
+          # above the bandwidth strip.
+          #
+          # The previous value (540, 1200) was WAY too low — it landed in
+          # the QUICK SETTINGS section and toggled something else (or
+          # nothing), which is why the app stayed DISCONNECTED in CI.
           echo ""
-          echo "=== Tapping Connect button at (540, 1200) ==="
-          adb shell input tap 540 1200
+          echo "=== Tapping Connect button at (540, 640) ==="
+          adb shell input tap 540 640
           sleep 3
 
           # Take a screenshot after tapping Connect
