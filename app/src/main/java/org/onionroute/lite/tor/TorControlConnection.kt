@@ -193,11 +193,8 @@ class TorControlConnection(private val context: Context) {
         // had actually finished bootstrapping.
         //
         // Fix: subscribe only to BW, CIRC, and STATUS_CLIENT. Bootstrap
-        // progress is parsed from STATUS_CLIENT events (see parseStatusEvent
-        // below).
-        Log.d(tag, "Subscribing to events: SETEVENTS BW CIRC STATUS_CLIENT")
+        // progress is parsed from STATUS_CLIENT events in the listener.
         sendCommand("SETEVENTS BW CIRC STATUS_CLIENT\r\n")
-        Log.d(tag, "SETEVENTS command sent, starting listener thread")
 
         // Start listener thread — this is the ONLY thread that reads from inputStream
         listenerThread = Thread({
@@ -205,7 +202,6 @@ class TorControlConnection(private val context: Context) {
         }, "TorControlListener")
         listenerThread?.isDaemon = true
         listenerThread?.start()
-        Log.d(tag, "Listener thread started")
     }
 
     /**
@@ -317,18 +313,11 @@ class TorControlConnection(private val context: Context) {
      */
     private fun listenForEvents() {
         try {
-            val stream = inputStream ?: run {
-                Log.e(tag, "Listener: inputStream is null, exiting")
-                return
-            }
+            val stream = inputStream ?: return
 
-            Log.d(tag, "Listener: starting event loop")
             while (isConnected && !Thread.currentThread().isInterrupted) {
                 val line = readLineFromStream(stream) ?: break  // null = EOF
                 if (line.isEmpty()) continue
-
-                // Debug: log every line received so we can see what Tor is sending
-                Log.d(tag, "Listener recv: $line")
 
                 when {
                     // Async events (650 ...)
