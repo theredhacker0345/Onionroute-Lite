@@ -67,10 +67,15 @@ android {
             // would confuse its infrastructure.
             splits.abi.enable = false
 
-            // Ship only ARM ABIs in the universal APK. x86 + x86_64 are
-            // emulator-only and would double the APK size for no benefit
-            // to real Android users. ~99% of Android devices are ARM.
-            // (armeabi-v7a = old 32-bit ARM, arm64-v8a = modern 64-bit ARM)
+            // ABI filters differ between debug and release:
+            //   - release: ARM-only (armeabi-v7a + arm64-v8a) to keep
+            //     APK size small for real users (~99% of Android devices
+            //     are ARM; x86 is emulator-only).
+            //   - debug: include x86_64 too so the CI emulator test
+            //     (which uses an x86_64 system image) can actually load
+            //     the native binaries. Without this, the app launches
+            //     but Tor fails to start because libtor.so is missing.
+            // The per-build-type abiFilters below override this default.
             ndk {
                 abiFilters 'armeabi-v7a', 'arm64-v8a'
             }
@@ -99,10 +104,32 @@ android {
 
             // Use debug keystore for now (F-Droid will re-sign)
             signingConfig signingConfigs.debug
+
+            // Release builds: ARM-only (armeabi-v7a + arm64-v8a).
+            // x86/x86_64 are emulator-only and would double the APK size
+            // for no benefit to real Android users. The default abiFilters
+            // from the fdroid flavor already enforce this, but we restate
+            // it here to be explicit and to override any debug-build
+            // additions if the build is promoted to release.
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
+            }
         }
         debug {
             minifyEnabled false
             signingConfig signingConfigs.debug
+
+            // Debug builds: include x86_64 too so the CI emulator test
+            // (x86_64 system image) can actually load the native binaries
+            // and exercise the Tor code path. Without this, the app
+            // launches but TorService fails with "libtor.so NOT FOUND"
+            // because the APK only contains ARM binaries.
+            //
+            // arm64-v8a is also included so developer devices with 64-bit
+            // ARM (most modern phones) can install the debug APK directly.
+            ndk {
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+            }
         }
     }
 
