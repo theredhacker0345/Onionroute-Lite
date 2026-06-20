@@ -335,22 +335,22 @@ Full license: [LICENSE](LICENSE)
 <!-- BRIDGE-HEALTH-START -->
 ## Bridge Health
 
-![Bridge Status](https://img.shields.io/badge/bridges-1/6%20alive-FFA500?style=for-the-badge&labelColor=1A1A1A)
-![Checks](https://img.shields.io/badge/checks-14-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![Bridge Status](https://img.shields.io/badge/bridges-2/6%20alive-FFA500?style=for-the-badge&labelColor=1A1A1A)
+![Checks](https://img.shields.io/badge/checks-15-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 ![AI](https://img.shields.io/badge/AI-Qwen%202.5%203B-00E5C4?style=for-the-badge&labelColor=1A1A1A)
 
 An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner via llama.cpp — no external API) tests every bundled bridge every 30 minutes. If a bridge has been dead for 3+ consecutive checks, the AI opens a PR to swap it for a working replacement.
 
-**Last check:** `2026-06-20T07:39:11+00:00`
+**Last check:** `2026-06-20T07:53:18+00:00`
 
 | Bridge | Type | Status | Bootstrap | Failures | History |
 |--------|------|--------|-----------|----------|---------|
-| `193.11.166.194:10901` | obfs4 | ⏱️ timeout | — | 0 | 🟨🟨🟨🟨🟨🟨 |
-| `85.31.186.98:443` | obfs4 | ⏱️ timeout | — | **13** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
-| `85.31.186.26:443` | obfs4 | ⏱️ timeout | — | **13** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
-| `159.69.22.241:443` | webtunnel | ✅ alive | 0.09s | 0 | 🟨🟨🟨🟨🟨🟩 |
-| `37.218.240.2:443` | webtunnel | ⏱️ timeout | — | **13** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
-| `192.0.2.3:80` | snowflake | ⏱️ timeout | — | **14** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
+| `80.96.58.89:9130` | obfs4 | ✅ alive | 0.14s | 0 | ⬜⬜⬜⬜⬜🟩 |
+| `85.31.186.98:443` | obfs4 | ⏱️ timeout | — | 0 | 🟨🟨🟨🟨🟨🟨 |
+| `85.31.186.26:443` | obfs4 | ⏱️ timeout | — | 0 | 🟨🟨🟨🟨🟨🟨 |
+| `159.69.22.241:443` | webtunnel | ✅ alive | 0.11s | 0 | 🟨🟨🟨🟨🟩🟩 |
+| `37.218.240.2:443` | webtunnel | ⏱️ timeout | — | **14** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
+| `192.0.2.3:80` | snowflake | ⏱️ timeout | — | **15** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
 
 *History: 🟩 alive · 🟨 timeout · 🟥 dead · 🟧 error · ⬜ no data (last 6 checks)*
 

@@ -701,13 +701,65 @@
           "timestamp": "2026-06-20T07:35:27Z"
         }
       ]
+    },
+    {
+      "timestamp": "2026-06-20T07:53:18+00:00",
+      "bridges": [
+        {
+          "transport": "obfs4",
+          "line": "obfs4 80.96.58.89:9130 09F8EE9BBF2224564255A69C75D2BDED0C11ED69 cert=eDeANY48aUHUkN93TkyqqOpWfu7CFUcyR8q6SwbRcg1pLPgWL8GPpt&#43;&#43;DakdOkgeqmQrUg iat-mode=0",
+          "status": "alive",
+          "bootstrap_time": 0.14,
+          "error": null,
+          "timestamp": "2026-06-20T07:49:00Z"
+        },
+        {
+          "transport": "obfs4",
+          "line": "obfs4 85.31.186.98:443 011F2592C5B56EE5423E624B4A7035B5B3D0B946 cert=Ov4fCC6MxR7GQx8w5Y0CJnDGp5QktT1x5JslU6HHUI8f9Ys0nCGRtQ iat-mode=0",
+          "status": "timeout",
+          "bootstrap_time": 0,
+          "error": "TCP connect to 85.31.186.98:443 timed out (5s)",
+          "timestamp": "2026-06-20T07:49:00Z"
+        },
+        {
+          "transport": "obfs4",
+          "line": "obfs4 85.31.186.26:443 91D625E7104B036D6E45C93E9B7D6FBA0929F510 cert=V0Jj8fCVAaW0Y7gFQThH3x2gUOCWsGs6MSX8F3q+0nY3GQPQ/V5Kwo iat-mode=0",
+          "status": "timeout",
+          "bootstrap_time": 0,
+          "error": "TCP connect to 85.31.186.26:443 timed out (5s)",
+          "timestamp": "2026-06-20T07:49:05Z"
+        },
+        {
+          "transport": "webtunnel",
+          "line": "webtunnel 159.69.22.241:443 40D1E0A98733F1E3E0548BD2F2B3C7B6B08C93B7 url=https://wt-1.broker.torproject.org/webtunnel/line/5a5a6463-05a0-4c44-bef7-40e3e2e128f2 ver=0.4.0",
+          "status": "alive",
+          "bootstrap_time": 0.11,
+          "error": null,
+          "timestamp": "2026-06-20T07:49:10Z"
+        },
+        {
+          "transport": "webtunnel",
+          "line": "webtunnel 37.218.240.2:443 6689A4F6FA2FDA96D6EDAF6D4B85C7E6F0E382B6 url=https://wt-2.broker.torproject.org/webtunnel/line/60A7DE4A11A6BB86C7D9F6E6BEB5C3AC1E5BE6F1 ver=0.4.0",
+          "status": "timeout",
+          "bootstrap_time": 0,
+          "error": "TCP connect to 37.218.240.2:443 timed out (5s)",
+          "timestamp": "2026-06-20T07:49:10Z"
+        },
+        {
+          "transport": "snowflake",
+          "line": "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://snowflake-broker.torproject.net/ fronts=cdn.sstatic.net ice=stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478",
+          "status": "timeout",
+          "bootstrap_time": 0,
+          "error": "TCP connect to 192.0.2.3:80 timed out (5s)",
+          "timestamp": "2026-06-20T07:49:15Z"
+        }
+      ]
     }
   ],
   "failure_counts": {
-    "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://snowflake-broker.torproject.net/ fronts=cdn.sstatic.net ice=stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478": 14,
-    "obfs4 85.31.186.98:443 011F2592C5B56EE5423E624B4A7035B5B3D0B946 cert=Ov4fCC6MxR7GQx8w5Y0CJnDGp5QktT1x5JslU6HHUI8f9Ys0nCGRtQ iat-mode=0": 13,
-    "obfs4 85.31.186.26:443 91D625E7104B036D6E45C93E9B7D6FBA0929F510 cert=V0Jj8fCVAaW0Y7gFQThH3x2gUOCWsGs6MSX8F3q+0nY3GQPQ/V5Kwo iat-mode=0": 13,
+    "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://snowflake-broker.torproject.net/ fronts=cdn.sstatic.net ice=stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478": 15,
     "webtunnel 159.69.22.241:443 40D1E0A98733F1E3E0548BD2F2B3C7B6B08C93B7 url=https://wt-1.broker.torproject.org/webtunnel/line/5a5a6463-05a0-4c44-bef7-40e3e2e128f2 ver=0.4.0": 0,
-    "webtunnel 37.218.240.2:443 6689A4F6FA2FDA96D6EDAF6D4B85C7E6F0E382B6 url=https://wt-2.broker.torproject.org/webtunnel/line/60A7DE4A11A6BB86C7D9F6E6BEB5C3AC1E5BE6F1 ver=0.4.0": 13
+    "webtunnel 37.218.240.2:443 6689A4F6FA2FDA96D6EDAF6D4B85C7E6F0E382B6 url=https://wt-2.broker.torproject.org/webtunnel/line/60A7DE4A11A6BB86C7D9F6E6BEB5C3AC1E5BE6F1 ver=0.4.0": 14,
+    "obfs4 80.96.58.89:9130 09F8EE9BBF2224564255A69C75D2BDED0C11ED69 cert=eDeANY48aUHUkN93TkyqqOpWfu7CFUcyR8q6SwbRcg1pLPgWL8GPpt&#43;&#43;DakdOkgeqmQrUg iat-mode=0": 0
   }
 }
