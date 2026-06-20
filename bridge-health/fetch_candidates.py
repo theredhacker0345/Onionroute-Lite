@@ -197,9 +197,9 @@ def main():
             print(f"[!] No {transport} bridges found from any source", file=sys.stderr)
             continue
 
-        # Test each candidate (limit to 5 to avoid long CI runs)
+        # Test each candidate (limit to 2 — we only need ONE alive bridge per transport)
         tested = 0
-        max_test = 5
+        max_test = 2
         for line in bridge_lines:
             if tested >= max_test:
                 print(f"[*] Tested {max_test} {transport} candidates, stopping", file=sys.stderr)
