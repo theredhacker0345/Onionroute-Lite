@@ -168,6 +168,16 @@ def main():
 
     print(f"[*] Dead transports needing replacements: {dead_transports}", file=sys.stderr)
 
+    # ALWAYS fetch ALL transport types — BridgeDB returns different bridges
+    # each time, and we want a pool of alive replacements for any transport
+    # that has dead bridges. If we only fetch dead transports, we might
+    # miss available obfs4 bridges when BridgeDB happens to return
+    # webtunnel/snowflake instead.
+    fetch_transports = dead_transports if dead_transports else set(SUPPORTED_TRANSPORTS)
+    # Always include ALL supported transports to maximize chances of
+    # finding alive replacements
+    fetch_transports = set(SUPPORTED_TRANSPORTS)
+
     # Get plugin path from environment (set by the workflow)
     plugin_path = os.environ.get("PLUGIN_PATH", "/usr/bin")
     go_path = os.environ.get("GOPATH", "/home/runner/go")
@@ -175,7 +185,7 @@ def main():
 
     candidates = []
 
-    for transport in dead_transports:
+    for transport in fetch_transports:
         # Try BridgeDB first
         bridge_lines = fetch_bridges_from_bridgedb(transport)
 
@@ -196,7 +206,7 @@ def main():
                 break
 
             print(f"[*] Testing candidate {tested+1}: {line[:60]}...", file=sys.stderr)
-            result = test_candidate_bridge(line, transport, plugin_path, timeout=60)
+            result = test_candidate_bridge(line, transport, plugin_path, timeout=90)
 
             if result["status"] == "alive":
                 print(f"    ✓ ALIVE — bootstrap in {result['bootstrap_time']}s", file=sys.stderr)
