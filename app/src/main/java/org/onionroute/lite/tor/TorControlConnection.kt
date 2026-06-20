@@ -69,7 +69,29 @@ class TorControlConnection(private val context: Context) {
             Log.d(tag, "Connecting to Tor control port $port…")
 
             controlSocket = Socket("127.0.0.1", port)
-            controlSocket?.soTimeout = 15000
+            // IMPORTANT: soTimeout applies to ALL reads on this socket,
+            // including the listener thread's blocking readLineFromStream().
+            // The listener blocks indefinitely waiting for the next async
+            // event (BW / BOOTSTRAP / CIRC). If we set a 15s timeout here,
+            // the listener will throw SocketTimeoutException every 15s
+            // when no event arrives (which is normal — Tor only emits BW
+            // events ~1/sec and BOOTSTRAP events only during bootstrap).
+            //
+            // The previous 15s timeout caused the listener thread to die
+            // with SocketTimeoutException during the long consensus
+            // download (5-15s of silence between BOOTSTRAP events), so
+            // bootstrap callbacks never fired and the app declared
+            // "timed out at 0%" even though Tor was actually still
+            // bootstrapping successfully.
+            //
+            // Set soTimeout = 0 (infinite) for the listener. The auth
+            // read in this method (readLineSync) is fast enough that it
+            // doesn't need a timeout — Tor responds to AUTHENTICATE
+            // within milliseconds on a localhost socket.
+            controlSocket?.soTimeout = 0
+            // Keep alive so the connection isn't killed by NAT idle
+            // timeouts on long-running sessions.
+            controlSocket?.keepAlive = true
 
             inputStream = controlSocket?.getInputStream()
             outputStream = controlSocket?.getOutputStream()

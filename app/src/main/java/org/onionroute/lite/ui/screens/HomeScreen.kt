@@ -134,6 +134,15 @@ fun HomeScreen(appState: OnionRouteAppState) {
         // ── Quick Toggles ────────────────────────────────────────
         QuickToggleRow(appState = appState)
 
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // ── Mode explainer card ──────────────────────────────────
+        // Explains the difference between Normal Tor Connect (just tap the
+        // power button) and VPN Mode (toggle the VPN chip after connecting).
+        // Many users were confused about which apps get anonymized by each
+        // mode — this card makes it clear at the bottom of the home screen.
+        ModeExplainerCard(isVpnActive = appState.isVpnMode)
+
         // Bottom padding so the last toggle row is reachable above the
         // gesture nav bar. Previously used Spacer(weight=1f) which is a
         // no-op inside a vertically scrollable column.
@@ -696,5 +705,116 @@ fun ToggleChip(
                 fontWeight = FontWeight.Medium
             )
         )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Mode Explainer Card
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Card explaining the difference between the two connection modes:
+ * - Normal Tor Connect (just tap the power button): only Tor-aware apps
+ *   that are manually configured to use SOCKS5 127.0.0.1:9050 are
+ *   anonymized. Other apps connect directly with your real IP.
+ * - VPN Mode (toggle the VPN chip after connecting): ALL device traffic
+ *   is routed through Tor via a TUN interface + tun2socks. No per-app
+ *   configuration needed; your real IP is hidden from every app.
+ *
+ * Placed at the bottom of HomeScreen so users see it after the quick
+ * toggles. The card visually highlights which mode is currently active
+ * (or neither, if just connected without VPN).
+ */
+@Composable
+fun ModeExplainerCard(isVpnActive: Boolean) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(OnionRouteColors.Surface1)
+            .border(
+                width = 1.dp,
+                color = OnionRouteColors.BorderSubtle,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = "HOW CONNECTING WORKS",
+            style = OnionRouteTypography.SectionHeader,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        // Normal mode row
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.padding(bottom = 10.dp)
+        ) {
+            // Indicator dot
+            Box(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (!isVpnActive) OnionRouteColors.Jade
+                        else OnionRouteColors.TextTertiary
+                    )
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = if (!isVpnActive) "Normal Connect (active)" else "Normal Connect",
+                    style = OnionRouteTypography.LabelMedium.copy(
+                        color = if (!isVpnActive) OnionRouteColors.Jade
+                                else OnionRouteColors.TextPrimary
+                    )
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Tor SOCKS5 runs on 127.0.0.1:9050. Apps must be " +
+                           "manually configured to use that proxy. Apps that " +
+                           "don't → connect with your real IP.",
+                    style = OnionRouteTypography.LabelSmall.copy(
+                        color = OnionRouteColors.TextSecondary,
+                        lineHeight = 16.sp
+                    )
+                )
+            }
+        }
+
+        // VPN mode row
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isVpnActive) OnionRouteColors.Jade
+                        else OnionRouteColors.TextTertiary
+                    )
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = if (isVpnActive) "VPN Mode (active)" else "VPN Mode",
+                    style = OnionRouteTypography.LabelMedium.copy(
+                        color = if (isVpnActive) OnionRouteColors.Jade
+                                else OnionRouteColors.TextPrimary
+                    )
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "All device traffic is routed through Tor via a " +
+                           "TUN interface. Every app is anonymized automatically " +
+                           "(no per-app config). Toggle the VPN chip above to enable.",
+                    style = OnionRouteTypography.LabelSmall.copy(
+                        color = OnionRouteColors.TextSecondary,
+                        lineHeight = 16.sp
+                    )
+                )
+            }
+        }
     }
 }
