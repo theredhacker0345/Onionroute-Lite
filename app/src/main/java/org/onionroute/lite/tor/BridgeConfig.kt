@@ -160,6 +160,11 @@ class BridgeConfig(private val context: Context) {
      *   - webtunnel:// URI
      *   - Multiple lines separated by newlines
      *
+     * Also decodes HTML entities (e.g. `&#43;` → `+`) because BridgeDB's
+     * web page returns HTML-encoded bridge lines — if a user copy-pastes
+     * from BridgeDB, the cert string would contain `&#43;` instead of `+`
+     * and Tor would silently fail to parse the cert.
+     *
      * Returns the number of valid bridges added.
      */
     fun parseAndAddBridges(text: String): Int {
@@ -170,25 +175,28 @@ class BridgeConfig(private val context: Context) {
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .forEach { line ->
+                // Defensive: decode HTML entities that may have come from a
+                // copy-paste of BridgeDB's HTML-encoded bridge page.
+                val entityDecoded = decodeHtmlEntities(line)
                 val bridgeLine = when {
                     // Handle bridge:// URI prefix (some QR codes use this)
-                    line.startsWith("bridge://", ignoreCase = true) -> {
-                        line.removePrefix("bridge://").removePrefix("Bridge://")
+                    entityDecoded.startsWith("bridge://", ignoreCase = true) -> {
+                        entityDecoded.removePrefix("bridge://").removePrefix("Bridge://")
                     }
                     // Handle obfs4:// URI format → convert to plain obfs4 line
-                    line.startsWith("obfs4://", ignoreCase = true) -> {
-                        convertUriToBridgeLine("obfs4", line)
+                    entityDecoded.startsWith("obfs4://", ignoreCase = true) -> {
+                        convertUriToBridgeLine("obfs4", entityDecoded)
                     }
                     // Handle snowflake:// URI format → convert to plain snowflake line
-                    line.startsWith("snowflake://", ignoreCase = true) -> {
-                        convertUriToBridgeLine("snowflake", line)
+                    entityDecoded.startsWith("snowflake://", ignoreCase = true) -> {
+                        convertUriToBridgeLine("snowflake", entityDecoded)
                     }
                     // Handle webtunnel:// URI format → convert to plain webtunnel line
-                    line.startsWith("webtunnel://", ignoreCase = true) -> {
-                        convertUriToBridgeLine("webtunnel", line)
+                    entityDecoded.startsWith("webtunnel://", ignoreCase = true) -> {
+                        convertUriToBridgeLine("webtunnel", entityDecoded)
                     }
                     // Already a plain bridge line
-                    else -> line
+                    else -> entityDecoded
                 }
 
                 val trimmed = bridgeLine.trim()
@@ -206,6 +214,21 @@ class BridgeConfig(private val context: Context) {
         }
 
         return newBridges.size
+    }
+
+    /**
+     * Decodes common HTML entities in bridge lines (defensive).
+     * Same set as BridgeUpdater.decodeHtmlEntities.
+     */
+    private fun decodeHtmlEntities(s: String): String {
+        return s
+            .replace("&#43;", "+")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&#x27;", "'")
     }
 
     /**
