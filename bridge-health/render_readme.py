@@ -145,9 +145,8 @@ def render_readme_section(health: dict) -> str:
 
 ![Bridge Status](https://img.shields.io/badge/bridges-{badge_text}-{badge_color}?style=for-the-badge&labelColor=1A1A1A)
 ![Checks](https://img.shields.io/badge/checks-{total_checks}-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
-![AI](https://img.shields.io/badge/AI-Qwen%202.5%203B-00E5C4?style=for-the-badge&labelColor=1A1A1A)
 
-An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner via llama.cpp — no external API) tests every bundled bridge every 30 minutes. If a bridge has been dead for 3+ consecutive checks, the AI opens a PR to swap it for a working replacement.
+A GitHub Actions workflow tests every bundled bridge every 15 minutes via TCP connectivity check. Dead bridges (3+ failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB. The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
 
 **Last check:** `{latest_check}`
 
@@ -156,17 +155,18 @@ An AI agent (Qwen 2.5 3B, running locally on the GitHub Actions runner via llama
 <details>
 <summary>How it works</summary>
 
-1. Every 30 min, a GitHub Actions runner installs `tor` + `llama.cpp`
-2. Tests each bridge in `Constants.kt` — real Tor bootstrap, 120s timeout
-3. If any bridge has 3+ consecutive failures, the AI agent decides:
-   - Fetch replacement bridges from Tor Project's BridgeDB
-   - Test each replacement live (must bootstrap in < 30s)
-   - Ask the local LLM: "should we swap? which replacement?"
-4. If the AI says swap, the workflow edits `Constants.kt` and opens a PR
-5. The PR description is written by the AI with evidence + reasoning
-6. You review and merge — the AI never auto-merges
+1. Every 15 min, a GitHub Actions runner TCP-tests all bridges in `Constants.kt`
+2. If any bridge has 3+ consecutive failures:
+   - Fetch replacement bridges from Tor Project's BridgeDB (multiple requests per transport type)
+   - TCP-test each candidate (5s timeout)
+   - Swap dead bridges for verified-alive ones
+3. Write `alive_bridges.json` with all alive bridges (fetched by the app at runtime)
+4. Commit changes to `main` — the app picks up new bridges automatically
 
-**AI details:** Qwen 2.5 3B Instruct (Q4_K_M, 2GB, Apache 2.0) via llama.cpp — ~25s per decision on 4-core CPU. Cost: $0. Model cached in `actions/cache`.
+The app uses a 3-layer bridge sourcing strategy:
+1. **Runtime JSON** — fetches `alive_bridges.json` from GitHub (freshest, CI-verified)
+2. **Local cache** — last successful fetch (works offline, 24h validity)
+3. **Hardcoded** — `Constants.kt` fallback (auto-swapped by CI)
 
 Workflow: [`.github/workflows/bridge-health.yml`](.github/workflows/bridge-health.yml)
 
