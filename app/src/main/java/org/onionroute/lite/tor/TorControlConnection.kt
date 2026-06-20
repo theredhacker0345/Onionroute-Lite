@@ -177,8 +177,14 @@ class TorControlConnection(private val context: Context) {
         onStatusEvent = onStatus
         onBootstrapEvent = onBootstrap
 
-        // Subscribe to BW, CIRC, STATUS_CLIENT, and BOOTSTRAP events
+        // Subscribe to BW, CIRC, STATUS_CLIENT, and BOOTSTRAP events.
+        // IMPORTANT: send SETEVENTS BEFORE starting the listener thread so
+        // the 250 OK response is the first thing the listener reads. The
+        // listener's 250-OK handler will see no pending request and just
+        // skip — which is correct.
+        Log.d(tag, "Subscribing to events: SETEVENTS BW CIRC STATUS_CLIENT BOOTSTRAP")
         sendCommand("SETEVENTS BW CIRC STATUS_CLIENT BOOTSTRAP\r\n")
+        Log.d(tag, "SETEVENTS command sent, starting listener thread")
 
         // Start listener thread — this is the ONLY thread that reads from inputStream
         listenerThread = Thread({
@@ -186,6 +192,7 @@ class TorControlConnection(private val context: Context) {
         }, "TorControlListener")
         listenerThread?.isDaemon = true
         listenerThread?.start()
+        Log.d(tag, "Listener thread started")
     }
 
     /**
@@ -297,11 +304,18 @@ class TorControlConnection(private val context: Context) {
      */
     private fun listenForEvents() {
         try {
-            val stream = inputStream ?: return
+            val stream = inputStream ?: run {
+                Log.e(tag, "Listener: inputStream is null, exiting")
+                return
+            }
 
+            Log.d(tag, "Listener: starting event loop")
             while (isConnected && !Thread.currentThread().isInterrupted) {
                 val line = readLineFromStream(stream) ?: break  // null = EOF
                 if (line.isEmpty()) continue
+
+                // Debug: log every line received so we can see what Tor is sending
+                Log.d(tag, "Listener recv: $line")
 
                 when {
                     // Async events (650 ...)
@@ -355,6 +369,7 @@ class TorControlConnection(private val context: Context) {
             // Unblock any pending GETINFO/SIGNAL callers so they don't wait
             // the full 5-10s timeout. They'll see null/false (no response
             // value stored) which is the correct "disconnected" behaviour.
+            Log.w(tag, "Listener: event loop exited (isConnected=$isConnected, interrupted=${Thread.currentThread().isInterrupted})")
             for ((_, latch) in pendingResponses) {
                 latch.countDown()
             }
