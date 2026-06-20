@@ -109,6 +109,15 @@ class ConnectTileService : TileService() {
             // prematurely would cause a stale state if Tor fails to stop.
             // (VPN_ENABLED is OK to clear here because we just sent STOP_VPN.)
             prefs.edit().putBoolean(Constants.PREF_VPN_ENABLED, false).apply()
+
+            // Optimistic UI feedback — show "Disconnecting" subtitle while
+            // we wait for the DISCONNECTED broadcast. The tile will be
+            // refreshed again by the broadcast receiver.
+            qsTile?.let { t ->
+                t.state = Tile.STATE_ACTIVE
+                t.subtitle = "Disconnecting…"
+                t.updateTile()
+            }
         } else {
             // Start Tor
             Log.i(tag, "Toggling ON — starting Tor")
@@ -125,9 +134,17 @@ class ConnectTileService : TileService() {
             // write it when bootstrap completes and it broadcasts CONNECTED.
             // Writing it prematurely caused the tile to show "Connected"
             // even when Tor failed to bootstrap.
-        }
 
-        updateTile()
+            // Optimistic UI feedback — show "Connecting…" subtitle while
+            // we wait for BOOTSTRAPPING / CONNECTED broadcasts. Without
+            // this, the tile looks unresponsive for several seconds
+            // until the first broadcast arrives.
+            qsTile?.let { t ->
+                t.state = Tile.STATE_UNAVAILABLE
+                t.subtitle = "Connecting…"
+                t.updateTile()
+            }
+        }
     }
 
     // ── Tile State ─────────────────────────────────────────────────

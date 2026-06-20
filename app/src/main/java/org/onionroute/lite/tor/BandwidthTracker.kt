@@ -9,9 +9,18 @@ import java.util.concurrent.atomic.AtomicLong
  * Receives real-time bandwidth events from the Tor control connection
  * and calculates current speed and cumulative totals.
  *
- * Previously polled GETINFO traffic/read and traffic/written as a fallback,
- * but this caused a race condition with the event listener thread on the
- * shared InputStream. Now we rely exclusively on async BW events.
+ * Tor BW event format:
+ *   650 BW <bytes-read-last-second> <bytes-written-last-second>
+ *
+ * IMPORTANT: Tor's BW event reports the BYTES TRANSFERRED IN THE LAST
+ * SECOND (an instantaneous rate), NOT a cumulative counter. So:
+ *   - `down` / `up` from the event are already a speed (bytes/sec).
+ *   - To compute cumulative totals, we SUM the per-second deltas.
+ *
+ * Previously this code treated the values as cumulative and computed
+ * `speed = delta/delta_time`, which gave wildly wrong speed numbers
+ * (because `delta` was already a speed, not a delta) and totals that
+ * drifted because `delta_time` was often ~0 between back-to-back events.
  */
 class BandwidthTracker(
     private val onUpdate: (speedDown: Long, speedUp: Long, totalDown: Long, totalUp: Long) -> Unit
@@ -23,9 +32,6 @@ class BandwidthTracker(
 
     private val totalDown = AtomicLong(0)
     private val totalUp = AtomicLong(0)
-    private val lastDown = AtomicLong(0)
-    private val lastUp = AtomicLong(0)
-    private val lastTimestamp = AtomicLong(0)
 
     // ── Public API ────────────────────────────────────────────────
 
@@ -42,7 +48,6 @@ class BandwidthTracker(
         onBootstrap: (progress: Int, tag: String) -> Unit = { _, _ -> }
     ) {
         controlConnection = connection
-        lastTimestamp.set(System.currentTimeMillis())
 
         // Subscribe to async bandwidth + bootstrap events — no GETINFO polling needed
         connection.subscribeEvents(
@@ -63,8 +68,6 @@ class BandwidthTracker(
 
         totalDown.set(0)
         totalUp.set(0)
-        lastDown.set(0)
-        lastUp.set(0)
 
         Log.i(tag, "BandwidthTracker stopped")
     }
@@ -75,29 +78,28 @@ class BandwidthTracker(
     fun resetTotals() {
         totalDown.set(0)
         totalUp.set(0)
-        lastDown.set(0)
-        lastUp.set(0)
         Log.d(tag, "Bandwidth totals reset")
     }
 
     // ── Internal ──────────────────────────────────────────────────
 
+    /**
+     * Handles a Tor BW event.
+     *
+     * `down` and `up` are bytes transferred in the last second (i.e. already
+     * a speed in B/s). We add them to the cumulative totals.
+     */
     private fun handleBandwidthEvent(down: Long, up: Long) {
-        val now = System.currentTimeMillis()
-        val elapsed = (now - lastTimestamp.get()).coerceAtLeast(1)
+        // Sanity: Tor sometimes reports 0 or negative on edge cases; coerce.
+        val safeDown = down.coerceAtLeast(0)
+        val safeUp = up.coerceAtLeast(0)
 
-        // Calculate speed (bytes per second)
-        val speedDown = ((down - lastDown.get()).coerceAtLeast(0) * 1000L) / elapsed
-        val speedUp = ((up - lastUp.get()).coerceAtLeast(0) * 1000L) / elapsed
+        // Accumulate cumulative totals. Each BW event represents 1 second
+        // of traffic, so the values are both the speed (B/s) AND the
+        // increment to the total.
+        totalDown.addAndGet(safeDown)
+        totalUp.addAndGet(safeUp)
 
-        // Update totals
-        totalDown.addAndGet((down - lastDown.get()).coerceAtLeast(0))
-        totalUp.addAndGet((up - lastUp.get()).coerceAtLeast(0))
-
-        lastDown.set(down)
-        lastUp.set(up)
-        lastTimestamp.set(now)
-
-        onUpdate(speedDown, speedUp, totalDown.get(), totalUp.get())
+        onUpdate(safeDown, safeUp, totalDown.get(), totalUp.get())
     }
 }

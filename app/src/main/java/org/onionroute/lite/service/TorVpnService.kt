@@ -199,10 +199,15 @@ class TorVpnService : VpnService() {
             }
 
             // Update preferences
+            // NOTE: only write PREF_VPN_ENABLED here. Do NOT touch
+            // PREF_TOR_CONNECTED — VPN being up doesn't imply Tor is up.
+            // (Previously this set PREF_TOR_CONNECTED=true unconditionally,
+            //  which made the QS tile show "Connected" even when Tor wasn't
+            //  running. The tile state now correctly reflects Tor's actual
+            //  state, which is managed by TorService.broadcastStatus().)
             val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
             prefs.edit()
                 .putBoolean(Constants.PREF_VPN_ENABLED, true)
-                .putBoolean(Constants.PREF_TOR_CONNECTED, true)
                 .apply()
 
             updateNotification("OnionRoute Lite — VPN active")

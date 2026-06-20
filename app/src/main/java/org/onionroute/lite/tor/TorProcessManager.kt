@@ -191,7 +191,9 @@ class TorProcessManager(private val context: Context) {
 
         // BridgeUpdater — fetches alive bridges from GitHub at runtime.
         // Falls back to hardcoded bridges in Constants.kt if fetch fails.
-        val bridgeUpdater = BridgeUpdater(context)
+        // Use the process-wide singleton so the cache is shared with
+        // MainActivity (which triggers fetchBridges on startup).
+        val bridgeUpdater = BridgeUpdater.get(context)
 
         val torrcContent = buildString {
             appendLine("# OnionRoute Lite torrc — auto-generated")
@@ -287,6 +289,34 @@ class TorProcessManager(private val context: Context) {
                 }
                 appendLine("UseBridges 1")
                 appendLine()
+            }
+
+            // ── Custom bridges (manually added by user via Bridge screen) ──
+            // These are user-supplied bridge lines stored in SharedPreferences
+            // by BridgeConfig.parseAndAddBridges(). They are ADDED IN ADDITION
+            // to any of the toggle-controlled bridge sets above — the user can
+            // mix custom bridges with built-in ones. If any bridge is in the
+            // config (built-in or custom), UseBridges must be 1.
+            val customBridges = BridgeConfig(context).getCustomBridges()
+            if (customBridges.isNotEmpty()) {
+                appendLine("# User-supplied custom bridges")
+                // For obfs4/snowflake/meek bridges that need a transport plugin,
+                // make sure the plugin is registered even if the user didn't
+                // toggle the corresponding built-in set on.
+                val needsObfs4Plugin = customBridges.any { it.startsWith("obfs4", ignoreCase = true) }
+                val needsSnowflakePlugin = customBridges.any { it.startsWith("snowflake", ignoreCase = true) }
+                if (needsObfs4Plugin && obfs4Path != null && !useObfs4) {
+                    appendLine("ClientTransportPlugin obfs4 exec $obfs4Path")
+                }
+                if (needsSnowflakePlugin && snowflakePath != null && !useSnowflake) {
+                    appendLine("ClientTransportPlugin snowflake exec $snowflakePath")
+                }
+                customBridges.forEach { bridge ->
+                    appendLine("Bridge $bridge")
+                }
+                appendLine("UseBridges 1")
+                appendLine()
+                Log.i(tag, "Added ${customBridges.size} custom bridges from user prefs")
             }
         }
 

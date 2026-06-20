@@ -23,6 +23,27 @@ OUTPUT_FILE = Path("bridge-health/alive_bridges.json")
 CONSTANTS_FILE = Path("app/src/main/java/org/onionroute/lite/Constants.kt")
 
 
+def decode_html_entities(s: str) -> str:
+    """Decode common HTML entities in bridge lines.
+
+    BridgeDB's web page HTML-encodes the `+` character in obfs4 cert
+    strings as `&#43;`. Tor cannot parse cert with `&#43;` — it needs
+    the literal `+`. We decode all known entities so the bridge lines
+    are valid when the app writes them to torrc.
+    """
+    if not s:
+        return s
+    return (
+        s.replace("&#43;", "+")
+         .replace("&amp;", "&")
+         .replace("&lt;", "<")
+         .replace("&gt;", ">")
+         .replace("&quot;", '"')
+         .replace("&#39;", "'")
+         .replace("&#x27;", "'")
+    )
+
+
 def parse_bridges_from_constants():
     """Parse ALL bridges from Constants.kt (the hardcoded fallback set)."""
     if not CONSTANTS_FILE.exists():
@@ -91,6 +112,9 @@ def main():
     # For each bridge in Constants.kt, if it was tested alive, include it
     # If not tested (new), include it anyway — the app will test at runtime
     for bridge in all_bridges:
+        # Defensive: decode any HTML entities that may have slipped through
+        # (e.g., if a future fetch script reads from BridgeDB's HTML page).
+        bridge = decode_html_entities(bridge)
         transport = bridge.split(" ")[0].lower()
         if transport in output:
             if bridge not in output[transport]:

@@ -49,15 +49,27 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
     var installedApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
+    // Per-app routed state, kept in a MutableStateMap so toggling an app
+    // triggers recomposition WITHOUT having to reload the entire app list
+    // (which would block the UI thread on PackageManager queries).
+    // Initial values are loaded on demand (lazy) when each row first renders.
+    val routedStates = remember { mutableStateMapOf<String, Boolean>() }
+
     // Initial load + reload when routing mode changes (selection state
     // differs between ALL and SELECTED_ONLY modes)
     LaunchedEffect(routingMode) {
         isLoading = true
+        routedStates.clear()
         // Run the PackageManager queries + icon loads off the main thread.
         // Default Dispatchers.IO is appropriate — this is exactly the kind
         // of blocking I/O it's designed for.
         installedApps = withContext(Dispatchers.IO) {
             manager.getInstalledApps()
+        }
+        // Pre-populate routed state for every app in one shot. This is
+        // fast because isAppTorRouted just reads from SharedPreferences.
+        for (app in installedApps) {
+            routedStates[app.packageName] = manager.isAppTorRouted(app.packageName)
         }
         isLoading = false
     }
@@ -160,11 +172,12 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
                     items(userApps, key = { it.packageName }) { app ->
                         AppRow(
                             app = app,
-                            isRouted = manager.isAppTorRouted(app.packageName),
-                            onToggle = { routed ->
-                                manager.setAppTorRouted(app.packageName, routed)
-                                // Force recomposition by refreshing the list reference
-                                installedApps = manager.getInstalledApps()
+                            isRouted = routedStates[app.packageName] ?: false,
+                            onToggle = { newRouted ->
+                                // Persist to SharedPreferences AND update the
+                                // reactive map. Both are safe on the main thread.
+                                manager.setAppTorRouted(app.packageName, newRouted)
+                                routedStates[app.packageName] = newRouted
                             }
                         )
                     }
@@ -183,10 +196,10 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
                     items(systemApps, key = { it.packageName }) { app ->
                         AppRow(
                             app = app,
-                            isRouted = manager.isAppTorRouted(app.packageName),
-                            onToggle = { routed ->
-                                manager.setAppTorRouted(app.packageName, routed)
-                                installedApps = manager.getInstalledApps()
+                            isRouted = routedStates[app.packageName] ?: false,
+                            onToggle = { newRouted ->
+                                manager.setAppTorRouted(app.packageName, newRouted)
+                                routedStates[app.packageName] = newRouted
                             }
                         )
                     }

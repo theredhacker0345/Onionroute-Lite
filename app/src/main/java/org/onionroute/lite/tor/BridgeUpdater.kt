@@ -23,8 +23,15 @@ import org.json.JSONObject
  *   3. Hardcoded fallback (Constants.kt — may be stale but works offline)
  *
  * No user data sent. No tracking. Just a GET request for a public JSON file.
+ *
+ * Implemented as a process-wide singleton so the in-memory cache is shared
+ * between MainActivity (which triggers fetchBridges on startup) and
+ * TorProcessManager (which reads getBridges at torrc-generation time).
+ * Previously each call site created its own instance, which meant the
+ * cache loaded from disk on every Tor start even if MainActivity had
+ * already fetched a fresher copy in memory.
  */
-class BridgeUpdater(private val context: Context) {
+class BridgeUpdater private constructor(private val context: Context) {
 
     private val tag = "BridgeUpdater"
 
@@ -33,11 +40,27 @@ class BridgeUpdater(private val context: Context) {
             "https://raw.githubusercontent.com/darkmaster0345/Onionroute-Lite/main/bridge-health/alive_bridges.json"
         private const val CACHE_FILE = "alive_bridges.json"
         private val CACHE_MAX_AGE_MS = TimeUnit.HOURS.toMillis(24) // 24h cache validity
+
+        @Volatile private var INSTANCE: BridgeUpdater? = null
+        private val initLock = Any()
+
+        /** Returns the process-wide singleton. Thread-safe. */
+        fun get(context: Context): BridgeUpdater {
+            val cached = INSTANCE
+            if (cached != null) return cached
+            synchronized(initLock) {
+                // Double-check inside the lock
+                INSTANCE?.let { return it }
+                val newInstance = BridgeUpdater(context.applicationContext)
+                INSTANCE = newInstance
+                return newInstance
+            }
+        }
     }
 
     /** Cached bridges grouped by transport type. */
-    private var cachedBridges: Map<String, List<String>> = emptyMap()
-    private var lastFetchTime: Long = 0
+    @Volatile private var cachedBridges: Map<String, List<String>> = emptyMap()
+    @Volatile private var lastFetchTime: Long = 0
 
     init {
         loadFromCache()
@@ -85,6 +108,11 @@ class BridgeUpdater(private val context: Context) {
 
     /**
      * Parse the JSON response and save to cache.
+     *
+     * BridgeDB (the source the CI fetches from) HTML-encodes the `+` character
+     * in obfs4 cert strings as `&#43;` on its web page. Tor cannot parse a
+     * cert with `&#43;` — it needs the literal `+`. We decode all known
+     * HTML entities here so the bridge lines are valid when written to torrc.
      */
     private fun parseAndCache(json: String) {
         val obj = JSONObject(json)
@@ -93,19 +121,44 @@ class BridgeUpdater(private val context: Context) {
         for (transport in listOf("obfs4", "webtunnel", "snowflake")) {
             val arr = obj.optJSONArray(transport)
             if (arr != null && arr.length() > 0) {
-                bridges[transport] = (0 until arr.length()).map { arr.getString(it) }
+                bridges[transport] = (0 until arr.length())
+                    .map { decodeHtmlEntities(arr.getString(it)) }
+                    .filter { it.isNotEmpty() }
             }
         }
 
         cachedBridges = bridges
         lastFetchTime = System.currentTimeMillis()
 
-        // Save to local cache file
+        // Save to local cache file (save the DECODED version so future loads
+        // don't need to decode again).
         try {
-            File(context.filesDir, CACHE_FILE).writeText(json)
+            // Re-serialize the decoded bridges back to JSON for caching.
+            val cacheObj = JSONObject()
+            cacheObj.put("last_updated", java.time.Instant.now().toString())
+            for ((transport, list) in bridges) {
+                cacheObj.put(transport, org.json.JSONArray(list))
+            }
+            File(context.filesDir, CACHE_FILE).writeText(cacheObj.toString())
         } catch (e: Exception) {
             Log.w(tag, "Failed to save cache: ${e.message}")
         }
+    }
+
+    /**
+     * Decodes the most common HTML entities found in BridgeDB output.
+     * BridgeDB web pages HTML-encode `<`, `>`, `&`, `+`, `"`, `'`.
+     * We decode these back to literal characters so Tor can parse the bridge lines.
+     */
+    private fun decodeHtmlEntities(s: String): String {
+        return s
+            .replace("&#43;", "+")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&#x27;", "'")
     }
 
     /**

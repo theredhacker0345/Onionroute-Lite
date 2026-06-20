@@ -261,7 +261,13 @@ class TorService : Service() {
     }
 
     private fun stopTorInternal() {
-        if (!isTorRunning) return
+        if (!isTorRunning) {
+            // Even if Tor wasn't fully running, we may have a half-started
+            // process + control connection to clean up. Also: this is called
+            // from the bootstrap-failure path where isTorRunning is still
+            // false, so we MUST still clean up here. Don't early-return.
+            Log.d(tag, "stopTorInternal: Tor wasn't fully running, cleaning up anyway")
+        }
 
         Log.i(tag, "Stopping Tor daemon…")
 
@@ -278,6 +284,31 @@ class TorService : Service() {
         torProcessManager = null
         torControlConnection = null
         isTorRunning = false
+
+        // If VPN is active and Tor died (intentionally or unexpectedly),
+        // we must also stop the VPN. Without this, the TUN interface stays
+        // up but tun2socks can't reach 127.0.0.1:9050 (Tor's SOCKS5) —
+        // the user would see "VPN active" but every app would fail to
+        // load anything. Stopping the VPN gives the user a clear signal
+        // that the connection is gone.
+        //
+        // If kill switch is ENABLED, we intentionally keep the VPN up so
+        // traffic is blocked (no SOCKS5 forwarder → no traffic flows).
+        // The user explicitly opted into "block everything if Tor dies".
+        val killSwitchOn = killSwitch?.let { KillSwitch.isEnabledInPrefs(this) } ?: false
+        val vpnActive = isVpnActive()
+        if (vpnActive && !killSwitchOn) {
+            Log.i(tag, "Stopping VPN because Tor disconnected (kill switch OFF)")
+            val vpnStopIntent = Intent(this, TorVpnService::class.java).apply {
+                action = Constants.ACTION_STOP_VPN
+            }
+            startService(vpnStopIntent)
+            // Update prefs so the QS tile / MainActivity reflect the actual state
+            getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putBoolean(Constants.PREF_VPN_ENABLED, false)
+                .apply()
+        }
 
         killSwitch?.onTorDisconnected()
         Log.i(tag, "Tor stopped")

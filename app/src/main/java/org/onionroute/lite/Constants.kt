@@ -129,11 +129,18 @@ object Constants {
     // manually in bridge settings if needed.
     const val SNOWFLAKE_ICE_SERVERS = "stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478"
 
-    // ── Default obfs4 Bridges ─────────────────────────────────
+    // HTML-decoded obfs4 bridges.
+    // BridgeDB returns HTML-encoded bridge lines on its web page (the `+`
+    // character in cert strings is encoded as `&#43;`). Tor cannot parse
+    // cert strings with `&#43;` — it needs the literal `+`. We decode the
+    // entities here so the bridge lines are valid when written to torrc.
+    // Without this fix, obfs4 bridges silently fail to bootstrap.
     val DEFAULT_OBFS4_BRIDGES = listOf(
-        "obfs4 80.96.58.89:9130 09F8EE9BBF2224564255A69C75D2BDED0C11ED69 cert=eDeANY48aUHUkN93TkyqqOpWfu7CFUcyR8q6SwbRcg1pLPgWL8GPpt&#43;&#43;DakdOkgeqmQrUg iat-mode=0",
-        "obfs4 129.151.27.14:3721 159E2EE0E954B669865AAF963EA534884850E6AD cert=Yngpf&#43;xcO4yraE/51Q3Kl6k2&#43;mQvaK2wPk&#43;HsP4cDs5zLJU83gyajohigzmTSoMEfyBUDg iat-mode=0",
-        "obfs4 82.64.193.83:12867 294AF2AD929814DB41F9AB6A8B9D0E17C6EFA6B7 cert=ixnzOa7SUh45eHpgKJJwSCuRV17DxLgLYWb4qtLgqsJbD32yfNB9cfDSvgi7XANsUhO&#43;aw iat-mode=0"
+        "obfs4 80.96.58.89:9130 09F8EE9BBF2224564255A69C75D2BDED0C11ED69 cert=eDeANY48aUHUkN93TkyqqOpWfu7CFUcyR8q6SwbRcg1pLPgWL8GPpt++DakdOkgeqmQrUg iat-mode=0",
+        "obfs4 129.151.27.14:3721 159E2EE0E954B669865AAF963EA534884850E6AD cert=Yngpf+xcO4yraE/51Q3Kl6k2+mQvaK2wPk+HsP4cDs5zLJU83gyajohigzmTSoMEfyBUDg iat-mode=0",
+        "obfs4 82.64.193.83:12867 294AF2AD929814DB41F9AB6A8B9D0E17C6EFA6B7 cert=ixnzOa7SUh45eHpgKJJwSCuRV17DxLgLYWb4qtLgqsJbD32yfNB9cfDSvgi7XANsUhO+aw iat-mode=0",
+        "obfs4 89.40.206.72:37171 2CC3655B4CE0DC10FD8E67457D8F7A0F2FEFDAC0 cert=/IK083k+A2mGBVAE622gy81kn409GY+84DP8+L8ovLdMPY1UcPano+mA3FAvnz0WrNmVVg iat-mode=0",
+        "obfs4 159.203.18.175:5846 76860AA01FAB2927E8805B4165C579BAB4315A5D cert=80m7x5D0p1neEUzCTWzdpHbCXom3QIecgIAvGTlnpgKyVPT/0TPoXJQxWmnLCbNQFj9SbA iat-mode=0"
     )
 
     // ── Default WebTunnel Bridges ─────────────────────────────

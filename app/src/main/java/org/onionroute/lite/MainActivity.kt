@@ -12,13 +12,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.onionroute.lite.service.KindnessService
 import org.onionroute.lite.service.TorService
 import org.onionroute.lite.service.TorVpnService
 import org.onionroute.lite.tor.BridgeConfig
+import org.onionroute.lite.tor.BridgeUpdater
 import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.OnionRouteNavigation
 import org.onionroute.lite.ui.theme.ConnectionState
@@ -36,6 +39,15 @@ class MainActivity : ComponentActivity() {
     private val tag = "MainActivity"
 
     private val appState = OnionRouteAppState()
+
+    /**
+     * Application-scoped coroutine scope. Lives for the lifetime of this
+     * Activity (cleared in onDestroy). Used for fire-and-forget background
+     * work that should NOT outlive the activity (e.g. bridge fetching).
+     *
+     * SupervisorJob so one failed child doesn't cancel siblings.
+     */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -78,9 +90,11 @@ class MainActivity : ComponentActivity() {
         // BridgeUpdater fetches alive_bridges.json (CI-verified working
         // bridges) from the repo's raw URL. Falls back to cache →
         // hardcoded bridges. No user data sent, no tracking.
-        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-            val bridgeUpdater = org.onionroute.lite.tor.BridgeUpdater(this@MainActivity)
-            bridgeUpdater.fetchBridges()
+        // Uses an application-scoped coroutine scope instead of GlobalScope
+        // so the coroutine is properly tied to the app lifecycle (GlobalScope
+        // is fragile and discouraged by the Kotlin coroutines team).
+        appScope.launch(Dispatchers.IO) {
+            BridgeUpdater.get(this@MainActivity).fetchBridges()
         }
 
         // ── Restore camouflage icon preference ────────────────────
@@ -146,6 +160,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}
+        // Cancel any in-flight background work (e.g. bridge fetching).
+        appScope.cancel()
         super.onDestroy()
     }
 

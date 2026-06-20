@@ -10,7 +10,6 @@ import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Connection to the Tor control port for monitoring and controlling the Tor daemon.
@@ -40,8 +39,14 @@ class TorControlConnection(private val context: Context) {
     private var onStatusEvent: ((line: String) -> Unit)? = null
     private var onBootstrapEvent: ((progress: Int, tag: String) -> Unit)? = null
 
-    // ── Thread-safe GETINFO support ───────────────────────────────
-    // Pending GETINFO requests waiting for responses from the listener thread.
+    // ── Thread-safe GETINFO/SIGNAL support ────────────────────────
+    // The Tor control port is a FIFO protocol: requests are answered in the
+    // order they were sent. We use a ReentrantLock to serialize getInfo /
+    // signal calls so that only ONE request is in-flight at a time. This
+    // avoids the race condition where the 250-OK terminator from request A
+    // would unblock request B's latch (the previous implementation called
+    // `latch.countDown()` for ALL pending requests on every 250 OK).
+    private val requestLock = java.util.concurrent.locks.ReentrantLock()
     private val pendingResponses = ConcurrentHashMap<String, CountDownLatch>()
     private val responseValues = ConcurrentHashMap<String, String>()
 
@@ -164,11 +169,17 @@ class TorControlConnection(private val context: Context) {
     /**
      * Sends a GETINFO query to the control port (thread-safe).
      * The response is collected by the listener thread, not read directly.
+     *
+     * Uses [requestLock] to ensure only one GETINFO/SIGNAL is in-flight
+     * at a time, avoiding response mix-ups (the Tor control port is FIFO
+     * but the previous listener implementation would unblock ALL pending
+     * requests on every 250-OK terminator).
      */
     fun getInfo(keyword: String): String? {
         if (!isConnected) return null
 
-        return try {
+        requestLock.lock()
+        try {
             val latch = CountDownLatch(1)
             pendingResponses[keyword] = latch
 
@@ -181,36 +192,45 @@ class TorControlConnection(private val context: Context) {
                 return null
             }
 
-            responseValues.remove(keyword)
+            return responseValues.remove(keyword)
         } catch (e: Exception) {
             Log.e(tag, "GETINFO failed for $keyword", e)
             pendingResponses.remove(keyword)
-            null
+            return null
+        } finally {
+            requestLock.unlock()
         }
     }
 
     /**
      * Sends a SIGNAL to the control port.
+     *
+     * Uses a synthetic key "SIGNAL_<name>" so the listener can match the
+     * 250-OK terminator to this request. Serialized via [requestLock].
      */
     fun signal(signal: String): Boolean {
         if (!isConnected) return false
 
-        return try {
+        requestLock.lock()
+        try {
+            val key = "SIGNAL_$signal"
             val latch = CountDownLatch(1)
-            pendingResponses["SIGNAL_$signal"] = latch
+            pendingResponses[key] = latch
 
             sendCommand("SIGNAL $signal\r\n")
 
             if (!latch.await(5, TimeUnit.SECONDS)) {
-                pendingResponses.remove("SIGNAL_$signal")
+                pendingResponses.remove(key)
                 return false
             }
 
-            val resp = responseValues.remove("SIGNAL_$signal")
-            resp?.startsWith("250") == true
+            val resp = responseValues.remove(key)
+            return resp?.startsWith("250") == true
         } catch (e: Exception) {
             Log.e(tag, "SIGNAL $signal failed", e)
-            false
+            return false
+        } finally {
+            requestLock.unlock()
         }
     }
 
@@ -224,7 +244,7 @@ class TorControlConnection(private val context: Context) {
                 os.flush()
             }
         } catch (e: Exception) {
-            Log.e(tag, "Failed to send command: \$command", e)
+            Log.e(tag, "Failed to send command: $command", e)
             isConnected = false
         }
     }
@@ -277,18 +297,30 @@ class TorControlConnection(private val context: Context) {
                     }
                     line.startsWith("250 ") -> {
                         // Final line of a response: 250 OK
-                        // Signal any pending response that wasn't a key=value pair
-                        for ((key, latch) in pendingResponses) {
-                            if (!responseValues.containsKey(key)) {
-                                responseValues[key] = line
+                        // Only unblock the SINGLE oldest pending request — never
+                        // all of them. Because getInfo/signal are serialized
+                        // via requestLock, there is at most ONE pending request
+                        // at a time. We pop it and store the 250 OK line so the
+                        // caller (signal()) can check the response code.
+                        //
+                        // This is SIGNAL's response path (GETINFO's response is
+                        // always the 250- line above; SIGNAL's response is just
+                        // 250 OK with no preceding data line).
+                        val firstKey = pendingResponses.keys.firstOrNull()
+                        if (firstKey != null) {
+                            if (!responseValues.containsKey(firstKey)) {
+                                responseValues[firstKey] = line
                             }
-                            latch.countDown()
+                            pendingResponses.remove(firstKey)?.countDown()
                         }
                     }
                     line.startsWith("5") -> {
-                        // Error response — unblock any pending requests
-                        for ((_, latch) in pendingResponses) {
-                            latch.countDown()
+                        // Error response — unblock the SINGLE oldest pending
+                        // request only (same reason as above).
+                        val firstKey = pendingResponses.keys.firstOrNull()
+                        if (firstKey != null) {
+                            responseValues[firstKey] = line  // store error so caller sees it
+                            pendingResponses.remove(firstKey)?.countDown()
                         }
                     }
                 }
