@@ -335,23 +335,23 @@ Full license: [LICENSE](LICENSE)
 <!-- BRIDGE-HEALTH-START -->
 ## Bridge Health
 
-![Bridge Status](https://img.shields.io/badge/bridges-6/8%20alive-FFA500?style=for-the-badge&labelColor=1A1A1A)
-![Checks](https://img.shields.io/badge/checks-3-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![Bridge Status](https://img.shields.io/badge/bridges-7/8%20alive-FFA500?style=for-the-badge&labelColor=1A1A1A)
+![Checks](https://img.shields.io/badge/checks-4-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
 A GitHub Actions workflow tests every bundled bridge approximately every 1-4 hours (scheduled for every 15 min, but GitHub Actions throttles scheduled workflows on free repos). Dead bridges (2+ consecutive failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB, with cross-transport fallback at 5+ failures. The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
 
-**Last check:** `2026-06-21T15:27:28+00:00`
+**Last check:** `2026-06-21T15:50:01+00:00`
 
 | Bridge | Type | Status | Bootstrap | Failures | History |
 |--------|------|--------|-----------|----------|---------|
-| `80.96.58.89:9130` | obfs4 | ✅ alive | 0.13s | 0 | 🟩🟩🟩 |
-| `129.151.27.14:3721` | obfs4 | ✅ alive | 0.05s | 0 | 🟩🟩🟩 |
-| `82.64.193.83:12867` | obfs4 | ✅ alive | 0.09s | 0 | 🟩🟩🟩 |
-| `89.40.206.72:37171` | obfs4 | ⏱️ timeout | — | 1 | 🟩🟩🟨 |
-| `159.203.18.175:5846` | obfs4 | ✅ alive | 0.03s | 0 | 🟩🟩🟩 |
-| `159.69.22.241:443` | webtunnel | ✅ alive | 0.09s | 0 | 🟩🟩🟩 |
-| `37.218.240.2:443` | webtunnel | ⏱️ timeout | — | **3** ⚠️ | 🟨🟨🟨 |
-| `192.0.2.3:80` | snowflake | ✅ alive | 1.51s | 0 | 🟩🟩🟩 |
+| `80.96.58.89:9130` | obfs4 | ✅ alive | 0.13s | 0 | 🟩🟩🟩🟩 |
+| `129.151.27.14:3721` | obfs4 | ✅ alive | 0.06s | 0 | 🟩🟩🟩🟩 |
+| `82.64.193.83:12867` | obfs4 | ✅ alive | 0.09s | 0 | 🟩🟩🟩🟩 |
+| `89.40.206.72:37171` | obfs4 | ✅ alive | 0.01s | 0 | 🟩🟩🟨🟩 |
+| `159.203.18.175:5846` | obfs4 | ✅ alive | 0.02s | 0 | 🟩🟩🟩🟩 |
+| `159.69.22.241:443` | webtunnel | ✅ alive | 0.1s | 0 | 🟩🟩🟩🟩 |
+| `37.218.240.2:443` | webtunnel | ⏱️ timeout | — | **4** ⚠️ | 🟨🟨🟨🟨 |
+| `192.0.2.3:80` | snowflake | ✅ alive | 1.2s | 0 | 🟩🟩🟩🟩 |
 
 *History: 🟩 alive · 🟨 timeout · 🟥 dead · 🟧 error · ⬜ no data (last 6 checks)*
 
@@ -360,14 +360,14 @@ A GitHub Actions workflow tests every bundled bridge approximately every 1-4 hou
 
 1. Approximately every 1-4 hours (scheduled every 15 min, throttled by GitHub Actions), a runner tests all bridges in `Constants.kt`:
    - **obfs4 / webtunnel**: TCP connectivity check to the bridge's IP:port
-   - **snowflake**: HTTPS HEAD to the broker URL + UDP STUN Binding Request to each STUN server
+   - **snowflake**: HTTPS HEAD to the broker URL + UDP STUN Binding Request to each STUN server (the bridge line's IP is a virtual placeholder)
 2. If any bridge has 2+ consecutive failures:
    - Fetch replacement bridges from Tor Project's BridgeDB (multiple requests per transport type)
    - Filter out documentation/test addresses (RFC 3849 IPv6, RFC 5737 IPv4)
    - TCP-test each candidate (5s timeout)
    - Swap dead bridges for verified-alive ones of the same transport
-   - **Cross-transport fallback** at 5+ failures: swap for an alive bridge of any transport
-   - **Snowflake is never swapped** (virtual placeholder; infrastructure issue, not bridge-line issue)
+   - **Cross-transport fallback** at 5+ failures: if no same-transport replacement exists, swap for an alive bridge of any transport (better to have a working obfs4 than a dead webtunnel)
+   - **Snowflake is never swapped** (the bridge line is a fixed virtual placeholder pointing at the Tor Project broker; if snowflake is dead, it's an infrastructure issue, not a bridge-line issue)
 3. Write `alive_bridges.json` with all alive bridges (fetched by the app at runtime)
 4. Commit changes to `main` — the app picks up new bridges automatically
 
