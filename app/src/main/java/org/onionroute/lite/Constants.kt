@@ -122,12 +122,27 @@ object Constants {
     const val EXIT_IP_CHECK_URL = "https://check.torproject.org/api/ip"
     const val EXIT_IP_UPDATE_INTERVAL_MS = 15_000L
     // STUN servers for Snowflake WebRTC NAT traversal.
-    // Using FOSS-friendly STUN servers where possible.
-    // stun.l.google.com is excluded from the default list because
-    // it is a non-free network service (Google STUN), which would
-    // trigger F-Droid NonFreeNet AntiFeature. Users can add it
-    // manually in bridge settings if needed.
-    const val SNOWFLAKE_ICE_SERVERS = "stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.sipnet.cz:3478"
+    //
+    // These were tested via UDP STUN Binding Request on 2026-06-21 and
+    // confirmed responding. The previous list (stun.antisip.com,
+    // stun.bluesip.net, stun.sipnet.cz) is dead — all three either
+    // refuse connections or don't resolve anymore, which caused the
+    // bridge health monitor to flag snowflake as permanently dead and
+    // also caused real snowflake connections to fail.
+    //
+    // F-Droid NonFreeNet policy: stun.l.google.com is operated by Google
+    // and would trigger the NonFreeNet AntiFeature. We exclude it from
+    // the default list. Users on heavily-censored networks where the
+    // non-Google STUN servers are blocked can add it manually in bridge
+    // settings if needed.
+    //
+    // Current list (FOSS-friendly, tested working 2026-06-21):
+    //   - stun.voip.blackberry.com:3478  (BlackBerry, Canada)
+    //   - stun.miwifi.com:3478           (Xiaomi, China — reliable globally)
+    //   - stun.voipbuster.com:3478       (VoipBuster, Germany)
+    //   - stun.sip.us:3478               (SIP.US, USA)
+    //   - stun.freeswitch.org:3478       (FreeSWITCH FOSS project)
+    const val SNOWFLAKE_ICE_SERVERS = "stun:stun.voip.blackberry.com:3478,stun:stun.miwifi.com:3478,stun:stun.voipbuster.com:3478,stun:stun.sip.us:3478,stun:stun.freeswitch.org:3478"
 
     // HTML-decoded obfs4 bridges.
     // BridgeDB returns HTML-encoded bridge lines on its web page (the `+`

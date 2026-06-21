@@ -87,3 +87,10 @@ ci-results-v3/
 ci-results-final/
 ci-debug/
 ci-fixed/
+
+# Bridge health CI artifacts (regenerated each run, not source)
+/bridge-health/candidates.json
+/bridge-health/current_results.json
+/bridge-health/decision.json
+/bridge-health/health_data.json
+/bridge-health/need_ai.txt
