@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Check if any bridges need replacement (3+ consecutive failures)."""
+"""Check if any bridges need replacement (2+ consecutive failures).
+
+Threshold is 2 (not 3) because GitHub Actions throttles scheduled
+workflows on free repos — actual check frequency is every 1-4 hours,
+not every 15 minutes as the cron suggests. With 2 failures, a dead
+bridge gets swapped after 2-8 hours instead of 3-12 hours.
+"""
 import json
 from pathlib import Path
 
@@ -20,7 +26,7 @@ need = False
 for b in results:
     if b["status"] != "alive":
         count = failure_counts.get(b["line"], 0) + 1
-        if count >= 3:
+        if count >= 2:
             need = True
             break
 

@@ -163,10 +163,13 @@ def main():
     except (FileNotFoundError, json.JSONDecodeError):
         results = []
 
-    # Find dead bridges needing replacement (3+ failures)
+    # Find dead bridges needing replacement (2+ failures).
+    # Threshold is 2 (not 3) because GitHub Actions throttles scheduled
+    # workflows — actual check frequency is every 1-4 hours, so 2 failures
+    # = 2-8 hours before swap (acceptable), 3 failures = 3-12 hours (too slow).
     dead_bridges = []
     for r in results:
-        if r["status"] != "alive" and failure_counts.get(r["line"], 0) >= 3:
+        if r["status"] != "alive" and failure_counts.get(r["line"], 0) >= 2:
             dead_bridges.append(r)
 
     if not dead_bridges:
@@ -255,10 +258,10 @@ def main():
                 replacement = (i, c)
                 break
 
-        # If no same-transport replacement and 10+ failures, try cross-
+        # If no same-transport replacement and 5+ failures, try cross-
         # transport fallback (any alive bridge is better than a dead one
-        # that's been failing for hours).
-        if replacement is None and failure_count >= 10:
+        # that's been failing for 5+ hours).
+        if replacement is None and failure_count >= 5:
             for i, c in enumerate(candidates):
                 if i in used_candidates:
                     continue

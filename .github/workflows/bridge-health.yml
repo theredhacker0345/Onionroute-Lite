@@ -1,7 +1,12 @@
 # ══════════════════════════════════════════════════════════════
 # Bridge Health Monitor — Pure Python, No AI
 # ══════════════════════════════════════════════════════════════
-# Every 15 minutes:
+# Scheduled to run every 15 minutes, BUT GitHub Actions throttles
+# scheduled workflows on free repos — actual frequency is 1-4 hours
+# depending on GitHub's load. The off-peak minutes (7,22,37,52
+# instead of 0,15,30,45) help a little but don't fully solve it.
+#
+# Steps:
 #   1. TCP-test all bridges in Constants.kt (5s each)
 #   2. For dead bridges: fetch replacements from BridgeDB
 #   3. TCP-test candidates
@@ -18,7 +23,13 @@ name: Bridge Health
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # Run every 15 minutes at off-peak minutes (7, 22, 37, 52).
+    # GitHub Actions throttles scheduled workflows at peak times
+    # (top of every hour :00, :15, :30, :45 are the busiest).
+    # Using :07, :22, :37, :52 gives us a better chance of actually
+    # running on schedule. Still not guaranteed — GitHub may delay
+    # or skip runs entirely during high load.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 
 permissions:

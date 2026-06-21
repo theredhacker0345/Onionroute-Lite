@@ -338,7 +338,7 @@ Full license: [LICENSE](LICENSE)
 ![Bridge Status](https://img.shields.io/badge/bridges-6/8%20alive-FFA500?style=for-the-badge&labelColor=1A1A1A)
 ![Checks](https://img.shields.io/badge/checks-3-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-A GitHub Actions workflow tests every bundled bridge every 15 minutes via TCP connectivity check. Dead bridges (3+ failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB. The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
+A GitHub Actions workflow tests every bundled bridge approximately every 1-4 hours (scheduled for every 15 min, but GitHub Actions throttles scheduled workflows on free repos). Dead bridges (3+ consecutive failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB, with cross-transport fallback at 10+ failures. The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
 
 **Last check:** `2026-06-21T15:27:28+00:00`
 
