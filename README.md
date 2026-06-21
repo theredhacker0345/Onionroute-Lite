@@ -336,22 +336,22 @@ Full license: [LICENSE](LICENSE)
 ## Bridge Health
 
 ![Bridge Status](https://img.shields.io/badge/bridges-8/8%20alive-00E5C4?style=for-the-badge&labelColor=1A1A1A)
-![Checks](https://img.shields.io/badge/checks-9-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![Checks](https://img.shields.io/badge/checks-10-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
 A GitHub Actions workflow tests every bundled bridge approximately every 1-4 hours (scheduled for every 15 min, but GitHub Actions throttles scheduled workflows on free repos). Dead bridges (2+ consecutive failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB. If no same-transport replacement is available, cross-transport fallback kicks in immediately (e.g. a dead webtunnel gets replaced with an alive obfs4). The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
 
-**Last check:** `2026-06-21T20:43:56+00:00`
+**Last check:** `2026-06-21T22:04:11+00:00`
 
 | Bridge | Type | Status | Bootstrap | Failures | History |
 |--------|------|--------|-----------|----------|---------|
-| `80.96.58.89:9130` | obfs4 | ✅ alive | 0.17s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `129.151.27.14:3721` | obfs4 | ✅ alive | 0.04s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `82.64.193.83:12867` | obfs4 | ✅ alive | 0.13s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `89.40.206.72:37171` | obfs4 | ✅ alive | 0.06s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `159.203.18.175:5846` | obfs4 | ✅ alive | 0.08s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `159.69.22.241:443` | webtunnel | ✅ alive | 0.14s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `5.83.147.191:8080` | webtunnel | ✅ alive | 0.13s | 0 | ⬜⬜🟩🟩🟩🟩 |
-| `192.0.2.3:80` | snowflake | ✅ alive | 1.52s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `80.96.58.89:9130` | obfs4 | ✅ alive | 0.12s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `129.151.27.14:3721` | obfs4 | ✅ alive | 0.05s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `82.64.193.83:12867` | obfs4 | ✅ alive | 0.09s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `89.40.206.72:37171` | obfs4 | ✅ alive | 0.01s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `159.203.18.175:5846` | obfs4 | ✅ alive | 0.02s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `159.69.22.241:443` | webtunnel | ✅ alive | 0.09s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `5.83.147.191:8080` | webtunnel | ✅ alive | 0.09s | 0 | ⬜🟩🟩🟩🟩🟩 |
+| `192.0.2.3:80` | snowflake | ✅ alive | 1.33s | 0 | 🟩🟩🟩🟩🟩🟩 |
 
 *History: 🟩 alive · 🟨 timeout · 🟥 dead · 🟧 error · ⬜ no data (last 6 checks)*
 
