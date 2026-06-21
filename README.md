@@ -336,22 +336,22 @@ Full license: [LICENSE](LICENSE)
 ## Bridge Health
 
 ![Bridge Status](https://img.shields.io/badge/bridges-6/8%20alive-FFA500?style=for-the-badge&labelColor=1A1A1A)
-![Checks](https://img.shields.io/badge/checks-26-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
+![Checks](https://img.shields.io/badge/checks-27-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
 A GitHub Actions workflow tests every bundled bridge every 15 minutes via TCP connectivity check. Dead bridges (3+ failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB. The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
 
-**Last check:** `2026-06-21T04:08:54+00:00`
+**Last check:** `2026-06-21T08:41:36+00:00`
 
 | Bridge | Type | Status | Bootstrap | Failures | History |
 |--------|------|--------|-----------|----------|---------|
-| `80.96.58.89:9130` | obfs4 | ✅ alive | 0.22s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `129.151.27.14:3721` | obfs4 | ✅ alive | 0.04s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `82.64.193.83:12867` | obfs4 | ✅ alive | 0.13s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `89.40.206.72:37171` | obfs4 | ✅ alive | 0.06s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `159.203.18.175:5846` | obfs4 | ✅ alive | 0.04s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `159.69.22.241:443` | webtunnel | ✅ alive | 0.14s | 0 | 🟩🟩🟩🟩🟩🟩 |
-| `37.218.240.2:443` | webtunnel | ⏱️ timeout | — | **25** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
-| `192.0.2.3:80` | snowflake | ⏱️ timeout | — | **26** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
+| `80.96.58.89:9130` | obfs4 | ✅ alive | 0.14s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `129.151.27.14:3721` | obfs4 | ✅ alive | 0.06s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `82.64.193.83:12867` | obfs4 | ✅ alive | 0.09s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `89.40.206.72:37171` | obfs4 | ✅ alive | 0.01s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `159.203.18.175:5846` | obfs4 | ✅ alive | 0.02s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `159.69.22.241:443` | webtunnel | ✅ alive | 0.09s | 0 | 🟩🟩🟩🟩🟩🟩 |
+| `37.218.240.2:443` | webtunnel | ⏱️ timeout | — | **26** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
+| `192.0.2.3:80` | snowflake | ⏱️ timeout | — | **27** ⚠️ | 🟨🟨🟨🟨🟨🟨 |
 
 *History: 🟩 alive · 🟨 timeout · 🟥 dead · 🟧 error · ⬜ no data (last 6 checks)*
 
