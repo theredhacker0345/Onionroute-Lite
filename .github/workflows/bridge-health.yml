@@ -110,11 +110,14 @@ jobs:
 
           git add bridge-health/health.json \
                  bridge-health/alive_bridges.json \
-                 bridge-health/current_results.json \
                  README.md
 
           # Also add Constants.kt if it was modified by a swap
           git add app/src/main/java/org/onionroute/lite/Constants.kt 2>/dev/null || true
+
+          # NOTE: current_results.json, candidates.json, decision.json,
+          # health_data.json, need_ai.txt are gitignored (CI artifacts
+          # regenerated each run). Don't try to add them.
 
           if git diff --cached --quiet; then
             echo "[*] No changes to commit"
