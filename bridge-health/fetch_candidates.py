@@ -258,17 +258,27 @@ def main():
                 replacement = (i, c)
                 break
 
-        # If no same-transport replacement and 5+ failures, try cross-
-        # transport fallback (any alive bridge is better than a dead one
-        # that's been failing for 5+ hours).
-        if replacement is None and failure_count >= 5:
+        # If no same-transport replacement is available, fall back to
+        # cross-transport IMMEDIATELY (no separate threshold). Rationale:
+        # if we've already decided the bridge needs replacement (2+ failures)
+        # and BridgeDB has no working bridges of that transport, waiting
+        # longer just means more hours of a dead bridge for the user.
+        # Better to give them a working bridge of a different transport
+        # right away.
+        #
+        # The previous logic waited for 5+ failures before cross-transport
+        # fallback, which meant a dead webtunnel (BridgeDB has no working
+        # webtunnel bridges — all are IPv6 doc addresses) would stay dead
+        # for 5+ checks (5-20 hours) before being swapped. That's too slow.
+        if replacement is None:
             for i, c in enumerate(candidates):
                 if i in used_candidates:
                     continue
                 # Cross-transport fallback: use any alive candidate
                 replacement = (i, c)
                 print(f"[*] CROSS-TRANSPORT fallback: {dead_transport} "
-                      f"(failed {failure_count}x) → {c['transport']}", file=sys.stderr)
+                      f"(failed {failure_count}x, no same-transport replacement) "
+                      f"→ {c['transport']}", file=sys.stderr)
                 break
 
         if replacement is None:
