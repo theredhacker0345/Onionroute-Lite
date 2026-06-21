@@ -146,7 +146,7 @@ def render_readme_section(health: dict) -> str:
 ![Bridge Status](https://img.shields.io/badge/bridges-{badge_text}-{badge_color}?style=for-the-badge&labelColor=1A1A1A)
 ![Checks](https://img.shields.io/badge/checks-{total_checks}-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-A GitHub Actions workflow tests every bundled bridge every 15 minutes via TCP connectivity check. Dead bridges (3+ failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB. The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
+A GitHub Actions workflow tests every bundled bridge approximately every 1-4 hours (scheduled for every 15 min, but GitHub Actions throttles scheduled workflows on free repos). Dead bridges (2+ consecutive failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB, with cross-transport fallback at 5+ failures. The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
 
 **Last check:** `{latest_check}`
 
@@ -155,11 +155,16 @@ A GitHub Actions workflow tests every bundled bridge every 15 minutes via TCP co
 <details>
 <summary>How it works</summary>
 
-1. Every 15 min, a GitHub Actions runner TCP-tests all bridges in `Constants.kt`
-2. If any bridge has 3+ consecutive failures:
+1. Approximately every 1-4 hours (scheduled every 15 min, throttled by GitHub Actions), a runner tests all bridges in `Constants.kt`:
+   - **obfs4 / webtunnel**: TCP connectivity check to the bridge's IP:port
+   - **snowflake**: HTTPS HEAD to the broker URL + UDP STUN Binding Request to each STUN server (the bridge line's IP is a virtual placeholder)
+2. If any bridge has 2+ consecutive failures:
    - Fetch replacement bridges from Tor Project's BridgeDB (multiple requests per transport type)
+   - Filter out documentation/test addresses (RFC 3849 IPv6, RFC 5737 IPv4)
    - TCP-test each candidate (5s timeout)
-   - Swap dead bridges for verified-alive ones
+   - Swap dead bridges for verified-alive ones of the same transport
+   - **Cross-transport fallback** at 5+ failures: if no same-transport replacement exists, swap for an alive bridge of any transport (better to have a working obfs4 than a dead webtunnel)
+   - **Snowflake is never swapped** (the bridge line is a fixed virtual placeholder pointing at the Tor Project broker; if snowflake is dead, it's an infrastructure issue, not a bridge-line issue)
 3. Write `alive_bridges.json` with all alive bridges (fetched by the app at runtime)
 4. Commit changes to `main` — the app picks up new bridges automatically
 
