@@ -347,41 +347,98 @@ class TorService : Service() {
     }
 
     private fun toggleSnowflake() {
+        val oldValue = isSnowflakeEnabled
         isSnowflakeEnabled = !isSnowflakeEnabled
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(Constants.PREF_SNOWFLAKE_ENABLED, isSnowflakeEnabled).apply()
         Log.i(tag, "Snowflake ${if (isSnowflakeEnabled) "enabled" else "disabled"}")
 
-        // Restart Tor with new bridge config if running
+        // Restart Tor with new bridge config if running. If the restart
+        // fails (e.g. invalid bridge config, network issue), revert the
+        // preference and local state so the UI toggle stays consistent
+        // with what Tor is actually using.
         if (isTorRunning) {
-            stopTorInternal()
-            startTorAsync()
+            restartTorWithRevert(
+                prefKey = Constants.PREF_SNOWFLAKE_ENABLED,
+                oldValue = oldValue,
+                onRevert = { isSnowflakeEnabled = oldValue }
+            )
         }
     }
 
     private fun toggleObfs4() {
+        val oldValue = isObfs4Enabled
         isObfs4Enabled = !isObfs4Enabled
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(Constants.PREF_OBFS4_ENABLED, isObfs4Enabled).apply()
         Log.i(tag, "obfs4 ${if (isObfs4Enabled) "enabled" else "disabled"}")
 
-        // Restart Tor with new bridge config if running
         if (isTorRunning) {
-            stopTorInternal()
-            startTorAsync()
+            restartTorWithRevert(
+                prefKey = Constants.PREF_OBFS4_ENABLED,
+                oldValue = oldValue,
+                onRevert = { isObfs4Enabled = oldValue }
+            )
         }
     }
 
     private fun toggleWebTunnel() {
+        val oldValue = isWebTunnelEnabled
         isWebTunnelEnabled = !isWebTunnelEnabled
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(Constants.PREF_WEBTUNNEL_ENABLED, isWebTunnelEnabled).apply()
         Log.i(tag, "WebTunnel ${if (isWebTunnelEnabled) "enabled" else "disabled"}")
 
-        // Restart Tor with new bridge config if running
         if (isTorRunning) {
+            restartTorWithRevert(
+                prefKey = Constants.PREF_WEBTUNNEL_ENABLED,
+                oldValue = oldValue,
+                onRevert = { isWebTunnelEnabled = oldValue }
+            )
+        }
+    }
+
+    /**
+     * Restarts Tor after a bridge toggle. If the restart fails (Tor doesn't
+     * reach CONNECTED state), reverts the preference and calls [onRevert]
+     * so the local variable is restored to its pre-toggle value.
+     *
+     * This prevents the situation where:
+     *   1. User toggles Snowflake ON while Tor is running
+     *   2. Tor stops, tries to restart with Snowflake, fails
+     *   3. Prefs say Snowflake is enabled, but Tor isn't running
+     *   4. UI shows bridge toggle ON + connection ERROR (confusing)
+     *
+     * With this fix:
+     *   1. User toggles Snowflake ON while Tor is running
+     *   2. Tor stops, tries to restart with Snowflake, fails
+     *   3. Preference reverted to OFF, local var reverted to false
+     *   4. UI shows bridge toggle OFF + connection ERROR (consistent)
+     *
+     * The user can then try a different bridge or connect without bridges.
+     */
+    private fun restartTorWithRevert(
+        prefKey: String,
+        oldValue: Boolean,
+        onRevert: () -> Unit
+    ) {
+        serviceScope.launch {
             stopTorInternal()
-            startTorAsync()
+            startTor()
+            // startTor() broadcasts ERROR on failure and leaves isTorRunning=false.
+            // If Tor didn't connect, revert the preference and local state.
+            if (!isTorRunning) {
+                Log.w(tag, "Tor restart failed after bridge toggle — reverting $prefKey to $oldValue")
+                getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(prefKey, oldValue)
+                    .apply()
+                onRevert()
+                // Broadcast the reverted state so the UI updates.
+                // The ERROR broadcast from startTor() already informed the
+                // user that the connection failed; this just ensures the
+                // bridge toggle chip shows the correct state.
+            }
         }
     }
 
