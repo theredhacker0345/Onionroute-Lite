@@ -111,10 +111,14 @@ class ConnectTileService : TileService() {
             prefs.edit().putBoolean(Constants.PREF_VPN_ENABLED, false).apply()
 
             // Optimistic UI feedback — show "Disconnecting" subtitle while
-            // we wait for the DISCONNECTED broadcast. The tile will be
-            // refreshed again by the broadcast receiver.
+            // we wait for the DISCONNECTED broadcast. Use STATE_INACTIVE
+            // (not STATE_ACTIVE) so the tile visually starts turning gray
+            // immediately when the user taps to disconnect. The previous
+            // code used STATE_ACTIVE which kept the tile green during
+            // disconnect — visually confusing because the user just tapped
+            // to turn it OFF.
             qsTile?.let { t ->
-                t.state = Tile.STATE_ACTIVE
+                t.state = Tile.STATE_INACTIVE
                 t.subtitle = "Disconnecting…"
                 t.updateTile()
             }
