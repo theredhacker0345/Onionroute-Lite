@@ -183,7 +183,13 @@ class MainActivity : ComponentActivity() {
     fun requestVpnPermission() {
         if (appState.connectionState !is ConnectionState.Connected) {
             Toast.makeText(this, "Connect to Tor first", Toast.LENGTH_SHORT).show()
-            appState.updateVpnMode(false)
+            // Revert the VPN toggle UI to OFF without triggering the
+            // onVpnToggle callback (which would call stopVpn() unnecessarily
+            // — VPN was never started). We set isVpnMode directly instead
+            // of using updateVpnMode(false) to avoid the callback chain:
+            //   updateVpnMode(false) → onVpnToggle(false) → stopVpn()
+            //     → updateVpnMode(false) → ... (wasteful, harmless but noisy)
+            appState.isVpnMode = false
             return
         }
         val intent = VpnService.prepare(this)

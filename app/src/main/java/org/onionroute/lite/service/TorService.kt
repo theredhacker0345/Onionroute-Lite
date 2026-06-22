@@ -305,6 +305,11 @@ class TorService : Service() {
         lastExitIp = ""
 
         bandwidthTracker?.stop()
+        // Broadcast zero bandwidth so the UI clears stale totals/speeds
+        // when Tor disconnects. Without this, the HomeScreen keeps showing
+        // the last-known totals (e.g. "22.2 MB / 1.2 MB") until the next
+        // connection, which is misleading.
+        broadcastBandwidth(0, 0, 0, 0)
         torControlConnection?.disconnect()
         torProcessManager?.stopTor()
 
