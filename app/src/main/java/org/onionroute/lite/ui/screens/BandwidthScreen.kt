@@ -92,9 +92,15 @@ fun BandwidthScreen(appState: OnionRouteAppState) {
                 .background(OnionRouteColors.Surface1)
                 .border(1.dp, OnionRouteColors.BorderSubtle, RoundedCornerShape(8.dp))
         ) {
-            if (dataPoints.isEmpty()) return@Canvas
+            // Need at least 2 data points to draw a line. With 0 or 1 points,
+            // there's nothing meaningful to graph — just show the empty
+            // background. (The previous code had .coerceAtLeast(1) which
+            // prevented division by zero, but with 1 point it drew a
+            // misleading flat line at x=0. This early return is cleaner.)
+            if (dataPoints.size < 2) return@Canvas
             val maxSpeed = dataPoints.maxOrNull()?.coerceAtLeast(1f) ?: 1f
-            val stepX = size.width / (dataPoints.size - 1).coerceAtLeast(1)
+            // Safe now: dataPoints.size >= 2, so (size - 1) >= 1
+            val stepX = size.width / (dataPoints.size - 1)
 
             // Filled area
             val path = Path().apply {

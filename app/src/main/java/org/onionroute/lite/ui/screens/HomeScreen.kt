@@ -509,10 +509,12 @@ fun SpeedGraph(appState: OnionRouteAppState) {
                 shape = RoundedCornerShape(8.dp)
             )
     ) {
-        if (dataPoints.isEmpty()) return@Canvas
+        // Need at least 2 data points to draw a meaningful line.
+        if (dataPoints.size < 2) return@Canvas
 
         val maxSpeed = dataPoints.maxOrNull()?.coerceAtLeast(1f) ?: 1f
-        val stepX = size.width / (dataPoints.size - 1).coerceAtLeast(1)
+        // Safe: dataPoints.size >= 2, so (size - 1) >= 1
+        val stepX = size.width / (dataPoints.size - 1)
 
         // Draw filled area
         val path = androidx.compose.ui.graphics.Path().apply {
