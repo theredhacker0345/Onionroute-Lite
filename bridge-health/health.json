@@ -5312,6 +5312,75 @@
           "timestamp": "2026-06-28T14:53:06Z"
         }
       ]
+    },
+    {
+      "timestamp": "2026-06-28T16:20:59+00:00",
+      "bridges": [
+        {
+          "transport": "obfs4",
+          "line": "obfs4 80.96.58.89:9130 09F8EE9BBF2224564255A69C75D2BDED0C11ED69 cert=eDeANY48aUHUkN93TkyqqOpWfu7CFUcyR8q6SwbRcg1pLPgWL8GPpt++DakdOkgeqmQrUg iat-mode=0",
+          "status": "alive",
+          "bootstrap_time": 0.16,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:56Z"
+        },
+        {
+          "transport": "obfs4",
+          "line": "obfs4 129.151.27.14:3721 159E2EE0E954B669865AAF963EA534884850E6AD cert=Yngpf+xcO4yraE/51Q3Kl6k2+mQvaK2wPk+HsP4cDs5zLJU83gyajohigzmTSoMEfyBUDg iat-mode=0",
+          "status": "alive",
+          "bootstrap_time": 0.06,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:56Z"
+        },
+        {
+          "transport": "obfs4",
+          "line": "obfs4 82.64.193.83:12867 294AF2AD929814DB41F9AB6A8B9D0E17C6EFA6B7 cert=ixnzOa7SUh45eHpgKJJwSCuRV17DxLgLYWb4qtLgqsJbD32yfNB9cfDSvgi7XANsUhO+aw iat-mode=0",
+          "status": "alive",
+          "bootstrap_time": 0.11,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:56Z"
+        },
+        {
+          "transport": "obfs4",
+          "line": "obfs4 89.40.206.72:37171 2CC3655B4CE0DC10FD8E67457D8F7A0F2FEFDAC0 cert=/IK083k+A2mGBVAE622gy81kn409GY+84DP8+L8ovLdMPY1UcPano+mA3FAvnz0WrNmVVg iat-mode=0",
+          "status": "alive",
+          "bootstrap_time": 0.04,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:56Z"
+        },
+        {
+          "transport": "obfs4",
+          "line": "obfs4 159.203.18.175:5846 76860AA01FAB2927E8805B4165C579BAB4315A5D cert=80m7x5D0p1neEUzCTWzdpHbCXom3QIecgIAvGTlnpgKyVPT/0TPoXJQxWmnLCbNQFj9SbA iat-mode=0",
+          "status": "alive",
+          "bootstrap_time": 0.03,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:56Z"
+        },
+        {
+          "transport": "webtunnel",
+          "line": "webtunnel 159.69.22.241:443 40D1E0A98733F1E3E0548BD2F2B3C7B6B08C93B7 url=https://wt-1.broker.torproject.org/webtunnel/line/5a5a6463-05a0-4c44-bef7-40e3e2e128f2 ver=0.4.0",
+          "status": "alive",
+          "bootstrap_time": 0.12,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:56Z"
+        },
+        {
+          "transport": "webtunnel",
+          "line": "obfs4 67.205.142.190:9889 656C06D42A01D25138F2F52E459C6DC27B209F73 cert=Y8MM/9CEGC7PshNot9XYQQncWugSGeu/p6hbvNOsU1zl2U4TL50l4OBzyOhD6dLw4LVMSw iat-mode=0",
+          "status": "alive",
+          "bootstrap_time": 0.04,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:57Z"
+        },
+        {
+          "transport": "snowflake",
+          "line": "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://snowflake-broker.torproject.net/ fronts=cdn.sstatic.net ice=stun:stun.voip.blackberry.com:3478,stun:stun.miwifi.com:3478,stun:stun.voipbuster.com:3478,stun:stun.sip.us:3478,stun:stun.freeswitch.org:3478",
+          "status": "alive",
+          "bootstrap_time": 2.05,
+          "error": null,
+          "timestamp": "2026-06-28T16:20:57Z"
+        }
+      ]
     }
   ],
   "failure_counts": {
