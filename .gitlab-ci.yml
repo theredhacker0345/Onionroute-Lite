@@ -11,7 +11,6 @@ workflow:
     - when: never
 
 stages:
-  - validate
   - build
   - runtime
   - diagnostics
@@ -55,11 +54,11 @@ default:
     - test -x "$ANDROID_NDK_HOME/ndk-build"
     - chmod +x gradlew scripts/*.sh
 
-metadata_validate:
-  stage: validate
+android_verify:
+  stage: build
   when: manual
   allow_failure: true
-  timeout: 10m
+  timeout: 300m
   script:
     - |
       python3 - <<'PY'
@@ -89,34 +88,10 @@ metadata_validate:
         printf '%s: OK (%s bytes)\n' "$file" "$(wc -c < "$file")"
       done
     - test "$(wc -c < fastlane/metadata/android/en-US/short_description.txt)" -le 80
-
-build_debug:
-  stage: build
-  when: manual
-  allow_failure: true
-  timeout: 120m
-  script:
-    - ./scripts/build-all.sh armeabi-v7a "$ANDROID_NDK_HOME"
-    - ./scripts/build-all.sh x86_64 "$ANDROID_NDK_HOME"
-    - ./gradlew assembleFdroidDebug --no-daemon --stacktrace
-    - ./gradlew lintFdroidDebug --no-daemon
-    - |
-      find app/build/outputs/apk/fdroid/debug -name '*.apk' -print -exec unzip -l {} 'lib/*/*.so' \;
-  artifacts:
-    when: always
-    expire_in: 14 days
-    paths:
-      - app/build/outputs/apk/fdroid/debug/*.apk
-      - app/build/reports/lint-results-fdroidDebug.html
-
-build_release:
-  stage: build
-  when: manual
-  allow_failure: true
-  timeout: 180m
-  script:
     - ./scripts/build-all.sh armeabi-v7a "$ANDROID_NDK_HOME"
     - ./scripts/build-all.sh arm64-v8a "$ANDROID_NDK_HOME"
+    - ./scripts/build-all.sh x86_64 "$ANDROID_NDK_HOME"
+    - ./gradlew assembleFdroidDebug lintFdroidDebug assembleFdroidRelease --no-daemon --stacktrace
     - |
       for abi in armeabi-v7a arm64-v8a; do
         for library in libtor.so libobfs4proxy.so libsnowflake.so libsnowflake-proxy.so libtun2socks.so; do
@@ -125,20 +100,25 @@ build_release:
           test "$(stat -c%s "$path")" -ge 1024
         done
       done
-    - ./gradlew assembleFdroidRelease --no-daemon --stacktrace
     - |
-      apk="$(find app/build/outputs/apk/fdroid/release -name '*.apk' -print -quit)"
-      test -n "$apk"
-      if unzip -l "$apk" | grep -q 'META-INF/com/android/build/gradle/dependencies-metadata'; then
+      debug_apk="$(find app/build/outputs/apk/fdroid/debug -name '*.apk' -print -quit)"
+      release_apk="$(find app/build/outputs/apk/fdroid/release -name '*.apk' -print -quit)"
+      test -n "$debug_apk"
+      test -n "$release_apk"
+      unzip -l "$debug_apk" 'lib/*/*.so'
+      if unzip -l "$release_apk" | grep -q 'META-INF/com/android/build/gradle/dependencies-metadata'; then
         echo "DependencyInfoBlock detected in release APK" >&2
         exit 1
       fi
-      printf 'Release artifact: %s (%s bytes)\n' "$apk" "$(stat -c%s "$apk")"
+      printf 'Debug artifact: %s (%s bytes)\n' "$debug_apk" "$(stat -c%s "$debug_apk")"
+      printf 'Release artifact: %s (%s bytes)\n' "$release_apk" "$(stat -c%s "$release_apk")"
   artifacts:
     when: always
     expire_in: 30 days
     paths:
+      - app/build/outputs/apk/fdroid/debug/*.apk
       - app/build/outputs/apk/fdroid/release/*.apk
+      - app/build/reports/lint-results-fdroidDebug.html
 
 emulator_runtime:
   stage: runtime
@@ -148,7 +128,7 @@ emulator_runtime:
   tags:
     - android-kvm
   needs:
-    - job: build_debug
+    - job: android_verify
       artifacts: true
   script:
     - |
@@ -181,10 +161,15 @@ emulator_runtime:
       - onionroute-launch.png
 
 bridge_health_diagnostics:
+  image: python:3.12-slim
   stage: diagnostics
   when: manual
   allow_failure: true
   timeout: 15m
+  before_script:
+    - export DEBIAN_FRONTEND=noninteractive
+    - apt-get update -qq
+    - apt-get install -y --no-install-recommends git
   script:
     - mkdir -p bridge-health-artifacts
     - |
