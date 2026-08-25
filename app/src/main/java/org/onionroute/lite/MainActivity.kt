@@ -71,6 +71,10 @@ class MainActivity : ComponentActivity() {
                 Constants.ACTION_KINDNESS_UPDATE -> handleKindnessUpdate(intent)
                 Constants.ACTION_EXIT_IP_UPDATE -> handleExitIpUpdate(intent)
                 Constants.ACTION_CIRCUITS_UPDATE -> handleCircuitsUpdate(intent)
+                Constants.ACTION_HEALTH_UPDATE -> {
+                    val latency = intent.getLongExtra(Constants.EXTRA_HEALTH_LATENCY_MS, -1L)
+                    runOnUiThread { appState.addHealthPoint(latency) }
+                }
             }
         }
     }
@@ -419,6 +423,8 @@ class MainActivity : ComponentActivity() {
             addAction(Constants.ACTION_EXIT_IP_UPDATE)
             addAction(Constants.ACTION_KINDNESS_STATS)
             addAction(Constants.ACTION_KINDNESS_UPDATE)
+            addAction(Constants.ACTION_CIRCUITS_UPDATE)
+            addAction(Constants.ACTION_HEALTH_UPDATE)
         }
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)

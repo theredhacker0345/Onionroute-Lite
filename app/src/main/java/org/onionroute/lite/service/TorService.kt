@@ -814,23 +814,43 @@ class TorService : Service() {
             var consecutiveFailures = 0
             while (isTorRunning && isActive && torControlConnection != null) {
                 try {
+                    // HEALTH: the probe doubles as a real end-to-end latency
+                    // sample (SOCKS → tor circuit → guard → … → exit →
+                    // check.torproject.org). Timing the existing request adds
+                    // a connection-health datapoint at zero extra network cost.
+                    val startMs = android.os.SystemClock.elapsedRealtime()
                     val ip = fetchExitIp()
+                    val latencyMs = android.os.SystemClock.elapsedRealtime() - startMs
+
                     if (ip != null) {
                         consecutiveFailures = 0
                         broadcastExitIp(ip)
+                        broadcastHealthSample(latencyMs)
                     } else {
                         Log.d(tag, "Exit IP fetch returned null — Tor may not be carrying traffic yet")
                         consecutiveFailures++
+                        broadcastHealthSample(-1L)
                     }
                 } catch (e: Exception) {
                     Log.w(tag, "Exit IP fetch failed: ${e.message}")
                     consecutiveFailures++
+                    broadcastHealthSample(-1L)
                 }
                 val backoffFactor = 1L + consecutiveFailures.coerceAtMost(3)
                 delay(Constants.EXIT_IP_UPDATE_INTERVAL_MS * backoffFactor)
             }
             Log.i(tag, "Exit IP update job ended")
         }
+    }
+
+    /** Broadcasts one connection-health latency sample to the UI. */
+    private fun broadcastHealthSample(latencyMs: Long) {
+        val intent = Intent(Constants.ACTION_HEALTH_UPDATE).apply {
+            putExtra(Constants.EXTRA_HEALTH_LATENCY_MS, latencyMs)
+            putExtra(Constants.EXTRA_HEALTH_TIMESTAMP, System.currentTimeMillis())
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
     }
 
     /**

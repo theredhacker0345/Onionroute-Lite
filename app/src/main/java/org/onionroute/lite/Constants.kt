@@ -84,6 +84,14 @@ object Constants {
     const val ACTION_CIRCUITS_UPDATE = "org.onionroute.lite.CIRCUITS_UPDATE"
     const val EXTRA_CIRCUITS_JSON = "extra_circuits_json"
 
+    // ── Connection Health Dashboard ────────────────────────────
+    // Latency samples ride along the existing exit-IP poller (same HTTP
+    // request through SOCKS, timed) — zero extra network traffic.
+    // latencyMs == -1 marks a failed probe (circuit churn / no network).
+    const val ACTION_HEALTH_UPDATE = "org.onionroute.lite.HEALTH_UPDATE"
+    const val EXTRA_HEALTH_LATENCY_MS = "extra_health_latency_ms"
+    const val EXTRA_HEALTH_TIMESTAMP = "extra_health_timestamp"
+
     // ── Kindness Donation Level ────────────────────────────────
     // Max concurrent snowflake clients served by the proxy (-capacity).
     // Effectively caps donated bandwidth. 0 = unlimited.

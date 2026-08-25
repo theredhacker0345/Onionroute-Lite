@@ -14,6 +14,7 @@ import org.onionroute.lite.ui.screens.SettingsScreen
 import org.onionroute.lite.ui.screens.BridgeScreen
 import org.onionroute.lite.ui.screens.BandwidthScreen
 import org.onionroute.lite.ui.screens.CircuitScreen
+import org.onionroute.lite.ui.screens.HealthScreen
 import org.onionroute.lite.ui.screens.KindnessScreen
 import org.onionroute.lite.ui.theme.ConnectionState
 
@@ -25,6 +26,7 @@ sealed class Screen(val route: String) {
     data object AppSelection : Screen("app_selection")
     data object Kindness : Screen("kindness")
     data object Circuits : Screen("circuits")
+    data object Health : Screen("health")
 }
 
 class OnionRouteAppState {
@@ -77,6 +79,13 @@ class OnionRouteAppState {
 
     /** Max concurrent snowflake clients (0 = unlimited). */
     var kindnessCapacity by mutableStateOf(5)
+        internal set
+
+    // ── Connection Health ──────────────────────────────────────
+    // Latency samples (ms) through the full Tor path; -1 = failed probe.
+    // Capped at 60 (~15 min of history at the 15s poll interval).
+
+    var healthPoints by mutableStateOf<List<Long>>(emptyList())
         internal set
 
     // ── Service Callbacks (set by MainActivity) ─────────────
@@ -148,6 +157,7 @@ class OnionRouteAppState {
             Screen.AppSelection -> Screen.Settings
             Screen.Kindness -> Screen.Settings
             Screen.Circuits -> Screen.Home
+            Screen.Health -> Screen.Home
         }
     }
 
@@ -255,6 +265,14 @@ class OnionRouteAppState {
         onKindnessCapacityChange?.invoke(capacity)
     }
 
+    /** Called by MainActivity on each ACTION_HEALTH_UPDATE broadcast. */
+    fun addHealthPoint(latencyMs: Long) {
+        val current = healthPoints.toMutableList()
+        current.add(latencyMs)
+        if (current.size > 60) current.removeAt(0)
+        healthPoints = current
+    }
+
     fun addSpeedDataPoint(speed: Float) {
         val current = speedDataPoints.toMutableList()
         current.add(speed)
@@ -287,6 +305,7 @@ fun OnionRouteNavigation(appState: OnionRouteAppState) {
             Screen.AppSelection -> AppSelectionScreen(appState = appState)
             Screen.Kindness -> KindnessScreen(appState = appState)
             Screen.Circuits -> CircuitScreen(appState = appState)
+            Screen.Health -> HealthScreen(appState = appState)
         }
     }
 }
