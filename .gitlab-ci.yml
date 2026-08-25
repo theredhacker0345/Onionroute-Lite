@@ -2,7 +2,8 @@
 #
 # Pipelines may be created only from GitLab's Run pipeline page. Every job is
 # optional and manual; none runs on pushes, merge requests, tags, triggers, or
-# API/trigger events. Jobs never create releases or write back to this project.
+# API/trigger events. Jobs never create releases. The manual Bridge Health job
+# can commit only its generated bridge data and README section to protected main.
 
 workflow:
   rules:
@@ -132,6 +133,7 @@ bridge_health_diagnostics:
   when: manual
   allow_failure: true
   timeout: 15m
+  resource_group: bridge-health-main
   before_script:
     - export DEBIAN_FRONTEND=noninteractive
     - apt-get update -qq
@@ -139,23 +141,46 @@ bridge_health_diagnostics:
   script:
     - mkdir -p bridge-health-artifacts
     - |
-      test_status=0
-      python3 bridge-health/test_bridges.py --timeout 5 --output bridge-health/current_results.json || test_status=$?
+      test "$CI_COMMIT_BRANCH" = "main"
+      test -n "${BRIDGE_WRITE_TOKEN:-}" || { echo "BRIDGE_WRITE_TOKEN is unavailable on this protected main pipeline" >&2; exit 1; }
+      test -n "${BRIDGE_WRITE_USERNAME:-}" || { echo "BRIDGE_WRITE_USERNAME is unavailable on this protected main pipeline" >&2; exit 1; }
+      python3 bridge-health/test_bridges.py --timeout 5 --output bridge-health/current_results.json
       python3 bridge-health/check_need_ai.py
       if [ "$(cat bridge-health/need_ai.txt)" = "true" ]; then
         python3 bridge-health/fetch_candidates.py
       else
         python3 bridge-health/make_no_action_decision.py
       fi
-      python3 bridge-health/write_alive_bridges.py --output bridge-health-artifacts/alive_bridges.proposed.json
+      python3 bridge-health/apply_changes.py bridge-health/decision.json bridge-health/current_results.json
+      python3 bridge-health/write_alive_bridges.py --output bridge-health/alive_bridges.json
+      python3 bridge-health/render_readme.py
       python3 bridge-health/summary.py > bridge-health-artifacts/summary.txt || true
       cp bridge-health/current_results.json bridge-health-artifacts/
       cp bridge-health/need_ai.txt bridge-health-artifacts/
       cp bridge-health/decision.json bridge-health-artifacts/
+      cp bridge-health/alive_bridges.json bridge-health-artifacts/alive_bridges.committed.json
+      cp bridge-health/health.json bridge-health-artifacts/health.committed.json
       test ! -f bridge-health/candidates.json || cp bridge-health/candidates.json bridge-health-artifacts/
       test ! -f bridge-health/health_data.json || cp bridge-health/health_data.json bridge-health-artifacts/
-      git diff --exit-code
-      exit "$test_status"
+      git diff --check
+      changed_files="$(git diff --name-only | LC_ALL=C sort)"
+      expected_files="$(printf '%s\n' README.md bridge-health/alive_bridges.json bridge-health/health.json)"
+      test "$changed_files" = "$expected_files" || { echo "Unexpected tracked-file change set:" >&2; printf '%s\n' "$changed_files" >&2; exit 1; }
+      git add README.md bridge-health/alive_bridges.json bridge-health/health.json
+      git config user.name "Onionroute Bridge Health Bot"
+      git config user.email "bridge-health-bot@users.noreply.gitlab.com"
+      git commit --no-verify -m "chore(bridges): update manual health check"
+      cat > /tmp/bridge-health-askpass <<'EOF'
+      #!/bin/sh
+      case "$1" in
+        *Username*) printf '%s\n' "$BRIDGE_WRITE_USERNAME" ;;
+        *Password*) printf '%s\n' "$BRIDGE_WRITE_TOKEN" ;;
+        *) exit 1 ;;
+      esac
+      EOF
+      chmod 700 /tmp/bridge-health-askpass
+      git remote set-url origin "https://${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+      GIT_ASKPASS=/tmp/bridge-health-askpass GIT_TERMINAL_PROMPT=0 git push origin HEAD:main
   artifacts:
     when: always
     expire_in: 14 days

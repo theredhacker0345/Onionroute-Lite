@@ -146,7 +146,7 @@ def render_readme_section(health: dict) -> str:
 ![Bridge Status](https://img.shields.io/badge/bridges-{badge_text}-{badge_color}?style=for-the-badge&labelColor=1A1A1A)
 ![Checks](https://img.shields.io/badge/checks-{total_checks}-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-A maintainer can manually start the GitLab bridge-health diagnostic job to test bundled bridges and generate review artifacts. The job never swaps bridges, changes this repository, creates a release, or commits to `main`. The app fetches the reviewed [`alive_bridges.json`](bridge-health/alive_bridges.json) from the canonical GitLab project; publishing a newer file requires a normal reviewed commit.
+A maintainer can manually start the GitLab Bridge Health job to test bundled bridges and generate current bridge data. After the owner explicitly starts the protected `main` job, it commits only the generated `alive_bridges.json`, `health.json`, and this README section. The job never runs on a schedule or push, changes `Constants.kt`, creates a release, or commits candidate source swaps. The app fetches the current [`alive_bridges.json`](bridge-health/alive_bridges.json) from the canonical GitLab project.
 
 **Last check:** `{latest_check}`
 
@@ -155,7 +155,7 @@ A maintainer can manually start the GitLab bridge-health diagnostic job to test 
 <details>
 <summary>How it works</summary>
 
-1. When a maintainer manually starts `bridge_health_diagnostics` in GitLab, a runner tests all bridges in `Constants.kt`:
+1. When a maintainer manually starts `bridge_health_diagnostics` on protected `main` in GitLab, a runner tests all bridges in `Constants.kt`:
    - **obfs4 / webtunnel**: TCP connectivity check to the bridge's IP:port
    - **snowflake**: HTTPS HEAD to the broker URL + UDP STUN Binding Request to each STUN server (the bridge line's IP is a virtual placeholder)
 2. If any bridge has 2+ consecutive failures, the diagnostic artifact may include candidate replacements:
@@ -164,8 +164,8 @@ A maintainer can manually start the GitLab bridge-health diagnostic job to test 
    - TCP-test each candidate (5s timeout)
    - Propose same-transport or cross-transport alternatives for maintainer review
    - Keep Snowflake unchanged (the bridge line is a fixed virtual placeholder pointing at the Tor Project broker)
-3. Save results, candidate data, a decision, and a proposed `alive_bridges.json` as job artifacts
-4. A maintainer reviews the artifacts and, if appropriate, makes a normal reviewed GitLab commit
+3. Save results, candidate data, a decision, and the generated bridge data as job artifacts
+4. Commit only `alive_bridges.json`, `health.json`, and this rendered README section with the protected project write-back token
 
 The app uses a 3-layer bridge sourcing strategy:
 1. **Runtime JSON** — fetches reviewed `alive_bridges.json` from GitLab
