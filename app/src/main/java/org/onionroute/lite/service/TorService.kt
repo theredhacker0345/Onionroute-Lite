@@ -32,6 +32,7 @@ import org.onionroute.lite.KillSwitch
 import org.onionroute.lite.MainActivity
 import org.onionroute.lite.tor.BandwidthTracker
 import org.onionroute.lite.tor.BridgeConfig
+import org.onionroute.lite.tor.TorCircuit
 import org.onionroute.lite.tor.TorControlConnection
 import org.onionroute.lite.tor.TorProcessManager
 
@@ -124,6 +125,8 @@ class TorService : Service() {
             Constants.ACTION_TOGGLE_OBFS4 -> toggleObfs4()
             Constants.ACTION_TOGGLE_WEBTUNNEL -> toggleWebTunnel()
             Constants.ACTION_NEW_CIRCUIT -> requestNewCircuit()
+            Constants.ACTION_GET_CIRCUITS -> requestCircuits()
+            Constants.ACTION_SET_EXIT_COUNTRY -> applyExitCountry(intent.getStringExtra(Constants.EXTRA_EXIT_COUNTRY))
             null -> handleStickyRestart()
             else -> Log.w(tag, "Unknown action: $action")
         }
@@ -627,6 +630,53 @@ class TorService : Service() {
         }
     }
 
+    /**
+     * Circuit Viewer: fetches `GETINFO circuit-status` over the control port
+     * and broadcasts the parsed list to the UI as a JSON array.
+     * Called by the Circuits screen every few seconds while it is visible.
+     */
+    private fun requestCircuits() {
+        val conn = torControlConnection
+        if (conn == null || !isTorRunning) return
+
+        serviceScope.launch {
+            try {
+                val raw = conn.getInfo("circuit-status")
+                val json = TorCircuit.toJsonArray(TorCircuit.parseAll(raw))
+                val intent = Intent(Constants.ACTION_CIRCUITS_UPDATE).apply {
+                    putExtra(Constants.EXTRA_CIRCUITS_JSON, json)
+                    setPackage(packageName)
+                }
+                sendBroadcast(intent)
+            } catch (e: Exception) {
+                Log.d(tag, "GETINFO circuit-status failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Exit Country Selector: applies the chosen restriction to a RUNNING tor
+     * session via SETCONF (no restart needed). The choice is also persisted
+     * in prefs and written into future torrc files by generateTorrc().
+     */
+    private fun applyExitCountry(code: String?) {
+        if (!isTorRunning) {
+            // Not connected — nothing to apply live; the pref is already
+            // saved and will land in the next torrc generation.
+            Log.i(tag, "Exit country '$code' saved (applies on next connect)")
+            return
+        }
+
+        serviceScope.launch {
+            try {
+                val ok = torControlConnection?.setExitCountry(code) ?: false
+                Log.i(tag, "Exit country applied ('$code'): $ok")
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to apply exit country", e)
+            }
+        }
+    }
+
     // ── Notification ──────────────────────────────────────────────
 
     private fun createNotificationChannel() {
@@ -764,23 +814,43 @@ class TorService : Service() {
             var consecutiveFailures = 0
             while (isTorRunning && isActive && torControlConnection != null) {
                 try {
+                    // HEALTH: the probe doubles as a real end-to-end latency
+                    // sample (SOCKS → tor circuit → guard → … → exit →
+                    // check.torproject.org). Timing the existing request adds
+                    // a connection-health datapoint at zero extra network cost.
+                    val startMs = android.os.SystemClock.elapsedRealtime()
                     val ip = fetchExitIp()
+                    val latencyMs = android.os.SystemClock.elapsedRealtime() - startMs
+
                     if (ip != null) {
                         consecutiveFailures = 0
                         broadcastExitIp(ip)
+                        broadcastHealthSample(latencyMs)
                     } else {
                         Log.d(tag, "Exit IP fetch returned null — Tor may not be carrying traffic yet")
                         consecutiveFailures++
+                        broadcastHealthSample(-1L)
                     }
                 } catch (e: Exception) {
                     Log.w(tag, "Exit IP fetch failed: ${e.message}")
                     consecutiveFailures++
+                    broadcastHealthSample(-1L)
                 }
                 val backoffFactor = 1L + consecutiveFailures.coerceAtMost(3)
                 delay(Constants.EXIT_IP_UPDATE_INTERVAL_MS * backoffFactor)
             }
             Log.i(tag, "Exit IP update job ended")
         }
+    }
+
+    /** Broadcasts one connection-health latency sample to the UI. */
+    private fun broadcastHealthSample(latencyMs: Long) {
+        val intent = Intent(Constants.ACTION_HEALTH_UPDATE).apply {
+            putExtra(Constants.EXTRA_HEALTH_LATENCY_MS, latencyMs)
+            putExtra(Constants.EXTRA_HEALTH_TIMESTAMP, System.currentTimeMillis())
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
     }
 
     /**

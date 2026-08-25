@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.onionroute.lite.Constants
 import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.Screen
 import org.onionroute.lite.ui.theme.*
@@ -107,6 +108,64 @@ fun SettingsScreen(appState: OnionRouteAppState) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // EXIT NODE section
+        SectionLabel("EXIT NODE")
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Restrict which country your traffic exits from",
+            style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextSecondary)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Country chips, 3 per row — plain chunked Rows keep this dependency
+        // and API-version friendly (no experimental FlowRow).
+        Constants.EXIT_COUNTRY_OPTIONS.chunked(3).forEach { rowOptions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowOptions.forEach { (code, label) ->
+                    val selected = appState.exitCountry == code
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selected) OnionRouteColors.JadeGlow else OnionRouteColors.Surface2)
+                            .border(
+                                1.dp,
+                                if (selected) OnionRouteColors.Jade.copy(alpha = 0.4f) else OnionRouteColors.BorderSubtle,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { appState.updateExitCountry(code) }
+                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            style = OnionRouteTypography.LabelMedium.copy(
+                                color = if (selected) OnionRouteColors.Jade else OnionRouteColors.TextPrimary
+                            ),
+                            maxLines = 1
+                        )
+                    }
+                }
+                // Pad the last row out so chips stay equal width.
+                repeat(3 - rowOptions.size) { Spacer(modifier = Modifier.weight(1f)) }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Text(
+            text = if (appState.exitCountry.isBlank()) "Applied instantly when connected"
+                   else "Exit country: ${appState.exitCountry.uppercase()} — new circuits use it automatically",
+            style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextTertiary)
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         // BRIDGES section
         SectionLabel("BRIDGES")
         Spacer(modifier = Modifier.height(12.dp))
@@ -140,6 +199,54 @@ fun SettingsScreen(appState: OnionRouteAppState) {
         // KINDNESS section
         SectionLabel("KINDNESS MODE")
         Spacer(modifier = Modifier.height(12.dp))
+
+        // Donation level — caps concurrent snowflake clients (-capacity),
+        // which effectively bounds donated bandwidth.
+        val capacityOptions = listOf(0 to "Unlimited", 1 to "Low", 5 to "Balanced", 10 to "Generous")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            capacityOptions.forEach { (cap, label) ->
+                val selected = appState.kindnessCapacity == cap
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (selected) OnionRouteColors.JadeGlow else OnionRouteColors.Surface2)
+                        .border(
+                            1.dp,
+                            if (selected) OnionRouteColors.Jade.copy(alpha = 0.4f) else OnionRouteColors.BorderSubtle,
+                            RoundedCornerShape(10.dp)
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { appState.updateKindnessCapacity(cap) }
+                        .padding(horizontal = 4.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        style = OnionRouteTypography.LabelMedium.copy(
+                            color = if (selected) OnionRouteColors.Jade else OnionRouteColors.TextPrimary
+                        ),
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = when (appState.kindnessCapacity) {
+                0 -> "Proxy serves unlimited censored clients"
+                1 -> "Proxy serves at most 1 client at a time"
+                else -> "Proxy serves up to ${appState.kindnessCapacity} clients at a time"
+            },
+            style = OnionRouteTypography.LabelSmall.copy(color = OnionRouteColors.TextTertiary)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Clickable kindness card that navigates to stats screen
         Box(

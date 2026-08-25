@@ -99,6 +99,16 @@ class KindnessService : Service() {
                 startProxy()
             }
             Constants.ACTION_STOP_KINDNESS -> stopProxy()
+            Constants.ACTION_RESTART_KINDNESS_PROXY -> {
+                // Apply a changed donation level (-capacity) without touching
+                // the enabled state or notification flow: only meaningful if
+                // the proxy is currently running.
+                if (proxyProcess != null) {
+                    Log.i(tag, "Restarting proxy to apply new donation level")
+                    stopProxyInternal()
+                    startProxy()
+                }
+            }
             else -> {
                 consecutiveFailures.set(0)
                 startProxy()
@@ -147,19 +157,31 @@ class KindnessService : Service() {
             //   -broker URL     — broker URL (required)
             //   -stun URL       — comma-separated STUN servers (NOT -ice)
             //   -relay URL      — WebSocket relay URL (defaults to wss://snowflake.torproject.net/)
-            //   -capacity N     — max concurrent clients
+            //   -capacity N     — max concurrent clients (0/omitted = unlimited)
             //   -unsafe-logging — show IP addresses in logs for stats parsing
             //
             // DO NOT USE: -front (removed in v2), -ice (renamed to -stun),
             //   -log info (takes filename not level)
-            val processBuilder = ProcessBuilder(
+            //
+            // Donation Level (Settings → KINDNESS): -capacity caps concurrent
+            // clients, which effectively bounds donated bandwidth. 0 = omit
+            // the flag entirely (upstream default = unlimited).
+            val capacity = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+                .getInt(Constants.PREF_KINDNESS_CAPACITY, Constants.KINDNESS_CAPACITY_DEFAULT)
+
+            val args = mutableListOf(
                 proxyBinary.absolutePath,
                 "-broker", Constants.SNOWFLAKE_BROKER_URL,
                 "-stun", Constants.SNOWFLAKE_ICE_SERVERS,
-                "-relay", "wss://snowflake.torproject.net/",
-                "-capacity", "5",
-                "-unsafe-logging"
+                "-relay", "wss://snowflake.torproject.net/"
             )
+            if (capacity > 0) {
+                args.add("-capacity")
+                args.add(capacity.toString())
+            }
+            args.add("-unsafe-logging")
+
+            val processBuilder = ProcessBuilder(args)
 
             val appDataDir = filesDir.absolutePath
             processBuilder.environment()["HOME"] = appDataDir

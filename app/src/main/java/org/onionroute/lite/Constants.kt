@@ -57,6 +57,48 @@ object Constants {
     // (MIUI, EMUI, ColorOS…) kill the tor process minutes after screen-off.
     const val PREF_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
 
+    // ── Exit Country Selector ──────────────────────────────────
+    const val PREF_EXIT_COUNTRY = "exit_country"
+    const val ACTION_SET_EXIT_COUNTRY = "org.onionroute.lite.SET_EXIT_COUNTRY"
+    const val EXTRA_EXIT_COUNTRY = "extra_exit_country"
+
+    /** Curated exit-country choices ("" = no restriction). Kept small and
+     *  censorship-relevant; torrc gets `ExitNodes {cc}` + StrictNodes 1. */
+    val EXIT_COUNTRY_OPTIONS: List<Pair<String, String>> = listOf(
+        "" to "Any",
+        "de" to "Germany",
+        "nl" to "Netherlands",
+        "se" to "Sweden",
+        "ch" to "Switzerland",
+        "ro" to "Romania",
+        "is" to "Iceland",
+        "fi" to "Finland",
+        "fr" to "France",
+        "us" to "USA",
+        "es" to "Spain",
+        "jp" to "Japan"
+    )
+
+    // ── Circuit Viewer ─────────────────────────────────────────
+    const val ACTION_GET_CIRCUITS = "org.onionroute.lite.GET_CIRCUITS"
+    const val ACTION_CIRCUITS_UPDATE = "org.onionroute.lite.CIRCUITS_UPDATE"
+    const val EXTRA_CIRCUITS_JSON = "extra_circuits_json"
+
+    // ── Connection Health Dashboard ────────────────────────────
+    // Latency samples ride along the existing exit-IP poller (same HTTP
+    // request through SOCKS, timed) — zero extra network traffic.
+    // latencyMs == -1 marks a failed probe (circuit churn / no network).
+    const val ACTION_HEALTH_UPDATE = "org.onionroute.lite.HEALTH_UPDATE"
+    const val EXTRA_HEALTH_LATENCY_MS = "extra_health_latency_ms"
+    const val EXTRA_HEALTH_TIMESTAMP = "extra_health_timestamp"
+
+    // ── Kindness Donation Level ────────────────────────────────
+    // Max concurrent snowflake clients served by the proxy (-capacity).
+    // Effectively caps donated bandwidth. 0 = unlimited.
+    const val PREF_KINDNESS_CAPACITY = "kindness_capacity"
+    const val KINDNESS_CAPACITY_DEFAULT = 5
+    const val ACTION_RESTART_KINDNESS_PROXY = "org.onionroute.lite.KINDNESS_RESTART_PROXY"
+
     // ── Kindness Stats Preferences ────────────────────────────
     const val PREF_KINDNESS_DATA_DONATED = "kindness_data_donated"
     const val PREF_KINDNESS_PEOPLE_HELPED_NOW = "kindness_people_helped_now"
@@ -135,6 +177,13 @@ object Constants {
     // by the OS/OOM recover without user interaction.
     const val TOR_AUTO_RESTART_ATTEMPTS = 2
     const val TOR_AUTO_RESTART_DELAY_BASE_MS = 3000L
+
+    // ── Low-RAM Tuning ────────────────────────────────────────
+    // Cap on tor's total in-memory cell/channel queue buffers. Tor's default
+    // scales with system RAM and can balloon under multi-app VPN load; an
+    // explicit bound keeps the daemon predictable on the 1.5GB devices this
+    // app targets (tor typically idles at ~20-40 MB regardless).
+    const val TOR_MAX_MEM_IN_QUEUE = "32 MBytes"
     // STUN servers for Snowflake WebRTC NAT traversal.
     //
     // These were tested via UDP STUN Binding Request on 2026-06-21 and
