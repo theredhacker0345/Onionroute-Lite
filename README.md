@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="ic_launcher.png" alt="OnionRoute Lite" width="120" height="120">
+  <img src="https://gitlab.com/theredhacker0345/Onionroute-Lite/-/raw/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="OnionRoute Lite launcher icon" width="120" height="120">
 </p>
 
 <h1 align="center">OnionRoute Lite</h1>
