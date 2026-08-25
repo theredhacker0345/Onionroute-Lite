@@ -14,11 +14,11 @@ Categories:
 License: GPL-3.0-or-later
 
 AuthorName: darkmaster0345
-AuthorWebSite: https://github.com/darkmaster0345
-WebSite: https://github.com/darkmaster0345/Onionroute-Lite
-SourceCode: https://github.com/darkmaster0345/Onionroute-Lite
-IssueTracker: https://github.com/darkmaster0345/Onionroute-Lite/issues
-Changelog: https://github.com/darkmaster0345/Onionroute-Lite/releases
+AuthorWebSite: https://gitlab.com/theredhacker0345
+WebSite: https://gitlab.com/theredhacker0345/Onionroute-Lite
+SourceCode: https://gitlab.com/theredhacker0345/Onionroute-Lite
+IssueTracker: https://gitlab.com/theredhacker0345/Onionroute-Lite/-/issues
+Changelog: https://gitlab.com/theredhacker0345/Onionroute-Lite/-/releases
 
 Summary: Lightweight Tor client with VPN, Snowflake and per-app routing
 
@@ -57,7 +57,7 @@ Description: |
   - Google Play Services dependency
 
 RepoType: git
-Repo: https://github.com/darkmaster0345/Onionroute-Lite.git
+Repo: https://gitlab.com/theredhacker0345/Onionroute-Lite.git
 
 # ── Build Configuration ───────────────────────────────────────
 # F-Droid builds a SINGLE UNIVERSAL APK containing all 4 ABIs.

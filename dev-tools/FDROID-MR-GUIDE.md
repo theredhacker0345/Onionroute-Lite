@@ -76,7 +76,7 @@ git commit -m "New app: OnionRoute Lite
 Lightweight Orbot alternative for Android — Tor VPN, SOCKS5/HTTP proxy,
 obfs4 + snowflake bridges, kill switch, kindness mode (snowflake proxy).
 
-Source: https://github.com/darkmaster0345/Onionroute-Lite
+Source: https://gitlab.com/theredhacker0345/Onionroute-Lite
 License: GPL-3.0-or-later
 AntiFeatures: NonFreeNet"
 
@@ -100,7 +100,7 @@ git push origin org.onionroute.lite
 
 **Summary:** Lightweight Tor client for Android with VPN mode, SOCKS5/HTTP proxy, snowflake + obfs4 bridges, kill switch, and kindness mode (snowflake proxy).
 
-**Source code:** https://github.com/darkmaster0345/Onionroute-Lite
+**Source code:** https://gitlab.com/theredhacker0345/Onionroute-Lite
 **License:** GPL-3.0-or-later
 **AntiFeatures:** NonFreeNet (Tor directory authorities use the public internet)
 **Categories:** Internet, Security
@@ -113,9 +113,9 @@ git push origin org.onionroute.lite
 - **Single universal APK** (fdroid flavor disables ABI splits)
 
 ### Verification
-- CI builds + tests on every push: https://github.com/darkmaster0345/Onionroute-Lite/actions
-- Emulator test (API 34, x86_64) verifies app launches and native binaries load
-- Lint report attached to each CI run
+- Manually run GitLab CI jobs: https://gitlab.com/theredhacker0345/Onionroute-Lite/-/pipelines
+- The `emulator_runtime` job (API 34, x86_64) verifies launch and native binaries when an `android-kvm` runner is available
+- Lint report is attached to the manually started debug build job
 - Static analysis (BUGS.md) — all findings addressed
 
 ### Notes
@@ -157,8 +157,8 @@ This script does steps 2-5 automatically. You still need to do step 1 (fork) and
 
 ## Current Status
 
-- **Source repo:** https://github.com/darkmaster0345/Onionroute-Lite
+- **Source repo:** https://gitlab.com/theredhacker0345/Onionroute-Lite
 - **Release tag:** `v1.0.0-fdroid` on commit `9b6c353`
 - **Metadata commit:** `9b533dd5e96b9fbc9efb92204ee8ceb81c8961ca`
-- **CI:** All checks passing (build, emulator test, metadata validation)
-- **Release APK:** Built by CI on tag push, downloadable from GitHub Releases
+- **CI:** Optional manual jobs for metadata, build, emulator, and bridge diagnostics
+- **Release APK:** Available only as an artifact from a manually started release job; no automatic GitLab release is created

@@ -10,15 +10,14 @@ import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
 /**
- * Fetches alive bridges from GitHub at runtime.
+ * Fetches alive bridges from the canonical GitLab project at runtime.
  *
- * The CI workflow (bridge-health.yml) tests all bridges every 15 min
- * and writes alive_bridges.json to the repo. This class fetches that
- * file so the app always has fresh, verified-working bridges without
- * needing an app update.
+ * A manually started GitLab diagnostic job can produce a proposed bridge
+ * report for maintainer review. This class fetches the reviewed repository
+ * file so the app can use published bridge data without needing an app update.
  *
  * Priority chain:
- *   1. Runtime JSON (freshest, from GitHub raw URL)
+ *   1. Runtime JSON (freshest, from GitLab raw-file URL)
  *   2. Local cache (last successful fetch, stored in filesDir)
  *   3. Hardcoded fallback (Constants.kt — may be stale but works offline)
  *
@@ -37,7 +36,7 @@ class BridgeUpdater private constructor(private val context: Context) {
 
     companion object {
         private const val BRIDGES_URL =
-            "https://raw.githubusercontent.com/darkmaster0345/Onionroute-Lite/main/bridge-health/alive_bridges.json"
+            "https://gitlab.com/theredhacker0345/Onionroute-Lite/-/raw/main/bridge-health/alive_bridges.json"
         private const val CACHE_FILE = "alive_bridges.json"
         private val CACHE_MAX_AGE_MS = TimeUnit.HOURS.toMillis(24) // 24h cache validity
 
@@ -67,7 +66,7 @@ class BridgeUpdater private constructor(private val context: Context) {
     }
 
     /**
-     * Fetch alive bridges from GitHub. Call this on a background thread.
+     * Fetch alive bridges from GitLab. Call this on a background thread.
      *
      * @return true if fetch succeeded (or cache is still valid), false if
      *   using hardcoded fallback
@@ -80,7 +79,7 @@ class BridgeUpdater private constructor(private val context: Context) {
         }
 
         return try {
-            Log.i(tag, "Fetching alive bridges from GitHub...")
+            Log.i(tag, "Fetching alive bridges from GitLab...")
             val url = URL(BRIDGES_URL)
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
@@ -90,7 +89,7 @@ class BridgeUpdater private constructor(private val context: Context) {
             }
 
             if (conn.responseCode != 200) {
-                Log.w(tag, "GitHub returned HTTP ${conn.responseCode}")
+                Log.w(tag, "GitLab returned HTTP ${conn.responseCode}")
                 return cachedBridges.isNotEmpty()
             }
 
@@ -98,7 +97,7 @@ class BridgeUpdater private constructor(private val context: Context) {
             conn.disconnect()
 
             parseAndCache(body)
-            Log.i(tag, "Fetched ${cachedBridges.values.sumOf { it.size }} alive bridges from GitHub")
+            Log.i(tag, "Fetched ${cachedBridges.values.sumOf { it.size }} alive bridges from GitLab")
             true
         } catch (e: Exception) {
             Log.w(tag, "Fetch failed: ${e.message} — using cache or hardcoded fallback")

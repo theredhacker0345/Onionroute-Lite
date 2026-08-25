@@ -266,8 +266,8 @@ onionroute-lite/
 |   +-- org.onionroute.lite.yml         # F-Droid metadata
 +-- fastlane/
 |   +-- metadata/android/en-US/         # F-Droid store listing
-+-- .github/workflows/
-|   +-- android-build.yml               # CI/CD pipeline
++-- .gitlab-ci.yml                      # Manual-only GitLab CI pipeline
++-- docs/GITLAB_CI.md                   # Manual job and runner requirements
 +-- LICENSE                             # GPL-3.0-or-later
 +-- THIRD-PARTY-LICENSES.md             # Font & dependency licenses
 +-- PRIVACY_POLICY.md                   # Privacy policy
@@ -304,7 +304,7 @@ real Android users — ~99% of Android phones and tablets are ARM-based.
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Commit your changes (`git commit -am 'Add my feature'`)
 4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
+5. Open a GitLab merge request
 
 All contributions must be compatible with GPL-3.0-or-later.
 
@@ -339,7 +339,7 @@ Full license: [LICENSE](LICENSE)
 ![Bridge Status](https://img.shields.io/badge/bridges-8/8%20alive-00E5C4?style=for-the-badge&labelColor=1A1A1A)
 ![Checks](https://img.shields.io/badge/checks-100-0D0D0D?style=for-the-badge&labelColor=1A1A1A)
 
-A GitHub Actions workflow tests every bundled bridge approximately every 1-4 hours (scheduled for every 15 min, but GitHub Actions throttles scheduled workflows on free repos). Dead bridges (2+ consecutive failures) are automatically replaced with verified-alive bridges from Tor Project's BridgeDB. If no same-transport replacement is available, cross-transport fallback kicks in immediately (e.g. a dead webtunnel gets replaced with an alive obfs4). The app fetches fresh bridges at runtime from [`alive_bridges.json`](bridge-health/alive_bridges.json) — no app update needed.
+A maintainer can manually start the GitLab bridge-health diagnostic job to test bundled bridges and generate review artifacts. The job never swaps bridges, changes this repository, creates a release, or commits to `main`. The app fetches the reviewed [`alive_bridges.json`](bridge-health/alive_bridges.json) from the canonical GitLab project; publishing a newer file requires a normal reviewed commit.
 
 **Last check:** `2026-07-13T16:09:14+00:00`
 
@@ -359,25 +359,24 @@ A GitHub Actions workflow tests every bundled bridge approximately every 1-4 hou
 <details>
 <summary>How it works</summary>
 
-1. Approximately every 1-4 hours (scheduled every 15 min, throttled by GitHub Actions), a runner tests all bridges in `Constants.kt`:
+1. When a maintainer manually starts `bridge_health_diagnostics` in GitLab, a runner tests all bridges in `Constants.kt`:
    - **obfs4 / webtunnel**: TCP connectivity check to the bridge's IP:port
    - **snowflake**: HTTPS HEAD to the broker URL + UDP STUN Binding Request to each STUN server (the bridge line's IP is a virtual placeholder)
-2. If any bridge has 2+ consecutive failures:
+2. If any bridge has 2+ consecutive failures, the diagnostic artifact may include candidate replacements:
    - Fetch replacement bridges from Tor Project's BridgeDB (multiple requests per transport type)
    - Filter out documentation/test addresses (RFC 3849 IPv6, RFC 5737 IPv4)
    - TCP-test each candidate (5s timeout)
-   - Swap dead bridges for verified-alive ones of the same transport
-   - **Cross-transport fallback**: if no same-transport replacement exists, swap for an alive bridge of any transport immediately (e.g. dead webtunnel → alive obfs4)
-   - **Snowflake is never swapped** (the bridge line is a fixed virtual placeholder pointing at the Tor Project broker; if snowflake is dead, it's an infrastructure issue, not a bridge-line issue)
-3. Write `alive_bridges.json` with all alive bridges (fetched by the app at runtime)
-4. Commit changes to `main` — the app picks up new bridges automatically
+   - Propose same-transport or cross-transport alternatives for maintainer review
+   - Keep Snowflake unchanged (the bridge line is a fixed virtual placeholder pointing at the Tor Project broker)
+3. Save results, candidate data, a decision, and a proposed `alive_bridges.json` as job artifacts
+4. A maintainer reviews the artifacts and, if appropriate, makes a normal reviewed GitLab commit
 
 The app uses a 3-layer bridge sourcing strategy:
-1. **Runtime JSON** — fetches `alive_bridges.json` from GitHub (freshest, CI-verified)
+1. **Runtime JSON** — fetches reviewed `alive_bridges.json` from GitLab
 2. **Local cache** — last successful fetch (works offline, 24h validity)
-3. **Hardcoded** — `Constants.kt` fallback (auto-swapped by CI)
+3. **Hardcoded** — `Constants.kt` fallback (changed only through reviewed source commits)
 
-Workflow: [`.github/workflows/bridge-health.yml`](.github/workflows/bridge-health.yml)
+Pipeline details: [`docs/GITLAB_CI.md`](docs/GITLAB_CI.md)
 
 </details>
 <!-- BRIDGE-HEALTH-END -->

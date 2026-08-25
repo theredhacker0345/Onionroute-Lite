@@ -4,12 +4,12 @@
 
 If you discover a security vulnerability in OnionRoute Lite, please report it responsibly.
 
-**Do NOT open a public GitHub issue for security vulnerabilities.**
+**Do NOT open a public GitLab issue for security vulnerabilities.**
 
 Instead, please:
 
-1. Email the maintainer directly via GitHub's private vulnerability reporting
-2. Or use GitHub's [Security Advisories](https://github.com/darkmaster0345/onionroute-lite/security/advisories/new) feature
+1. Use GitLab private vulnerability reporting if it is enabled for the canonical project
+2. Otherwise contact the maintainer privately through a verified contact channel listed on the GitLab project
 
 Please include:
 - Description of the vulnerability

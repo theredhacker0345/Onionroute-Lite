@@ -31,7 +31,7 @@ import ipaddress
 from pathlib import Path
 
 BRIDGEDB_URL = "https://bridges.torproject.org/bridges"
-USER_AGENT = "OnionRoute-Lite/1.0 (bridge health monitor; +https://github.com/darkmaster0345/Onionroute-Lite)"
+USER_AGENT = "OnionRoute-Lite/1.0 (manual bridge diagnostics; +https://gitlab.com/theredhacker0345/Onionroute-Lite)"
 SUPPORTED_TRANSPORTS = ["obfs4", "webtunnel", "snowflake"]
 
 
@@ -164,9 +164,8 @@ def main():
         results = []
 
     # Find dead bridges needing replacement (2+ failures).
-    # Threshold is 2 (not 3) because GitHub Actions throttles scheduled
-    # workflows — actual check frequency is every 1-4 hours, so 2 failures
-    # = 2-8 hours before swap (acceptable), 3 failures = 3-12 hours (too slow).
+    # Threshold is 2 consecutive recorded failures. A diagnostic run only
+    # proposes replacements; a maintainer must review any resulting change.
     dead_bridges = []
     for r in results:
         if r["status"] != "alive" and failure_counts.get(r["line"], 0) >= 2:
@@ -305,11 +304,11 @@ def main():
         transports_swapped = list(set(a["dead_bridge_line"].split(" ")[0] for a in actions))
         decision = {
             "actions": actions,
-            "pr_title": f"fix(bridges): swap {len(actions)} dead {', '.join(transports_swapped)} bridge(s)",
-            "pr_body": f"## Bridge Health — Auto-Swap\n\n"
-                       f"Swapped {len(actions)} dead bridge(s) for verified-alive replacements from BridgeDB.\n\n"
+            "pr_title": f"review(bridges): propose {len(actions)} replacement(s) for dead {', '.join(transports_swapped)} bridge(s)",
+            "pr_body": f"## Bridge Health — Review Proposal\n\n"
+                       f"Proposes {len(actions)} replacement(s) for bridges that failed health checks.\n\n"
                        f"Each replacement was TCP-tested (5s timeout) to confirm the bridge server is online.\n\n"
-                       f"### Swaps\n" +
+                       f"### Proposed replacements\n" +
                        "\n".join(f"- `{a['dead_bridge_line'][:60]}...` → `{a['replacement_bridge_line'][:60]}...`\n"
                                  f"  ({a['reason']})" for a in actions),
             "summary": f"swap {len(actions)} dead bridge(s) for verified-alive replacements",

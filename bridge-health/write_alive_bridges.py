@@ -2,8 +2,8 @@
 """Write alive_bridges.json — the file the app fetches at runtime.
 
 This file contains ALL alive bridges (both original and replacements),
-grouped by transport type. The app fetches this from GitHub raw URL:
-  https://raw.githubusercontent.com/darkmaster0345/Onionroute-Lite/main/bridge-health/alive_bridges.json
+grouped by transport type. The app fetches the reviewed file from GitLab:
+  https://gitlab.com/theredhacker0345/Onionroute-Lite/-/raw/main/bridge-health/alive_bridges.json
 
 Format:
 {
@@ -13,6 +13,7 @@ Format:
   "snowflake": ["snowflake ..."]
 }
 """
+import argparse
 import json
 import re
 from datetime import datetime, timezone
@@ -75,6 +76,14 @@ def parse_bridges_from_constants():
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Write an alive-bridges JSON report")
+    parser.add_argument(
+        "--output",
+        default=str(OUTPUT_FILE),
+        help="Output JSON path (default: bridge-health/alive_bridges.json)",
+    )
+    args = parser.parse_args()
+    output_file = Path(args.output)
     # Load current test results
     try:
         with open(RESULTS_FILE) as f:
@@ -120,9 +129,10 @@ def main():
             if bridge not in output[transport]:
                 output[transport].append(bridge)
 
-    OUTPUT_FILE.write_text(json.dumps(output, indent=2) + "\n")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(json.dumps(output, indent=2) + "\n")
     total = sum(len(v) for v in output.values() if isinstance(v, list))
-    print(f"[*] Wrote alive_bridges.json — {total} bridges across {len(output)-1} transports")
+    print(f"[*] Wrote {output_file} — {total} bridges across {len(output)-1} transports")
     for transport, bridges in output.items():
         if transport == "last_updated":
             continue

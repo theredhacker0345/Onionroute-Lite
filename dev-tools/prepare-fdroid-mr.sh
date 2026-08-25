@@ -120,7 +120,7 @@ git commit -m "New app: OnionRoute Lite
 Lightweight Orbot alternative for Android — Tor VPN, SOCKS5/HTTP proxy,
 obfs4 + snowflake bridges, kill switch, kindness mode (snowflake proxy).
 
-Source: https://github.com/darkmaster0345/Onionroute-Lite
+Source: https://gitlab.com/theredhacker0345/Onionroute-Lite
 Commit: ${COMMIT_HASH}
 License: GPL-3.0-or-later
 AntiFeatures: NonFreeNet"
@@ -151,7 +151,7 @@ cat << 'MRDESC'
 
 **Summary:** Lightweight Tor client for Android with VPN mode, SOCKS5/HTTP proxy, snowflake + obfs4 bridges, kill switch, and kindness mode (snowflake proxy).
 
-**Source code:** https://github.com/darkmaster0345/Onionroute-Lite
+**Source code:** https://gitlab.com/theredhacker0345/Onionroute-Lite
 **License:** GPL-3.0-or-later
 **AntiFeatures:** NonFreeNet (Tor directory authorities use the public internet)
 **Categories:** Internet, Security
@@ -164,9 +164,9 @@ cat << 'MRDESC'
 - **Single universal APK** (fdroid flavor disables ABI splits)
 
 ### Verification
-- CI builds + tests on every push: https://github.com/darkmaster0345/Onionroute-Lite/actions
-- Emulator test (API 34, x86_64) verifies app launches and Tor process starts
-- Lint report attached to each CI run
+- Manually run GitLab CI jobs: https://gitlab.com/theredhacker0345/Onionroute-Lite/-/pipelines
+- The `emulator_runtime` job (API 34, x86_64) verifies launch and native binaries when an `android-kvm` runner is available
+- Lint report is attached to the manually started debug build job
 - Static analysis (BUGS.md) — all findings addressed
 
 ### Notes

@@ -3,24 +3,22 @@
 Apply Bridge Changes
 ====================
 
-Applies AI-approved bridge swaps to Constants.kt.
-Also manages health.json (historical health data) and opens PRs.
+Applies maintainer-reviewed bridge swaps to Constants.kt.
+Also manages health.json (historical health data).
 
-This is the DETERMINISTIC part — it does exactly what the AI decided,
-no judgment of its own. The AI's judgment happened in agent.py.
+This is the deterministic local review helper. It does not contain a
+repository credential path and it cannot commit, push, or open a merge request.
 
 Usage:
-    python3 apply_changes.py <decision.json> [--apply] [--open-pr]
+    python3 apply_changes.py <decision.json> <health-results.json> [--apply]
 
 Without --apply: prints what would change (dry run)
 With --apply: edits Constants.kt in place
-With --open-pr: creates a git branch, commits, pushes, opens PR via GitHub API
+The legacy --open-pr option is retained only to issue a clear refusal.
 """
 import argparse
 import json
-import os
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -134,73 +132,18 @@ def apply_swap_to_constants(dead_line: str, replacement_line: str) -> bool:
     return True
 
 
-def commit_swap_to_main(decision: dict):
-    """Commit the bridge swap directly to main.
-
-    Instead of opening a PR (which requires a repo setting that may not
-    be enabled), we commit directly to main. The GITHUB_TOKEN already
-    has 'contents: write' permission, so this always works.
-
-    The commit message includes the AI's PR description so the git log
-    has full context.
-    """
-    token = os.environ.get("GITHUB_TOKEN")
-    repo = os.environ.get("GITHUB_REPOSITORY", "darkmaster0345/Onionroute-Lite")
-
-    if not token:
-        print("[!] GITHUB_TOKEN not set — cannot commit", file=sys.stderr)
-        return None
-
-    # Set git identity
-    subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
-    subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], check=True)
-
-    # Reconfigure remote with GITHUB_TOKEN for push permission
-    remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
-    subprocess.run(["git", "remote", "set-url", "origin", remote_url], check=True)
-
-    # Make sure we're on main
-    subprocess.run(["git", "checkout", "main"], check=True)
-
-    # Stage ONLY Constants.kt FIRST (before pull — the file was already
-    # modified by apply_swap_to_constants above)
-    subprocess.run(["git", "add", "app/src/main/java/org/onionroute/lite/Constants.kt"], check=True)
-
-    # Stash any other changes, pull, then pop
-    subprocess.run(["git", "stash"], capture_output=True)
-    subprocess.run(["git", "pull", "--rebase", "origin", "main"],
-                   capture_output=True,
-                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-    subprocess.run(["git", "stash", "pop"], capture_output=True)
-
-    # Re-stage after stash pop (stash pop restores as unstaged)
-    subprocess.run(["git", "add", "app/src/main/java/org/onionroute/lite/Constants.kt"], check=True)
-
-    # Build commit message from AI decision
-    summary = decision.get("summary", "swap dead bridge(s)")
-    pr_body = decision.get("pr_body", "")
-
-    # Truncate body for commit message (git has a limit)
-    full_msg = f"{summary}\n\n{pr_body[:1000]}"
-
-    subprocess.run(["git", "commit", "-m", full_msg], check=True)
-
-    # Push to main
-    subprocess.run(["git", "push", "origin", "main"],
-                   check=True,
-                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-
-    print(f"[*] Swap committed directly to main", file=sys.stderr)
-    return {"committed": True}
-
-
 def main():
     parser = argparse.ArgumentParser(description="Apply bridge health changes")
     parser.add_argument("decision", help="Path to AI decision JSON")
     parser.add_argument("health_results", help="Path to current health results JSON")
-    parser.add_argument("--apply", action="store_true", help="Apply changes to Constants.kt")
-    parser.add_argument("--open-pr", action="store_true", help="Open a PR for the changes")
+    parser.add_argument("--apply", action="store_true", help="Apply changes to Constants.kt locally")
+    parser.add_argument("--open-pr", action="store_true", help="Deprecated; automated write-back is refused")
     args = parser.parse_args()
+
+    if args.open_pr:
+        parser.error(
+            "Automated write-back is disabled. Review the local diff and create a GitLab merge request manually."
+        )
 
     # Load decision
     with open(args.decision) as f:
@@ -234,18 +177,6 @@ def main():
                     print(f"    Dead: {action['dead_bridge_line'][:60]}...", file=sys.stderr)
                     print(f"    New:  {action['replacement_bridge_line'][:60]}...", file=sys.stderr)
                     print(f"    Reason: {action.get('reason', 'no reason')}", file=sys.stderr)
-
-    # Commit swap directly to main if requested and there are changes
-    if args.open_pr and actions and args.apply:
-        print("[*] Committing swap to main...", file=sys.stderr)
-        result = commit_swap_to_main(decision)
-        if result:
-            print(f"\n✓ Swap committed to main: {len(actions)} bridge(s) replaced")
-        else:
-            print(f"\n✗ Failed to commit swap to main")
-    elif args.open_pr and not actions:
-        print("[*] No actions to commit", file=sys.stderr)
-
 
 if __name__ == "__main__":
     main()

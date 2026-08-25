@@ -10,7 +10,7 @@ Be respectful. Be constructive. Be inclusive.
 
 ### Bug Reports
 
-1. Check if the bug is already reported in [Issues](https://github.com/darkmaster0345/onionroute-lite/issues)
+1. Check if the bug is already reported in [Issues](https://gitlab.com/theredhacker0345/Onionroute-Lite/-/issues)
 2. If not, create a new issue with:
    - Clear title and description
    - Steps to reproduce
@@ -24,14 +24,14 @@ Be respectful. Be constructive. Be inclusive.
 2. Keep in mind the project's scope: **lightweight, low-end device focused**
 3. Features that increase APK size significantly or require proprietary dependencies will not be accepted
 
-### Pull Requests
+### Merge Requests
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
 4. Test on a low-end device or emulator (API 23, armeabi-v7a)
 5. Ensure the build passes: `./gradlew assembleDebug`
-6. Submit a pull request
+6. Submit a GitLab merge request
 
 ### Code Style
 
