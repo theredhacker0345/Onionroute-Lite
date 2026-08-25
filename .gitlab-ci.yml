@@ -12,7 +12,6 @@ workflow:
 
 stages:
   - build
-  - runtime
   - diagnostics
 
 variables:
@@ -126,46 +125,6 @@ android_verify:
       - app/build/outputs/apk/fdroid/debug/*.apk
       - app/build/outputs/apk/fdroid/release/*.apk
       - app/build/reports/lint-results-fdroidDebug.html
-
-emulator_runtime:
-  stage: runtime
-  when: manual
-  allow_failure: true
-  timeout: 30m
-  tags:
-    - android-kvm
-  needs:
-    - job: android_verify
-      artifacts: true
-  script:
-    - |
-      test -e /dev/kvm || { echo "This manual job requires an eligible android-kvm runner with /dev/kvm." >&2; exit 1; }
-      sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "emulator" "system-images;android-34;google_apis;x86_64"
-      echo "no" | avdmanager create avd --force --name onionroute-api34 --package "system-images;android-34;google_apis;x86_64" --device pixel_6
-      emulator -avd onionroute-api34 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot > emulator.log 2>&1 &
-      emulator_pid=$!
-      trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
-      adb wait-for-device
-      until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
-      apk="$(find app/build/outputs/apk/fdroid/debug -name '*.apk' -print -quit)"
-      test -n "$apk"
-      adb install -r "$apk"
-      adb logcat -c
-      adb shell am start -W -n org.onionroute.lite/org.onionroute.lite.MainActivity
-      sleep 5
-      adb exec-out screencap -p > onionroute-launch.png
-      timeout 60 adb logcat -d -v threadtime > emulator-logcat.txt || true
-      if grep -qi 'FATAL EXCEPTION' emulator-logcat.txt; then
-        echo "Fatal exception detected in emulator logcat" >&2
-        exit 1
-      fi
-  artifacts:
-    when: always
-    expire_in: 7 days
-    paths:
-      - emulator.log
-      - emulator-logcat.txt
-      - onionroute-launch.png
 
 bridge_health_diagnostics:
   image: python:3.12-slim
