@@ -40,7 +40,14 @@ default:
         mv /tmp/android-commandline-tools/cmdline-tools "$ANDROID_SDK_ROOT/cmdline-tools/latest"
       fi
     - export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:/opt/go/bin:$PATH"
-    - yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;$NDK_VERSION"
+    - |
+      # With pipefail enabled, `yes` receives SIGPIPE after sdkmanager accepts
+      # the licenses and can incorrectly fail an otherwise successful install.
+      set +o pipefail
+      yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;$NDK_VERSION"
+      sdkmanager_status=${PIPESTATUS[1]}
+      set -o pipefail
+      test "$sdkmanager_status" -eq 0
     - |
       if [ ! -x /opt/go/bin/go ]; then
         curl --fail --location --retry 3 --silent --show-error \
