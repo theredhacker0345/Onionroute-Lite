@@ -3,9 +3,11 @@ package org.onionroute.lite
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.net.VpnService
+import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
@@ -176,8 +178,43 @@ class MainActivity : ComponentActivity() {
     }
 
     fun startTor() {
+        maybeRequestBatteryExemption()
         appState.updateConnectionState(ConnectionState.Connecting(progress = 0))
         sendCommandToService(Constants.ACTION_START_TOR)
+    }
+
+    /**
+     * One-time prompt to exempt the app from battery optimization.
+     *
+     * RELIABILITY: without the exemption, aggressive OEM battery managers
+     * (MIUI, EMUI, ColorOS, …) kill the background tor process minutes after
+     * screen-off — the #1 cause of "Tor randomly stops working" reports on
+     * non-Pixel devices. The manifest already declares
+     * REQUEST_IGNORE_BATTERY_OPTIMIZATIONS; this actually shows the system
+     * dialog, exactly once, on the user's first manual connect (never during
+     * boot/auto-start so we don't fight the OS from the background).
+     */
+    private fun maybeRequestBatteryExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+
+        val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+        if (prefs.getBoolean(Constants.PREF_BATTERY_PROMPT_SHOWN, false)) return
+        prefs.edit().putBoolean(Constants.PREF_BATTERY_PROMPT_SHOWN, true).apply()
+
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        } catch (e: Exception) {
+            // Some OEM ROMs strip the settings activity — fall back silently;
+            // auto-reconnect + foreground service still cover most cases.
+            Log.w(tag, "Battery exemption dialog unavailable: ${e.message}")
+        }
     }
 
     fun stopTor() {

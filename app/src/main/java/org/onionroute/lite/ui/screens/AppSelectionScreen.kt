@@ -1,6 +1,8 @@
 package org.onionroute.lite.ui.screens
 
+import android.content.Intent
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -30,9 +32,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.onionroute.lite.Constants
 import org.onionroute.lite.service.AppInfo
 import org.onionroute.lite.service.AppSelectionManager
 import org.onionroute.lite.service.RoutingMode
+import org.onionroute.lite.service.TorVpnService
 import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.theme.*
 
@@ -123,15 +127,7 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
                 onModeChange = { mode ->
                     routingMode = mode
                     manager.setMode(mode)
-                    // The VPN builder snapshots allowed/disallowed lists at
-                    // startVpn() time — a running session keeps the OLD rules
-                    // until it is restarted. Tell the user instead of leaving
-                    // them wondering why nothing changed.
-                    Toast.makeText(
-                        context,
-                        "Routing mode saved. Toggle VPN off/on to apply.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    applyRoutingChange(context)
                 }
             )
 
@@ -188,6 +184,7 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
                                 // reactive map. Both are safe on the main thread.
                                 manager.setAppTorRouted(app.packageName, newRouted)
                                 routedStates[app.packageName] = newRouted
+                                applyRoutingChange(context)
                             }
                         )
                     }
@@ -210,6 +207,7 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
                             onToggle = { newRouted ->
                                 manager.setAppTorRouted(app.packageName, newRouted)
                                 routedStates[app.packageName] = newRouted
+                                applyRoutingChange(context)
                             }
                         )
                     }
@@ -415,4 +413,37 @@ private fun AppIcon(drawable: Drawable) {
         },
         modifier = Modifier.size(36.dp)
     )
+}
+
+// ── Seamless Rule Application ──────────────────────────────────────
+
+/**
+ * Applies routing changes to a RUNNING VPN without user action.
+ *
+ * The VpnService.Builder snapshots allowed/disallowed lists at startVpn()
+ * time, so a running session keeps the OLD rules until it is rebuilt. When
+ * the VPN is active we send ACTION_RESTART_VPN — TorVpnService tears down
+ * the TUN and rebuilds it with the new rules in one seamless step (the
+ * notification stays, no permission re-prompt is needed since VPN consent
+ * was already granted).
+ */
+private fun applyRoutingChange(context: android.content.Context) {
+    val prefs = context.getSharedPreferences(Constants.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    if (!prefs.getBoolean(Constants.PREF_VPN_ENABLED, false)) {
+        // VPN not active — rules will be picked up on next start.
+        return
+    }
+    val intent = Intent(context, TorVpnService::class.java).apply {
+        action = Constants.ACTION_RESTART_VPN
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.startForegroundService(intent)
+    } else {
+        context.startService(intent)
+    }
+    Toast.makeText(
+        context,
+        "Routing rules applied",
+        Toast.LENGTH_SHORT
+    ).show()
 }

@@ -64,6 +64,7 @@ class TorVpnService : VpnService() {
         when (intent?.action) {
             Constants.ACTION_STOP_VPN -> stopVpn()
             Constants.ACTION_VPN_ALWAYS_ON -> startVpn(isAlwaysOn = true)
+            Constants.ACTION_RESTART_VPN -> restartVpn()
             else -> startVpn()
         }
 
@@ -125,8 +126,17 @@ class TorVpnService : VpnService() {
                 .setSession("OnionRoute Lite")
                 .setMtu(Constants.VPN_MTU)
                 .addAddress(Constants.VPN_ADDRESS, Constants.VPN_ROUTE_PREFIX)
+                .addAddress(Constants.VPN_ADDRESS_V6, 126)
                 .addRoute("0.0.0.0", 0)
+                .addRoute("::", 0)
                 .addDnsServer(Constants.VPN_DNS)
+
+            // PRIVACY: the IPv6 route is critical. With only 0.0.0.0/0 routed,
+            // apps on an IPv6-capable network (most LTE/WiFi today) could send
+            // traffic over ::/0 OUTSIDE the TUN — completely bypassing Tor
+            // while the app claimed everything was routed. Capturing ::/0
+            // means IPv6 either goes through tun2socks → SOCKS5 → Tor, or
+            // fails closed (no leak). Orbot does the same.
 
             // Apply per-app routing rules.
             //
@@ -254,11 +264,13 @@ class TorVpnService : VpnService() {
         }
     }
 
-    private fun stopVpn() {
-        if (!isRunning) return
-
-        Log.i(tag, "Stopping VPN tunnel…")
-
+    /**
+     * Tears down the TUN interface and tun2socks WITHOUT touching the
+     * foreground notification or the service lifetime. Used by [restartVpn]
+     * so routing-rule changes can be applied seamlessly (no notification
+     * flicker, no service restart churn).
+     */
+    private fun teardownTunnel() {
         try {
             tun2socksProcess?.destroy()
             tun2socksProcess = null
@@ -274,11 +286,17 @@ class TorVpnService : VpnService() {
         }
 
         isRunning = false
-        Log.i(tag, "VPN stopped")
 
-        // Update preferences
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(Constants.PREF_VPN_ENABLED, false).apply()
+    }
+
+    private fun stopVpn() {
+        if (!isRunning) return
+
+        Log.i(tag, "Stopping VPN tunnel…")
+        teardownTunnel()
+        Log.i(tag, "VPN stopped")
 
         // Clear the stale "VPN active" foreground notification and stop the
         // service. Without this, the FGS (and its misleading notification)
@@ -291,6 +309,23 @@ class TorVpnService : VpnService() {
             stopForeground(true)
         }
         stopSelf()
+    }
+
+    /**
+     * Seamlessly rebuilds the VPN with the CURRENT per-app routing rules.
+     * Called via ACTION_RESTART_VPN when the user changes routing mode or
+     * app selections while the VPN is up — previously those changes were
+     * silently ignored until the user manually toggled the VPN off/on.
+     */
+    private fun restartVpn() {
+        if (!isRunning) {
+            Log.d(tag, "restartVpn: VPN not running — starting fresh")
+            startVpn()
+            return
+        }
+        Log.i(tag, "Restarting VPN to apply updated routing rules…")
+        teardownTunnel()
+        startVpn()
     }
 
     // ── tun2socks ─────────────────────────────────────────────────

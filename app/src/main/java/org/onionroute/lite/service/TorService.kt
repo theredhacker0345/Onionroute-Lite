@@ -179,10 +179,13 @@ class TorService : Service() {
      * Launches [startTor] on [Dispatchers.IO] to avoid NetworkOnMainThreadException.
      * All socket I/O (control port connection, bandwidth events) must happen off
      * the main thread — Android StrictMode forbids network access on the UI thread.
+     *
+     * @param clearStopFlag User-initiated starts clear a previously-set stop
+     *   flag; auto-restart passes false so a concurrent user stop is honored.
      */
-    private fun startTorAsync() {
+    private fun startTorAsync(clearStopFlag: Boolean = true) {
         serviceScope.launch {
-            startTor()
+            startTor(clearStopFlag)
         }
     }
 
@@ -191,20 +194,20 @@ class TorService : Service() {
      * MUST be called from a background thread (via [startTorAsync]) because it
      * performs blocking socket I/O to the Tor control port.
      */
-    private suspend fun startTor() {
+    private suspend fun startTor(clearStopFlag: Boolean = true) {
         // Serialize concurrent start attempts — see [startMutex] docs.
         if (!startMutex.tryLock()) {
             Log.w(tag, "startTor: another start attempt is in progress — ignoring duplicate request")
             return
         }
         try {
-            startTorLocked()
+            startTorLocked(clearStopFlag)
         } finally {
             startMutex.unlock()
         }
     }
 
-    private suspend fun startTorLocked() {
+    private suspend fun startTorLocked(clearStopFlag: Boolean = true) {
         if (isTorRunning) {
             Log.w(tag, "Tor is already running")
             broadcastStatus("CONNECTED")
@@ -212,7 +215,7 @@ class TorService : Service() {
         }
 
         Log.i(tag, "Starting Tor daemon…")
-        stopRequested = false
+        if (clearStopFlag) stopRequested = false
         broadcastStatus("CONNECTING")
 
         try {
@@ -349,6 +352,7 @@ class TorService : Service() {
             }
 
             isTorRunning = true
+            autoRestartAttempts.set(0)
             killSwitch?.setVpnMode(isVpnActive())
             killSwitch?.setEnabled(KillSwitch.isEnabledInPrefs(this))
             broadcastStatus("CONNECTED")
@@ -368,28 +372,67 @@ class TorService : Service() {
         }
     }
 
+    /** Number of auto-restart attempts since the last successful connect. */
+    private val autoRestartAttempts = java.util.concurrent.atomic.AtomicInteger(0)
+
     /**
      * Called by [TorProcessManager] when the tor process exits WITHOUT an
      * explicit stop request — i.e. it crashed or was killed by the system.
-     * Previously this was only logged; the UI kept showing CONNECTED forever,
-     * bandwidth froze at stale values and the kill switch could not react.
+     *
+     * SELF-HEALING: instead of immediately surfacing an ERROR (the old
+     * behavior), transparently restarts tor up to
+     * [Constants.TOR_AUTO_RESTART_ATTEMPTS] times with linear backoff while
+     * the UI shows "CONNECTING". This recovers gracefully from transient
+     * kills (OOM, network switch, OEM battery manager) with zero user
+     * interaction. Only after exhausting attempts does the user see ERROR.
      *
      * Note: this fires even when the crash happens mid-bootstrap (while
-     * [isTorRunning] is still false) so the user gets an immediate ERROR
-     * instead of staring at "CONNECTING…" until the 120s latch timeout.
+     * [isTorRunning] is still false) — in that case startTorLocked's own
+     * timeout path owns the error, so no auto-restart is attempted here.
      */
     private fun onTorProcessExited(exitCode: Int) {
         serviceScope.launch {
-            // Belt-and-braces: an intentional stop sets this flag before the
-            // process is destroyed; if it's set, cleanup is already running.
-            if (stopRequested) return@launch
-            Log.e(tag, "Tor process exited unexpectedly (exit code $exitCode)")
-            broadcastStatus("ERROR", "Tor disconnected unexpectedly (process exit code $exitCode)")
+            // An intentional stop or a mid-bootstrap failure: don't interfere.
+            if (stopRequested || !isTorRunning) return@launch
+
+            val attempt = autoRestartAttempts.incrementAndGet()
+            if (attempt > Constants.TOR_AUTO_RESTART_ATTEMPTS) {
+                autoRestartAttempts.set(0)
+                Log.e(tag, "Auto-restart exhausted after $exitCode exit — giving up")
+                broadcastStatus("ERROR", "Tor exited repeatedly (last exit code $exitCode)")
+                stopTorInternal()
+                return@launch
+            }
+
+            Log.w(tag, "Tor exited unexpectedly (code $exitCode) — " +
+                "auto-restarting (attempt $attempt/${Constants.TOR_AUTO_RESTART_ATTEMPTS})")
+            broadcastStatus("CONNECTING")
+            updateNotification("OnionRoute Lite — Reconnecting…")
+
+            // Tear down the dead stack first so startTor() starts fresh.
             stopTorInternal()
+
+            // Linear backoff: 3s, 6s, … gives the OS/network time to settle.
+            delay(Constants.TOR_AUTO_RESTART_DELAY_BASE_MS * attempt)
+
+            // A user stop during the backoff window must be honored; the flag
+            // is NOT cleared by this auto-restart path.
+            if (stopRequested) {
+                Log.i(tag, "Auto-restart aborted — user requested stop during backoff")
+                return@launch
+            }
+            startTor(clearStopFlag = false)
         }
     }
 
     private fun stopTor() {
+        // User-intent flag FIRST so any in-flight startTor() aborts quietly
+        // at its next checkpoint. Internal failure paths (bootstrap timeout,
+        // control-connect failure, crash give-up) deliberately do NOT set
+        // this — otherwise auto-restart would see a stale "user wants off"
+        // flag and refuse to reconnect.
+        stopRequested = true
+
         stopTorInternal()
         broadcastStatus("DISCONNECTED")
         updateNotification("OnionRoute Lite — Disconnected")
@@ -403,10 +446,6 @@ class TorService : Service() {
             // false, so we MUST still clean up here. Don't early-return.
             Log.d(tag, "stopTorInternal: Tor wasn't fully running, cleaning up anyway")
         }
-
-        // Signal any in-flight startTor() to abort quietly (it re-checks
-        // this flag between retries and after the bootstrap latch wait).
-        stopRequested = true
 
         Log.i(tag, "Stopping Tor daemon…")
 

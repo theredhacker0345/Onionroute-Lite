@@ -51,6 +51,12 @@ object Constants {
     const val PREF_WEBTUNNEL_CUSTOM_BRIDGES = "webtunnel_custom_bridges"
     const val PREF_CUSTOM_BRIDGES = "custom_bridges"
 
+    // One-shot prompt: ask the user to exempt the app from battery
+    // optimization (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS is declared in the
+    // manifest). Without the exemption, aggressive OEM battery managers
+    // (MIUI, EMUI, ColorOS…) kill the tor process minutes after screen-off.
+    const val PREF_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
+
     // ── Kindness Stats Preferences ────────────────────────────
     const val PREF_KINDNESS_DATA_DONATED = "kindness_data_donated"
     const val PREF_KINDNESS_PEOPLE_HELPED_NOW = "kindness_people_helped_now"
@@ -69,6 +75,7 @@ object Constants {
     const val ACTION_STOP_TOR = "org.onionroute.lite.STOP_TOR"
     const val ACTION_START_VPN = "org.onionroute.lite.START_VPN"
     const val ACTION_STOP_VPN = "org.onionroute.lite.STOP_VPN"
+    const val ACTION_RESTART_VPN = "org.onionroute.lite.RESTART_VPN"
     const val ACTION_TOGGLE_SNOWFLAKE = "org.onionroute.lite.TOGGLE_SNOWFLAKE"
     const val ACTION_TOGGLE_OBFS4 = "org.onionroute.lite.TOGGLE_OBFS4"
     const val ACTION_TOGGLE_WEBTUNNEL = "org.onionroute.lite.TOGGLE_WEBTUNNEL"
@@ -105,6 +112,9 @@ object Constants {
     const val VPN_MTU = 1500
     const val VPN_ADDRESS = "10.0.0.2"
     const val VPN_ROUTE_PREFIX = 32
+    // IPv6 address for the TUN interface. Paired with the ::/0 route so
+    // IPv6 traffic is captured into the tunnel instead of bypassing Tor.
+    const val VPN_ADDRESS_V6 = "fdfe:dcba:9876::1"
     const val VPN_DNS = "10.0.0.1"
 
     // ── Snowflake Default Configuration ───────────────────────
@@ -117,6 +127,14 @@ object Constants {
     // exit node IP. Response JSON: {"IsTor":true,"IP":"1.2.3.4"}
     const val EXIT_IP_CHECK_URL = "https://check.torproject.org/api/ip"
     const val EXIT_IP_UPDATE_INTERVAL_MS = 15_000L
+
+    // ── Auto-Reconnect (self-healing) ─────────────────────────
+    // When the tor process exits unexpectedly while connected, the service
+    // transparently restarts it this many times (with linear backoff) before
+    // surfacing an ERROR. Better-than-official smoothness: transient kills
+    // by the OS/OOM recover without user interaction.
+    const val TOR_AUTO_RESTART_ATTEMPTS = 2
+    const val TOR_AUTO_RESTART_DELAY_BASE_MS = 3000L
     // STUN servers for Snowflake WebRTC NAT traversal.
     //
     // These were tested via UDP STUN Binding Request on 2026-06-21 and
