@@ -46,6 +46,9 @@ class AppSelectionManager(context: Context) {
 
     companion object {
         private const val TAG = "AppSelectionManager"
+
+        /** Fixed raster size for cached app icons (see [loadBoundedIcon]). */
+        private const val ICON_CACHE_PX = 96
     }
 
     // ── Installed Apps ─────────────────────────────────────────────
@@ -76,11 +79,7 @@ class AppSelectionManager(context: Context) {
                 appInfo.packageName
             }
 
-            val icon = try {
-                appInfo.loadIcon(packageManager)
-            } catch (e: Exception) {
-                null
-            }
+            val icon = loadBoundedIcon(appInfo)
 
             val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
 
@@ -96,6 +95,39 @@ class AppSelectionManager(context: Context) {
 
         // Sort: non-system apps first (alphabetically), then system apps (alphabetically)
         return apps.sortedWith(compareBy({ it.isSystemApp }, { it.appName.lowercase() }))
+    }
+
+    /**
+     * Loads an app icon RASTERIZED TO A FIXED SIZE.
+     *
+     * LOW-RAM: [PackageManager.loadIcon] returns full-resolution adaptive
+     * launcher icons — up to 432px bitmaps on modern apps. Holding one per
+     * installed app (often 150-400 apps) in Compose state cost 30-80 MB of
+     * heap on the 1.5GB-RAM devices this app targets. The list renders
+     * icons at ~36dp, so anything beyond ~96px is wasted pixels: we draw
+     * each icon once into a 96x96 bitmap, bounding the whole list to
+     * ~15 MB worst case regardless of source resolution.
+     */
+    private fun loadBoundedIcon(appInfo: android.content.pm.ApplicationInfo): Drawable? {
+        val raw: Drawable = try {
+            appInfo.loadIcon(packageManager) ?: return null
+        } catch (e: Exception) {
+            return null
+        }
+        return try {
+            val size = ICON_CACHE_PX
+            val bitmap = android.graphics.Bitmap.createBitmap(
+                size, size, android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bitmap)
+            raw.setBounds(0, 0, size, size)
+            raw.draw(canvas)
+            android.graphics.drawable.BitmapDrawable(appContext.resources, bitmap)
+        } catch (e: Exception) {
+            // Rasterization failed (OOM, exotic drawable) — fall back to the
+            // original icon rather than dropping the row.
+            raw
+        }
     }
 
     // ── Routing Mode ───────────────────────────────────────────────

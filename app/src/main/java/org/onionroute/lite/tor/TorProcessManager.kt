@@ -326,6 +326,10 @@ class TorProcessManager(
             appendLine("CookieAuthFileGroupReadable 1")
             appendLine("AvoidDiskWrites 1")
             appendLine("StrictNodes 1")
+            // LOW-RAM: bound tor's in-memory queue buffers (default scales
+            // with system RAM and can grow under heavy multi-app VPN load).
+            // See Constants.TOR_MAX_MEM_IN_QUEUE.
+            appendLine("MaxMemInQueue ${Constants.TOR_MAX_MEM_IN_QUEUE}")
             appendLine("DataDirectory ${torDataDir.absolutePath}")
             appendLine("Log notice stdout")
 

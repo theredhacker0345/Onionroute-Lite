@@ -135,6 +135,13 @@ object Constants {
     // by the OS/OOM recover without user interaction.
     const val TOR_AUTO_RESTART_ATTEMPTS = 2
     const val TOR_AUTO_RESTART_DELAY_BASE_MS = 3000L
+
+    // ── Low-RAM Tuning ────────────────────────────────────────
+    // Cap on tor's total in-memory cell/channel queue buffers. Tor's default
+    // scales with system RAM and can balloon under multi-app VPN load; an
+    // explicit bound keeps the daemon predictable on the 1.5GB devices this
+    // app targets (tor typically idles at ~20-40 MB regardless).
+    const val TOR_MAX_MEM_IN_QUEUE = "32 MBytes"
     // STUN servers for Snowflake WebRTC NAT traversal.
     //
     // These were tested via UDP STUN Binding Request on 2026-06-21 and

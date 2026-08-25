@@ -24,15 +24,21 @@
 |---------|-------------|
 | **One-tap Tor** | Connect/disconnect with a single button |
 | **VPN Mode** | Route ALL device traffic through Tor (no root required) |
+| **IPv6 Leak Protection** | IPv6 is captured into the tunnel (`::/0`) or fails closed — apps can never bypass Tor on dual-stack networks |
+| **Self-Healing Reconnect** | Unexpected tor crashes auto-restart with backoff before showing an error |
 | **SOCKS5 Proxy** | `127.0.0.1:9050` for apps that support proxy settings |
 | **HTTP Proxy** | `127.0.0.1:8118` (Tor's HTTPTunnelPort) |
 | **Snowflake Bridge** | Censorship circumvention via WebRTC proxies |
 | **obfs4 Bridges** | Built-in default bridges for additional circumvention |
 | **WebTunnel** | Mimics HTTPS traffic to defeat deep packet inspection |
+| **CI-Verified Bridges** | GitHub Actions health-checks bridges every hour; the app fetches alive bridges at runtime |
+| **Per-App Routing** | Select which apps use Tor; rules apply live to a running VPN |
 | **.onion Access** | Automatic via Tor routing |
 | **Bandwidth Monitor** | Real-time speed + cumulative totals (upload & download) |
 | **Kill Switch** | Block all internet if Tor disconnects unexpectedly |
 | **Auto-start on Boot** | Optional, configurable in app |
+| **Battery-Optimization Prompt** | One-time system dialog so OEM battery managers don't kill tor after screen-off |
+| **Low-RAM Design** | Bounded icon memory, capped tor buffers — targets 1.5GB devices |
 | **Camouflage Icons** | Disguise the app with alternate launcher icons |
 | **Kindness Mode** | Run a Snowflake proxy to help censored users |
 
@@ -186,6 +192,14 @@ The kill switch works by keeping the VPN interface active but stopping the SOCKS
 
 All DNS queries are routed through Tor's DNSPort (`127.0.0.1:5400`) when VPN mode is active. This prevents your ISP from seeing which domains you resolve. Verify with [dnsleaktest.com](https://dnsleaktest.com).
 
+### IPv6 Leak Prevention
+
+The TUN interface routes **both** `0.0.0.0/0` and `::/0`. On dual-stack (IPv4+IPv6) networks — most LTE and modern WiFi — an IPv4-only VPN would let apps silently bypass Tor over IPv6 while everything *looked* routed. OnionRoute Lite captures IPv6 into the tunnel too: v6 traffic goes through tun2socks → SOCKS5 → tor, or fails closed. It never leaks around the VPN.
+
+### Self-Healing Reconnect
+
+If the tor process dies unexpectedly (OOM killer, OEM battery manager, network switch), the service automatically restarts it with linear backoff (3s, 6s) while the UI shows "Connecting…". Only after repeated failures does the app surface an error. Combined with the one-time battery-optimization prompt on first connect, this addresses the most common real-world failure mode on aggressive Chinese-OEM ROMs (MIUI, EMUI, ColorOS).
+
 ### UDP Blocking
 
 Tor only supports TCP. All UDP traffic is blocked at the VPN layer. This means:
@@ -203,10 +217,21 @@ Built for **Samsung Galaxy Grand Prime Plus** (SM-G532F):
 
 | Aspect | Detail |
 |--------|--------|
-| **RAM** | 1.5 GB — App uses ~30-50 MB; tor daemon ~20-40 MB |
+| **RAM** | 1.5 GB — App uses ~30-50 MB; tor daemon ~20-40 MB (queue buffers capped at 32 MB) |
 | **Storage** | 8 GB — APK is ~38 MB; leave room for tor data |
 | **CPU** | Spreadtrum SC9830E — First connect may take 30-60s |
-| **Battery** | Foreground service drains faster; plug in when possible |
+| **Battery** | Foreground service drains faster; the app asks once to be excluded from battery optimization |
+
+### Low-RAM Engineering
+
+Memory is bounded by design so the app stays smooth on 1.5GB devices:
+
+| Technique | Effect |
+|-----------|--------|
+| App icons rasterized to fixed 96px bitmaps | Per-app routing list costs ~15 MB instead of 30-80 MB of full-res adaptive icons |
+| `MaxMemInQueue 32 MBytes` in generated torrc | Tor's channel/cell buffers can't balloon under multi-app VPN load |
+| No `largeHeap` flag | Normal heap ceiling keeps the app friendly to co-running apps |
+| Speed-history capped at 60 samples; R8 full-mode shrinking | Small state footprint, minimal DEX |
 
 > **Phone/tablet only.** The release APK ships only ARM ABIs
 > (armeabi-v7a + arm64-v8a). x86/x86_64 (Intel-based tablets and
@@ -216,6 +241,7 @@ Built for **Samsung Galaxy Grand Prime Plus** (SM-G532F):
 ### Recommended Settings
 
 1. **Settings → Battery → Battery Optimization** → Set OnionRoute Lite to *Don't optimize*
+   (the app shows this system dialog once on your first manual connect — accepting is recommended)
 2. **Settings → Apps → OnionRoute Lite** → Enable *Allow background activity*
 
 ---
@@ -236,16 +262,19 @@ onionroute-lite/
 |       |   +-- KillSwitch.kt           # Kill switch logic
 |       |   +-- service/
 |       |   |   +-- TorService.kt       # Foreground service (core)
-|       |   |   +-- TorVpnService.kt    # VPN routing service
+|       |   |   +-- TorVpnService.kt    # VPN routing service (IPv4+IPv6)
 |       |   |   +-- KindnessService.kt  # Snowflake proxy service
+|       |   |   +-- AppSelectionManager.kt # Per-app routing rules
+|       |   |   +-- BootReceiver.kt     # Auto-start on boot
 |       |   |   +-- ConnectTileService.kt
 |       |   |   +-- RefreshTileService.kt
-|       |   |   +-- BootReceiver.kt     # Auto-start on boot
 |       |   +-- tor/
-|       |   |   +-- TorProcessManager.kt # Manages tor binary
+|       |   |   +-- TorProcessManager.kt # Manages tor binary + torrc generation
 |       |   |   +-- TorControlConnection.kt # Control port client
 |       |   |   +-- BandwidthTracker.kt # Bandwidth stats
+|       |   |   +-- BridgeUpdater.kt    # Runtime CI-verified bridge fetcher
 |       |   |   +-- BridgeConfig.kt     # Bridge configuration
+|       |   |   +-- WebTunnelConfig.kt  # WebTunnel bridge config
 |       |   +-- ui/
 |       |       +-- screens/            # Compose screens
 |       |       +-- theme/Theme.kt      # OnionRoute design system
@@ -262,6 +291,7 @@ onionroute-lite/
 |   +-- build-obfs4.sh                  # Build obfs4proxy
 |   +-- build-snowflake.sh              # Build snowflake client + proxy
 |   +-- build-tun2socks.sh              # Build hev-socks5-tunnel
+|   +-- build-webtunnel.sh              # Build webtunnel-client
 +-- metadata/
 |   +-- org.onionroute.lite.yml         # F-Droid metadata
 +-- fastlane/
