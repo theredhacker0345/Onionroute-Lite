@@ -32,6 +32,7 @@ import org.onionroute.lite.KillSwitch
 import org.onionroute.lite.MainActivity
 import org.onionroute.lite.tor.BandwidthTracker
 import org.onionroute.lite.tor.BridgeConfig
+import org.onionroute.lite.tor.TorCircuit
 import org.onionroute.lite.tor.TorControlConnection
 import org.onionroute.lite.tor.TorProcessManager
 
@@ -124,6 +125,8 @@ class TorService : Service() {
             Constants.ACTION_TOGGLE_OBFS4 -> toggleObfs4()
             Constants.ACTION_TOGGLE_WEBTUNNEL -> toggleWebTunnel()
             Constants.ACTION_NEW_CIRCUIT -> requestNewCircuit()
+            Constants.ACTION_GET_CIRCUITS -> requestCircuits()
+            Constants.ACTION_SET_EXIT_COUNTRY -> applyExitCountry(intent.getStringExtra(Constants.EXTRA_EXIT_COUNTRY))
             null -> handleStickyRestart()
             else -> Log.w(tag, "Unknown action: $action")
         }
@@ -623,6 +626,53 @@ class TorService : Service() {
                 }
             } catch (e: Exception) {
                 Log.e(tag, "Error sending NEWNYM signal", e)
+            }
+        }
+    }
+
+    /**
+     * Circuit Viewer: fetches `GETINFO circuit-status` over the control port
+     * and broadcasts the parsed list to the UI as a JSON array.
+     * Called by the Circuits screen every few seconds while it is visible.
+     */
+    private fun requestCircuits() {
+        val conn = torControlConnection
+        if (conn == null || !isTorRunning) return
+
+        serviceScope.launch {
+            try {
+                val raw = conn.getInfo("circuit-status")
+                val json = TorCircuit.toJsonArray(TorCircuit.parseAll(raw))
+                val intent = Intent(Constants.ACTION_CIRCUITS_UPDATE).apply {
+                    putExtra(Constants.EXTRA_CIRCUITS_JSON, json)
+                    setPackage(packageName)
+                }
+                sendBroadcast(intent)
+            } catch (e: Exception) {
+                Log.d(tag, "GETINFO circuit-status failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Exit Country Selector: applies the chosen restriction to a RUNNING tor
+     * session via SETCONF (no restart needed). The choice is also persisted
+     * in prefs and written into future torrc files by generateTorrc().
+     */
+    private fun applyExitCountry(code: String?) {
+        if (!isTorRunning) {
+            // Not connected — nothing to apply live; the pref is already
+            // saved and will land in the next torrc generation.
+            Log.i(tag, "Exit country '$code' saved (applies on next connect)")
+            return
+        }
+
+        serviceScope.launch {
+            try {
+                val ok = torControlConnection?.setExitCountry(code) ?: false
+                Log.i(tag, "Exit country applied ('$code'): $ok")
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to apply exit country", e)
             }
         }
     }

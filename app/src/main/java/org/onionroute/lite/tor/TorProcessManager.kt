@@ -330,6 +330,18 @@ class TorProcessManager(
             // with system RAM and can grow under heavy multi-app VPN load).
             // See Constants.TOR_MAX_MEM_IN_QUEUE.
             appendLine("MaxMemInQueue ${Constants.TOR_MAX_MEM_IN_QUEUE}")
+            // Exit-country restriction (Settings → EXIT NODE). Persisted here
+            // so it survives restarts; StrictNodes 1 above makes the
+            // restriction hard (no fallback to other exits). Changes made
+            // while connected are applied live via SETCONF — this line keeps
+            // the same choice for the NEXT daemon start.
+            val exitCountry = context.getSharedPreferences(
+                Constants.PREFS_NAME, android.content.Context.MODE_PRIVATE
+            ).getString(Constants.PREF_EXIT_COUNTRY, "") ?: ""
+            if (exitCountry.isNotBlank()) {
+                appendLine("ExitNodes {$exitCountry}")
+                Log.i(tag, "torrc: exit country restricted to '$exitCountry'")
+            }
             appendLine("DataDirectory ${torDataDir.absolutePath}")
             appendLine("Log notice stdout")
 

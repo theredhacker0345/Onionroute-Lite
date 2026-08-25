@@ -370,6 +370,18 @@ fun StatusDisplay(appState: OnionRouteAppState) {
                         )
                     )
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                // Entry point to the Circuit Viewer (GETINFO circuit-status).
+                Text(
+                    text = "VIEW CIRCUITS \u2192",
+                    fontSize = 11.sp,
+                    fontFamily = SyneFontFamily,
+                    color = OnionRouteColors.Jade,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { appState.navigateTo(Screen.Circuits) }
+                )
             }
             is ConnectionState.Error -> {
                 Text(

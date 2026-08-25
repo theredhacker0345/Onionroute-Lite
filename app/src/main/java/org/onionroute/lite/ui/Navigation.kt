@@ -7,11 +7,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.onionroute.lite.tor.TorCircuit
 import org.onionroute.lite.ui.screens.AppSelectionScreen
 import org.onionroute.lite.ui.screens.HomeScreen
 import org.onionroute.lite.ui.screens.SettingsScreen
 import org.onionroute.lite.ui.screens.BridgeScreen
 import org.onionroute.lite.ui.screens.BandwidthScreen
+import org.onionroute.lite.ui.screens.CircuitScreen
 import org.onionroute.lite.ui.screens.KindnessScreen
 import org.onionroute.lite.ui.theme.ConnectionState
 
@@ -22,6 +24,7 @@ sealed class Screen(val route: String) {
     data object Bandwidth : Screen("bandwidth")
     data object AppSelection : Screen("app_selection")
     data object Kindness : Screen("kindness")
+    data object Circuits : Screen("circuits")
 }
 
 class OnionRouteAppState {
@@ -61,6 +64,21 @@ class OnionRouteAppState {
     var customBridges by mutableStateOf<List<String>>(emptyList())
         internal set
 
+    // ── Circuit Viewer / Exit Country / Kindness Level ────────
+
+    /** Live circuit list, refreshed by the Circuits screen via
+     *  [onRefreshCircuits]; delivered by TorService broadcast. */
+    var circuits by mutableStateOf<List<TorCircuit>>(emptyList())
+        internal set
+
+    /** Selected exit country ("" = no restriction). */
+    var exitCountry by mutableStateOf("")
+        internal set
+
+    /** Max concurrent snowflake clients (0 = unlimited). */
+    var kindnessCapacity by mutableStateOf(5)
+        internal set
+
     // ── Service Callbacks (set by MainActivity) ─────────────
 
     var onVpnToggle: ((Boolean) -> Unit)? = null
@@ -72,6 +90,9 @@ class OnionRouteAppState {
     var onAutoStartToggle: ((Boolean) -> Unit)? = null
     var onConnectToggle: (() -> Unit)? = null
     var onImportBridges: ((List<String>) -> Unit)? = null
+    var onRefreshCircuits: (() -> Unit)? = null
+    var onExitCountryChange: ((String) -> Unit)? = null
+    var onKindnessCapacityChange: ((Int) -> Unit)? = null
 
     var uploadSpeed by mutableStateOf("0 KB/s")
         internal set
@@ -126,6 +147,7 @@ class OnionRouteAppState {
             Screen.Bandwidth -> Screen.Home
             Screen.AppSelection -> Screen.Settings
             Screen.Kindness -> Screen.Settings
+            Screen.Circuits -> Screen.Home
         }
     }
 
@@ -216,6 +238,23 @@ class OnionRouteAppState {
         kindnessSessionStart = sessionStart
     }
 
+    /** Called by MainActivity when ACTION_CIRCUITS_UPDATE is received. */
+    fun updateCircuits(list: List<TorCircuit>) {
+        circuits = list
+    }
+
+    fun updateExitCountry(code: String) {
+        if (exitCountry == code) return
+        exitCountry = code
+        onExitCountryChange?.invoke(code)
+    }
+
+    fun updateKindnessCapacity(capacity: Int) {
+        if (kindnessCapacity == capacity) return
+        kindnessCapacity = capacity
+        onKindnessCapacityChange?.invoke(capacity)
+    }
+
     fun addSpeedDataPoint(speed: Float) {
         val current = speedDataPoints.toMutableList()
         current.add(speed)
@@ -247,6 +286,7 @@ fun OnionRouteNavigation(appState: OnionRouteAppState) {
             Screen.Bandwidth -> BandwidthScreen(appState = appState)
             Screen.AppSelection -> AppSelectionScreen(appState = appState)
             Screen.Kindness -> KindnessScreen(appState = appState)
+            Screen.Circuits -> CircuitScreen(appState = appState)
         }
     }
 }

@@ -272,6 +272,46 @@ class TorControlConnection(private val context: Context) {
         }
     }
 
+    /**
+     * Restricts exit nodes to a country at RUNTIME (applies immediately to a
+     * connected session, no tor restart needed).
+     *
+     * @param code ISO-3166 alpha-2 country code (e.g. "de"), or null/blank to
+     *   remove the restriction. Tor builds fresh circuits for new connections
+     *   after this — existing circuits keep their old exits until rotated.
+     * @return true if tor accepted the SETCONF.
+     */
+    fun setExitCountry(code: String?): Boolean {
+        if (!isConnected) return false
+
+        requestLock.lock()
+        try {
+            val key = "SETCONF_ExitNodes"
+            val latch = CountDownLatch(1)
+            pendingResponses[key] = latch
+
+            // Per control-spec: SETCONF with a value sets it; SETCONF with a
+            // bare keyword resets that option to its compiled default, which
+            // is exactly what "no exit-country restriction" means here.
+            val command = if (code.isNullOrBlank()) "SETCONF ExitNodes\r\n"
+                          else "SETCONF ExitNodes={$code}\r\n"
+            sendCommand(command)
+
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                pendingResponses.remove(key)
+                return false
+            }
+
+            val resp = responseValues.remove(key)
+            return resp?.startsWith("250") == true
+        } catch (e: Exception) {
+            Log.e(tag, "SETCONF ExitNodes failed", e)
+            return false
+        } finally {
+            requestLock.unlock()
+        }
+    }
+
     // ── Internal ──────────────────────────────────────────────────
 
     private fun sendCommand(command: String) {
@@ -332,6 +372,38 @@ class TorControlConnection(private val context: Context) {
                         onStatusEvent?.invoke(line)
                         if (line.contains(" BOOTSTRAP ")) {
                             parseBootstrapEvent(line)
+                        }
+                    }
+
+                    // Multiline GETINFO values use the "+" data-reply format
+                    // (control-spec §2.3):
+                    //   250+circuit-status=
+                    //   <line1>
+                    //   <line2>
+                    //   .
+                    //   250 OK
+                    // `GETINFO circuit-status` REQUIRES this path — its value
+                    // contains embedded newlines, one per circuit.
+                    line.startsWith("250+") -> {
+                        val eqIdx = line.indexOf('=', 4)
+                        if (eqIdx > 4) {
+                            val keyword = line.substring(4, eqIdx)
+                            val data = StringBuilder()
+                            var terminated = false
+                            while (!terminated && isConnected && !Thread.currentThread().isInterrupted) {
+                                val dataLine = readLineFromStream(stream) ?: break  // EOF mid-reply
+                                if (dataLine == ".") {
+                                    terminated = true
+                                } else {
+                                    if (data.isNotEmpty()) data.append('\n')
+                                    // Spec: lines starting with '.' are escaped by
+                                    // doubling the dot. Circuit paths never start with
+                                    // one, but unescape defensively anyway.
+                                    data.append(if (dataLine.startsWith("..")) dataLine.drop(1) else dataLine)
+                                }
+                            }
+                            responseValues[keyword] = data.toString()
+                            pendingResponses.remove(keyword)?.countDown()
                         }
                     }
 

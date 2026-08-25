@@ -24,6 +24,7 @@ import org.onionroute.lite.service.TorService
 import org.onionroute.lite.service.TorVpnService
 import org.onionroute.lite.tor.BridgeConfig
 import org.onionroute.lite.tor.BridgeUpdater
+import org.onionroute.lite.tor.TorCircuit
 import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.OnionRouteNavigation
 import org.onionroute.lite.ui.theme.ConnectionState
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
                 Constants.ACTION_KINDNESS_STATS -> handleKindnessStats(intent)
                 Constants.ACTION_KINDNESS_UPDATE -> handleKindnessUpdate(intent)
                 Constants.ACTION_EXIT_IP_UPDATE -> handleExitIpUpdate(intent)
+                Constants.ACTION_CIRCUITS_UPDATE -> handleCircuitsUpdate(intent)
             }
         }
     }
@@ -107,6 +109,12 @@ class MainActivity : ComponentActivity() {
                 BridgeUpdater.get(this@MainActivity).fetchBridges()
             }
         }
+
+        // ── Restore circuit viewer / exit country / kindness level ──
+        appState.exitCountry = prefs.getString(Constants.PREF_EXIT_COUNTRY, "") ?: ""
+        appState.kindnessCapacity = prefs.getInt(
+            Constants.PREF_KINDNESS_CAPACITY, Constants.KINDNESS_CAPACITY_DEFAULT
+        )
 
         // ── Restore camouflage icon preference ────────────────────
         val savedIconKey = prefs.getString(Constants.PREF_APP_ICON, "default") ?: "default"
@@ -148,6 +156,38 @@ class MainActivity : ComponentActivity() {
             // Reuse the bridgeConfig instance created earlier in onCreate
             // (don't shadow it with a new instance here).
             bridgeConfig.setCustomBridges(bridges)
+        }
+
+        // ── Circuit Viewer ──────────────────────────────────────────
+        appState.onRefreshCircuits = {
+            sendCommandToService(Constants.ACTION_GET_CIRCUITS)
+        }
+
+        // ── Exit Country Selector ───────────────────────────────────
+        // Persist the choice (generateTorrc writes it for future starts) and
+        // ask TorService to apply it live to a connected session via SETCONF.
+        appState.onExitCountryChange = { code ->
+            prefs.edit().putString(Constants.PREF_EXIT_COUNTRY, code).apply()
+            val intent = Intent(this, TorService::class.java).apply {
+                action = Constants.ACTION_SET_EXIT_COUNTRY
+                putExtra(Constants.EXTRA_EXIT_COUNTRY, code)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+            else startService(intent)
+        }
+
+        // ── Kindness Donation Level ────────────────────────────────
+        // Persist the -capacity value; if the proxy is running, restart it so
+        // the new level applies immediately.
+        appState.onKindnessCapacityChange = { capacity ->
+            prefs.edit().putInt(Constants.PREF_KINDNESS_CAPACITY, capacity).apply()
+            if (appState.isKindnessEnabled) {
+                val intent = Intent(this, KindnessService::class.java).apply {
+                    action = Constants.ACTION_RESTART_KINDNESS_PROXY
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+                else startService(intent)
+            }
         }
         appState.onConnectToggle = {
             when (appState.connectionState) {
@@ -351,6 +391,15 @@ class MainActivity : ComponentActivity() {
         val active = intent.getBooleanExtra(Constants.EXTRA_KINDNESS_ACTIVE, false)
         runOnUiThread {
             appState.updateKindnessState(active)
+        }
+    }
+
+    /** Circuit Viewer: TorService broadcasts the parsed circuit list as JSON. */
+    private fun handleCircuitsUpdate(intent: Intent) {
+        val json = intent.getStringExtra(Constants.EXTRA_CIRCUITS_JSON)
+        val circuits = TorCircuit.fromJsonArray(json)
+        runOnUiThread {
+            appState.updateCircuits(circuits)
         }
     }
 
