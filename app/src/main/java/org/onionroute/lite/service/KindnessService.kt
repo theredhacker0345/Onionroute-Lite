@@ -48,6 +48,11 @@ class KindnessService : Service() {
 
     private val tag = "KindnessService"
 
+    // PERF: precompiled once — parseProxyLine runs for EVERY line the proxy
+    // prints, and Regex compilation is expensive (pattern parsing + native
+    // structure). The old code recompiled these on every single line.
+    private val DATA_RELAYED_REGEX = Regex("""data\s+relayed:\s+(\d+)""")
+
     private var proxyProcess: Process? = null
     private var monitorThread: Thread? = null
     private var stdoutThread: Thread? = null
@@ -336,8 +341,7 @@ class KindnessService : Service() {
         if (trimmed.contains("disconnected")) {
             peopleHelpedNow.getAndUpdate { (it - 1).coerceAtLeast(0) }
             // Extract bytes: "data relayed: 1234567 B" or "data relayed: 1234567 bytes"
-            val dataMatch = Regex("""data\s+relayed:\s+(\d+)""").find(trimmed)
-            dataMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
+            DATA_RELAYED_REGEX.find(trimmed)?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
                 dataDonated.addAndGet(bytes)
             }
             broadcastKindnessStats()

@@ -88,14 +88,22 @@ class MainActivity : ComponentActivity() {
         appState.updateCustomBridges(bridgeConfig.getCustomBridges())
 
         // ── Fetch alive bridges from GitHub in background ──────
-        // BridgeUpdater fetches alive_bridges.json (CI-verified working
-        // bridges) from the repo's raw URL. Falls back to cache →
-        // hardcoded bridges. No user data sent, no tracking.
-        // Uses an application-scoped coroutine scope instead of GlobalScope
-        // so the coroutine is properly tied to the app lifecycle (GlobalScope
-        // is fragile and discouraged by the Kotlin coroutines team).
-        appScope.launch(Dispatchers.IO) {
-            BridgeUpdater.get(this@MainActivity).fetchBridges()
+        // PERF/PRIVACY: only prefetch when bridges are actually in use.
+        // Previously EVERY app start hit raw.githubusercontent.com once the
+        // 24h cache TTL expired — a wasted request (and IP disclosure to
+        // GitHub) for users who never enable any bridge. Users WITH bridges
+        // still get fresh lists before their next tor start; everyone else
+        // skips the round-trip entirely.
+        // BridgeUpdater.fetchBridges() itself also short-circuits while its
+        // cache is <24h old.
+        val bridgesInUse = prefs.getBoolean(Constants.PREF_SNOWFLAKE_ENABLED, false) ||
+                prefs.getBoolean(Constants.PREF_OBFS4_ENABLED, false) ||
+                prefs.getBoolean(Constants.PREF_WEBTUNNEL_ENABLED, false) ||
+                bridgeConfig.getCustomBridges().isNotEmpty()
+        if (bridgesInUse) {
+            appScope.launch(Dispatchers.IO) {
+                BridgeUpdater.get(this@MainActivity).fetchBridges()
+            }
         }
 
         // ── Restore camouflage icon preference ────────────────────

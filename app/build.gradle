@@ -19,6 +19,11 @@ android {
 
         // Reproducible build: freeze build timestamp
         buildConfigField "long", "BUILD_TIMESTAMP", "0L"
+
+        // The app's own resources are English-only; strip the ~80 translated
+        // locales bundled by AndroidX/Material libraries. Cuts resources.arsc
+        // and APK size noticeably with zero user-visible impact.
+        resourceConfigurations += ['en']
     }
 
     // ── Per-ABI APK splits ────────────────────────────────────────

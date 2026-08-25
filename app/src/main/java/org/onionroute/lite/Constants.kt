@@ -29,13 +29,6 @@ object Constants {
     // bootstrap stalls at PT_MISSING (5%) and never completes.
     const val BINARY_WEBTUNNEL = "libwebtunnel.so"
 
-    // ── Executable Names (symlinks in app data dir) ───────────
-    const val EXEC_TOR = "tor"
-    const val EXEC_OBFS4PROXY = "obfs4proxy"
-    const val EXEC_SNOWFLAKE = "snowflake-client"
-    const val EXEC_SNOWFLAKE_PROXY = "snowflake-proxy"
-    const val EXEC_TUN2SOCKS = "tun2socks"
-
     // ── File Paths ────────────────────────────────────────────
     const val TORRC_FILENAME = "torrc"
     const val TORRC_TEMPLATE = "torrc.template"
@@ -51,8 +44,6 @@ object Constants {
     const val PREF_VPN_ENABLED = "vpn_enabled"
     const val PREF_KILL_SWITCH_ENABLED = "kill_switch_enabled"
     const val PREF_AUTO_START = "pref_auto_start"
-    const val PREF_LAST_TOTAL_UP = "last_total_up"
-    const val PREF_LAST_TOTAL_DOWN = "last_total_down"
     const val PREF_APP_ROUTING_MODE = "app_routing_mode"
     const val PREF_SELECTED_APPS = "selected_apps"
     const val PREF_EXCLUDED_APPS = "excluded_apps"
@@ -179,9 +170,6 @@ object Constants {
         "webtunnel 159.69.22.241:443 40D1E0A98733F1E3E0548BD2F2B3C7B6B08C93B7 url=https://wt-1.broker.torproject.org/webtunnel/line/5a5a6463-05a0-4c44-bef7-40e3e2e128f2 ver=0.4.0",
         "obfs4 67.205.142.190:9889 656C06D42A01D25138F2F52E459C6DC27B209F73 cert=Y8MM/9CEGC7PshNot9XYQQncWugSGeu/p6hbvNOsU1zl2U4TL50l4OBzyOhD6dLw4LVMSw iat-mode=0"
     )
-
-    // ── Kill Switch ───────────────────────────────────────────
-    const val KILLSWITCH_CHECK_INTERVAL_MS = 3000L
 
     // ── Quick Settings Tile ───────────────────────────────────
     const val PREF_TOR_CONNECTED = "tor_connected"

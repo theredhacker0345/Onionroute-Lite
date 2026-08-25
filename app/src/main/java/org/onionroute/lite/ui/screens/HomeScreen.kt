@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -180,24 +181,39 @@ fun ConnectionButton(appState: OnionRouteAppState) {
         label = "glow_alpha"
     )
 
-    // Pulsing animation for connecting state
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
-
-    val scale = if (isConnecting) pulseScale else 1f
+    // PERF: the pulsing infinite transition previously existed unconditionally,
+    // driving continuous recomposition/redraw even in DISCONNECTED state where
+    // its value was never used. It's now composed ONLY while connecting, so an
+    // idle home screen costs zero animation frames.
+    //
+    // PERF: the pulse used to animate Modifier.size() directly — that forced a
+    // full measure/layout pass of this whole scrollable Column every frame.
+    // The State is now read DEFERRED inside the graphicsLayer lambda: the
+    // animation updates only layer properties (draw phase) with zero
+    // recomposition and zero re-layout.
+    val pulseScaleState = if (isConnecting) {
+        rememberInfiniteTransition(label = "pulse").animateFloat(
+            initialValue = 0.95f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse_scale"
+        )
+    } else {
+        null
+    }
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(200.dp * scale)
+            .size(200.dp)
+            .graphicsLayer {
+                val s = pulseScaleState?.value ?: 1f
+                scaleX = s
+                scaleY = s
+            }
             .shadow(
                 elevation = if (isConnected || isConnecting) 24.dp else 0.dp,
                 shape = CircleShape,
@@ -243,16 +259,25 @@ fun PowerIcon(
     isConnected: Boolean,
     isConnecting: Boolean
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "power_pulse")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
+    // PERF: the spinning transition is now created ONLY while connecting.
+    // The previous version created an unconditional infinite transition,
+    // keeping an animation clock ticking (and the canvas redrawing at 60fps)
+    // even when the app was idle or connected. Compose disposes the branch's
+    // transition as soon as isConnecting flips to false.
+    val rotation = if (isConnecting) {
+        val infiniteTransition = rememberInfiniteTransition(label = "power_pulse")
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation"
+        ).value
+    } else {
+        0f
+    }
 
     Canvas(modifier = Modifier.size(72.dp)) {
         val strokeWidth = 4.dp.toPx()

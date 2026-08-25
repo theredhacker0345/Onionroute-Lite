@@ -1,82 +1,39 @@
 # OnionRoute Lite ProGuard / R8 Rules
-# Aggressive optimization for minimal APK size
+#
+# OPTIMIZATION NOTES:
+# - AGP 8.2 + AAPT automatically generate keep rules for every manifest-
+#   referenced component (activities, services, receivers, tile services),
+#   so explicit -keep rules for those classes are NOT needed.
+# - The previous revision blanket-kept org.onionroute.lite.service.**,
+#   .ui.**, MainActivity, Constants, etc. with { *; } — that disabled
+#   R8 shrinking AND obfuscation for essentially the whole app package
+#   (hundreds of KB of dead weight in the release APK).
+# - The app performs NO reflection on its own classes (verified: only
+#   java.lang.Process#pid via getMethod, a framework class), so all app
+#   code can be safely shrunk/renamed.
 
 # ── Native method names (JNI) ─────────────────────────────────
 -keepclasseswithmembernames class * {
     native <methods>;
 }
 
-# ── Service classes (AndroidManifest references) ───────────────
--keep class org.onionroute.lite.service.** { *; }
-
-# ── BroadcastReceiver ─────────────────────────────────────────
--keep class org.onionroute.lite.service.BootReceiver { *; }
-
-# ── Constants (accessed via reflection by Android framework) ───
--keep class org.onionroute.lite.Constants { *; }
-
-# ── MainActivity (referenced from manifest) ───────────────────
--keep class org.onionroute.lite.MainActivity { *; }
-
-# ── KillSwitch ────────────────────────────────────────────────
--keep class org.onionroute.lite.KillSwitch { *; }
-
-# ── Tile Services (referenced from manifest) ──────────────────
--keep class org.onionroute.lite.service.ConnectTileService { *; }
--keep class org.onionroute.lite.service.RefreshTileService { *; }
-
-# ── IconSwitcher (uses PackageManager reflection) ─────────────
--keep class org.onionroute.lite.util.IconSwitcher { *; }
--keep class org.onionroute.lite.util.IconSwitcher$AppIcon { *; }
-
-# ── AppSelectionManager ───────────────────────────────────────
--keep class org.onionroute.lite.service.AppSelectionManager { *; }
--keep class org.onionroute.lite.service.AppSelectionManager$* { *; }
-
-# ── WebTunnelConfig ───────────────────────────────────────────
--keep class org.onionroute.lite.tor.WebTunnelConfig { *; }
-
-# ── Compose / UI ──────────────────────────────────────────────
--keep class org.onionroute.lite.ui.** { *; }
--keepclassmembers class org.onionroute.lite.ui.** {
-    *;
-}
-
 # ── Kotlin coroutines ─────────────────────────────────────────
--keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
--keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 -keepclassmembers class kotlinx.coroutines.** {
     volatile <fields>;
 }
 
-# ── Kotlin reflective access ──────────────────────────────────
--keepclassmembers class **$WhenMappings {
-    <fields>;
-}
--keepclassmembers class kotlin.Metadata {
-    public <methods>;
-}
-
-# ── AndroidX / Jetpack ───────────────────────────────────────
--keep class * extends androidx.lifecycle.LifecycleService { *; }
--dontwarn androidx.lifecycle.**
-
-# ── Compose ───────────────────────────────────────────────────
--dontwarn androidx.compose.**
--keep class androidx.compose.** { *; }
-
 # ── Aggressive optimization for smaller APK ───────────────────
-# Remove all logging in release builds
+# Strip verbose logging from release builds (d/v/i only; w/e kept for
+# field diagnostics which matter for a Tor client).
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
     public static *** i(...);
 }
 
-# Strip debug info from all classes
+# Keep crash-report stack traces readable without keeping full metadata.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
 # ── Suppress warnings ─────────────────────────────────────────
--dontwarn org.onionroute.lite.**
 -dontwarn kotlinx.coroutines.**

@@ -57,6 +57,11 @@ class TorService : Service() {
 
     private val tag = "TorService"
 
+    // PERF: precompiled once — fetchExitIp() runs every 15s while connected;
+    // Regex compilation per call wasted CPU on a recurring path.
+    private val IS_TOR_REGEX = Regex("\"IsTor\"\\s*:\\s*(true|false)")
+    private val IP_REGEX = Regex("\"IP\"\\s*:\\s*\"([^\"]+)\"")
+
     private var torProcessManager: TorProcessManager? = null
     private var torControlConnection: TorControlConnection? = null
     private var bandwidthTracker: BandwidthTracker? = null
@@ -712,18 +717,28 @@ class TorService : Service() {
         exitIpUpdateJob?.cancel()
         exitIpUpdateJob = serviceScope.launch {
             Log.i(tag, "Starting exit IP update job (every ${Constants.EXIT_IP_UPDATE_INTERVAL_MS}ms)")
-            while (isTorRunning && isActive) {
+            // PERF: back off exponentially when fetches fail (tor degraded,
+            // circuit churn, no network). A healthy connection polls every
+            // 15s as before; after repeated failures the interval stretches
+            // up to 4x (60s), instead of firing a doomed HTTPS-through-SOCKS
+            // request every 15s forever.
+            var consecutiveFailures = 0
+            while (isTorRunning && isActive && torControlConnection != null) {
                 try {
                     val ip = fetchExitIp()
                     if (ip != null) {
+                        consecutiveFailures = 0
                         broadcastExitIp(ip)
                     } else {
                         Log.d(tag, "Exit IP fetch returned null — Tor may not be carrying traffic yet")
+                        consecutiveFailures++
                     }
                 } catch (e: Exception) {
                     Log.w(tag, "Exit IP fetch failed: ${e.message}")
+                    consecutiveFailures++
                 }
-                delay(Constants.EXIT_IP_UPDATE_INTERVAL_MS)
+                val backoffFactor = 1L + consecutiveFailures.coerceAtMost(3)
+                delay(Constants.EXIT_IP_UPDATE_INTERVAL_MS * backoffFactor)
             }
             Log.i(tag, "Exit IP update job ended")
         }
@@ -757,8 +772,8 @@ class TorService : Service() {
             Log.d(tag, "Exit IP response: $body")
             // Parse {"IsTor":true,"IP":"1.2.3.4"} without a JSON library
             // (avoid adding org.json dependency for this small feature).
-            val isTorMatch = Regex("\"IsTor\"\\s*:\\s*(true|false)").find(body)
-            val ipMatch = Regex("\"IP\"\\s*:\\s*\"([^\"]+)\"").find(body)
+            val isTorMatch = IS_TOR_REGEX.find(body)
+            val ipMatch = IP_REGEX.find(body)
             val isTor = isTorMatch?.groupValues?.get(1)?.toBoolean() ?: false
             val ip = ipMatch?.groupValues?.get(1)
             if (isTor && !ip.isNullOrEmpty()) ip else null
