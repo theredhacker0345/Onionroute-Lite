@@ -128,6 +128,7 @@ This produces the following in `app/src/main/jniLibs/<abi>/`:
 | `libsnowflake.so` | ~5 MB | snowflake 2.10.1 |
 | `libsnowflake-proxy.so` | ~33 MB | snowflake proxy 2.10.1 |
 | `libtun2socks.so` | ~100 KB | hev-socks5-tunnel 3.0.5 |
+| `libwebtunnel.so` | ~8 MB | webtunnel client (required for the WebTunnel toggle) |
 
 ### Step 2: Build the APK
 

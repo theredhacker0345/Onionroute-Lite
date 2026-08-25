@@ -99,7 +99,7 @@ class TorControlConnection(private val context: Context) {
             // Authenticate using cookie — read response directly before listener starts
             val cookieFile = File(cookieFilePath)
             if (!cookieFile.exists()) {
-                Log.e(tag, "Cookie file not found: \$cookieFilePath")
+                Log.e(tag, "Cookie file not found: $cookieFilePath")
                 disconnect()
                 return false
             }

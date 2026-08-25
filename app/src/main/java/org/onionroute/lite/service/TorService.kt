@@ -87,6 +87,11 @@ class TorService : Service() {
         super.onCreate()
         createNotificationChannel()
         killSwitch = KillSwitch(this)
+        // Sync the in-memory enable flag from prefs. Previously setEnabled()
+        // was NEVER called anywhere, so isEnabled stayed false forever and
+        // onTorDisconnected() always early-returned — the kill switch was
+        // dead code despite its UI toggle writing the preference.
+        killSwitch?.setEnabled(KillSwitch.isEnabledInPrefs(this))
         killSwitch?.setOnKillSwitchTriggered {
             broadcastStatus("ERROR", "Kill switch triggered — Tor disconnected unexpectedly")
         }
@@ -105,7 +110,8 @@ class TorService : Service() {
             startForeground(Constants.NOTIFICATION_ID, buildNotification("Starting Tor…"))
         }
 
-        when (intent?.action) {
+        val action = intent?.action
+        when (action) {
             Constants.ACTION_START_TOR -> startTorAsync()
             Constants.ACTION_STOP_TOR -> stopTor()
             Constants.ACTION_STOP_VPN -> handleVpnStop()
@@ -113,10 +119,32 @@ class TorService : Service() {
             Constants.ACTION_TOGGLE_OBFS4 -> toggleObfs4()
             Constants.ACTION_TOGGLE_WEBTUNNEL -> toggleWebTunnel()
             Constants.ACTION_NEW_CIRCUIT -> requestNewCircuit()
-            else -> Log.w(tag, "Unknown action: ${intent?.action}")
+            null -> handleStickyRestart()
+            else -> Log.w(tag, "Unknown action: $action")
         }
 
         return START_STICKY
+    }
+
+    /**
+     * START_STICKY redelivery: the system restarted this service with a null
+     * intent after the process was killed. Previously this fell into the
+     * generic branch and left a foreground service stuck forever on
+     * "Starting Tor…" while tor wasn't running at all. Restore the previous
+     * state instead: reconnect if Tor was connected (or auto-start is on),
+     * otherwise stop cleanly.
+     */
+    private fun handleStickyRestart() {
+        val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+        val wasConnected = prefs.getBoolean(Constants.PREF_TOR_CONNECTED, false)
+        val autoStart = prefs.getBoolean(Constants.PREF_AUTO_START, false)
+        if (wasConnected || autoStart) {
+            Log.i(tag, "Sticky restart — restoring previous Tor session")
+            startTorAsync()
+        } else {
+            Log.i(tag, "Sticky restart — Tor was not connected and auto-start is off; stopping")
+            stopSelf()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -128,6 +156,19 @@ class TorService : Service() {
     }
 
     // ── Tor Control ───────────────────────────────────────────────
+
+    /** Set when a stop is requested so an in-flight startTor() can abort
+     *  quietly instead of broadcasting a spurious ERROR after the user
+     *  already saw DISCONNECTED. */
+    @Volatile private var stopRequested = false
+
+    /** Serializes start requests. isTorRunning only becomes true AFTER
+     *  bootstrap completes (up to 120s) — without this guard, duplicate
+     *  ACTION_START_TOR intents (QS tile re-tap, BootReceiver + always-on
+     *  VPN both firing on boot) each spawned their own tor process, leaked
+     *  the first one via field overwrite and double-subscribed control
+     *  events. */
+    private val startMutex = kotlinx.coroutines.sync.Mutex()
 
     /**
      * Launches [startTor] on [Dispatchers.IO] to avoid NetworkOnMainThreadException.
@@ -146,6 +187,19 @@ class TorService : Service() {
      * performs blocking socket I/O to the Tor control port.
      */
     private suspend fun startTor() {
+        // Serialize concurrent start attempts — see [startMutex] docs.
+        if (!startMutex.tryLock()) {
+            Log.w(tag, "startTor: another start attempt is in progress — ignoring duplicate request")
+            return
+        }
+        try {
+            startTorLocked()
+        } finally {
+            startMutex.unlock()
+        }
+    }
+
+    private suspend fun startTorLocked() {
         if (isTorRunning) {
             Log.w(tag, "Tor is already running")
             broadcastStatus("CONNECTED")
@@ -153,6 +207,7 @@ class TorService : Service() {
         }
 
         Log.i(tag, "Starting Tor daemon…")
+        stopRequested = false
         broadcastStatus("CONNECTING")
 
         try {
@@ -161,8 +216,11 @@ class TorService : Service() {
             isObfs4Enabled = prefs.getBoolean(Constants.PREF_OBFS4_ENABLED, false)
             isWebTunnelEnabled = prefs.getBoolean(Constants.PREF_WEBTUNNEL_ENABLED, false)
 
-            torProcessManager = TorProcessManager(this@TorService)
-            val configResult = torProcessManager!!.startTor(
+            val processManager = TorProcessManager(this@TorService) { exitCode ->
+                onTorProcessExited(exitCode)
+            }
+            torProcessManager = processManager
+            val configResult = processManager.startTor(
                 useSnowflake = isSnowflakeEnabled,
                 useObfs4 = isObfs4Enabled,
                 useWebTunnel = isWebTunnelEnabled
@@ -179,30 +237,44 @@ class TorService : Service() {
             // Retry with exponential backoff: 500ms, 1s, 1.5s, 2s, 2.5s, 3s.
             val maxRetries = 6
             var connected = false
+            var controlConnection: TorControlConnection? = null
 
             for (attempt in 1..maxRetries) {
                 delay(attempt * 500L)
 
+                // Abort quietly if the user stopped us mid-connect.
+                if (stopRequested) {
+                    Log.i(tag, "startTor aborted — stop requested during control-port retry")
+                    return
+                }
+
                 try {
-                    torControlConnection = TorControlConnection(this@TorService)
-                    connected = torControlConnection!!.connect(
+                    val conn = TorControlConnection(this@TorService)
+                    connected = conn.connect(
                         Constants.TOR_CONTROL_PORT,
-                        torProcessManager!!.controlCookieFile
+                        processManager.controlCookieFile
                     )
-                    if (connected) break
+                    if (connected) {
+                        controlConnection = conn
+                        break
+                    } else {
+                        conn.disconnect()
+                    }
                 } catch (e: Exception) {
                     Log.d(tag, "Control port attempt $attempt failed: ${e.message}")
                 }
-
-                torControlConnection?.disconnect()
-                torControlConnection = null
             }
 
-            if (!connected) {
+            if (!connected || controlConnection == null) {
                 Log.e(tag, "Failed to connect to Tor control port after $maxRetries attempts")
                 broadcastStatus("ERROR", "Failed to connect to Tor control port")
+                // Clean up the half-started stack — without this the tor
+                // daemon kept running orphaned (holding ports 9050/9051),
+                // breaking every subsequent start attempt.
+                stopTorInternal()
                 return
             }
+            torControlConnection = controlConnection
 
             // Start bandwidth monitoring + bootstrap listener.
             // We do NOT broadcast CONNECTED yet — Tor has only just opened its
@@ -214,7 +286,7 @@ class TorService : Service() {
             val bootstrapLatch = CountDownLatch(1)
             val lastProgress = AtomicInteger(0)
 
-            bandwidthTracker?.start(torControlConnection!!) { progress, bootstrapTag ->
+            bandwidthTracker?.start(controlConnection) { progress, bootstrapTag ->
                 Log.i(tag, "Bootstrap: $progress% ($bootstrapTag)")
                 lastProgress.set(progress)
                 // Broadcast intermediate progress so the UI shows "CONNECTING 45%"
@@ -231,7 +303,7 @@ class TorService : Service() {
             // current bootstrap phase via GETINFO; if it's already 100%, count
             // down the latch immediately.
             try {
-                val phase = torControlConnection?.getInfo("status/bootstrap-phase")
+                val phase = controlConnection.getInfo("status/bootstrap-phase")
                 if (phase != null) {
                     // Response format: NOTICE BOOTSTRAP PROGRESS=100 TAG=done ...
                     val progressMatch = Regex("PROGRESS=(\\d+)").find(phase)
@@ -255,6 +327,15 @@ class TorService : Service() {
             // Tor on a clean connection typically bootstraps in 5–30s; 120s
             // gives headroom for slow networks or bridge connections.
             val bootstrapped = bootstrapLatch.await(120, TimeUnit.SECONDS)
+
+            // Abort quietly if the user stopped us mid-bootstrap:
+            // stopTor()/stopTorInternal() already cleaned up and broadcast
+            // DISCONNECTED — don't report a confusing ERROR afterwards.
+            if (stopRequested) {
+                Log.i(tag, "startTor aborted — stop requested during bootstrap")
+                return
+            }
+
             if (!bootstrapped) {
                 Log.e(tag, "Tor bootstrap timed out at ${lastProgress.get()}% after 120s")
                 broadcastStatus("ERROR", "Tor bootstrap timed out at ${lastProgress.get()}%")
@@ -264,6 +345,7 @@ class TorService : Service() {
 
             isTorRunning = true
             killSwitch?.setVpnMode(isVpnActive())
+            killSwitch?.setEnabled(KillSwitch.isEnabledInPrefs(this))
             broadcastStatus("CONNECTED")
             updateNotification("OnionRoute Lite — Connected")
 
@@ -281,6 +363,27 @@ class TorService : Service() {
         }
     }
 
+    /**
+     * Called by [TorProcessManager] when the tor process exits WITHOUT an
+     * explicit stop request — i.e. it crashed or was killed by the system.
+     * Previously this was only logged; the UI kept showing CONNECTED forever,
+     * bandwidth froze at stale values and the kill switch could not react.
+     *
+     * Note: this fires even when the crash happens mid-bootstrap (while
+     * [isTorRunning] is still false) so the user gets an immediate ERROR
+     * instead of staring at "CONNECTING…" until the 120s latch timeout.
+     */
+    private fun onTorProcessExited(exitCode: Int) {
+        serviceScope.launch {
+            // Belt-and-braces: an intentional stop sets this flag before the
+            // process is destroyed; if it's set, cleanup is already running.
+            if (stopRequested) return@launch
+            Log.e(tag, "Tor process exited unexpectedly (exit code $exitCode)")
+            broadcastStatus("ERROR", "Tor disconnected unexpectedly (process exit code $exitCode)")
+            stopTorInternal()
+        }
+    }
+
     private fun stopTor() {
         stopTorInternal()
         broadcastStatus("DISCONNECTED")
@@ -295,6 +398,10 @@ class TorService : Service() {
             // false, so we MUST still clean up here. Don't early-return.
             Log.d(tag, "stopTorInternal: Tor wasn't fully running, cleaning up anyway")
         }
+
+        // Signal any in-flight startTor() to abort quietly (it re-checks
+        // this flag between retries and after the bootstrap latch wait).
+        stopRequested = true
 
         Log.i(tag, "Stopping Tor daemon…")
 
@@ -328,6 +435,10 @@ class TorService : Service() {
         // traffic is blocked (no SOCKS5 forwarder → no traffic flows).
         // The user explicitly opted into "block everything if Tor dies".
         val killSwitchOn = killSwitch?.let { KillSwitch.isEnabledInPrefs(this) } ?: false
+        // Re-sync the KillSwitch instance from prefs before firing the
+        // disconnect hook — the user may have toggled the pref after the
+        // service was created (the UI writes prefs directly, not the instance).
+        killSwitch?.setEnabled(killSwitchOn)
         val vpnActive = isVpnActive()
         if (vpnActive && !killSwitchOn) {
             Log.i(tag, "Stopping VPN because Tor disconnected (kill switch OFF)")

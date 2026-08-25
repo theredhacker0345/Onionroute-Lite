@@ -14,8 +14,10 @@ import org.onionroute.lite.Constants
  *
  * Key characteristics:
  * - Bridges connect via HTTPS, blending in with normal web traffic
- * - No separate transport plugin binary required for basic WebTunnel
- *   (the bridge line contains a URL endpoint that Tor connects to directly)
+ * - WebTunnel IS a pluggable transport: it REQUIRES its own client binary
+ *   (libwebtunnel.so) registered via a ClientTransportPlugin line in torrc.
+ *   Bridge lines alone do NOT work — tor stalls at PT_MISSING without the
+ *   plugin binary.
  * - Default bridges are provided by the Tor Project
  * - Users can add custom WebTunnel bridge lines
  *
@@ -90,13 +92,10 @@ class WebTunnelConfig(private val context: Context) {
     /**
      * Returns the WebTunnel bridge configuration lines for torrc.
      *
-     * WebTunnel bridges are added as Bridge lines in torrc. Unlike
-     * Snowflake and obfs4, basic WebTunnel does not require a separate
-     * ClientTransportPlugin binary — the bridge lines contain the
-     * HTTPS URL endpoint that Tor connects to directly.
-     *
-     * If a webtunnel transport plugin becomes available in the future,
-     * a ClientTransportPlugin line can be added here.
+     * WebTunnel bridges mimic HTTPS traffic. NOTE: these Bridge lines are
+     * only usable together with a ClientTransportPlugin webtunnel exec
+     * <libwebtunnel.so> line — TorProcessManager emits that line and skips
+     * webtunnel bridges entirely when libwebtunnel.so is missing.
      */
     fun getWebTunnelConfig(): List<String> {
         val lines = mutableListOf<String>()

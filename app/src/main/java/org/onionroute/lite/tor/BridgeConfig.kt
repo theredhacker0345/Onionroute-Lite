@@ -105,9 +105,10 @@ class BridgeConfig(private val context: Context) {
     /**
      * Returns the WebTunnel bridge configuration lines for torrc.
      *
-     * WebTunnel bridges mimic HTTPS traffic. No separate transport
-     * plugin binary is needed — the bridge lines contain HTTPS URL
-     * endpoints that Tor connects to directly.
+     * WebTunnel bridges mimic HTTPS traffic. NOTE: WebTunnel IS a pluggable
+     * transport and requires the libwebtunnel.so client binary registered
+     * via ClientTransportPlugin — TorProcessManager emits that line when
+     * the binary exists and skips these bridges when it doesn't.
      */
     fun getWebTunnelConfig(): List<String> {
         val lines = mutableListOf<String>()

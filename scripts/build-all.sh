@@ -7,6 +7,7 @@
 #   2. obfs4proxy (obfs4 pluggable transport)
 #   3. Snowflake client + proxy (snowflake pluggable transport + Kindness Mode)
 #   4. hev-socks5-tunnel (TUN-to-SOCKS5 forwarder for VPN mode)
+#   5. webtunnel-client (WebTunnel pluggable transport)
 #
 # Supports multiple Android ABIs:
 #   - armeabi-v7a  (32-bit ARM, legacy devices)
@@ -107,6 +108,7 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     COMPONENT_STATUS[obfs4]="NOT_BUILT"
     COMPONENT_STATUS[snowflake]="NOT_BUILT"
     COMPONENT_STATUS[tun2socks]="NOT_BUILT"
+    COMPONENT_STATUS[webtunnel]="NOT_BUILT"
 
     # ── Build Each Component ──────────────────────────────────
     # We run each build independently so a failure in one component
@@ -159,11 +161,23 @@ for ABI in "${SELECTED_ABIS[@]}"; do
         echo "WARNING: hev-socks5-tunnel build failed for ${ABI}, continuing with other components..."
     fi
 
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " [5/5] Building webtunnel-client [${ABI}]..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if bash "${SCRIPT_DIR}/build-webtunnel.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
+        COMPONENT_STATUS[webtunnel]="OK"
+    else
+        COMPONENT_STATUS[webtunnel]="FAILED"
+        OVERALL_OK=false
+        echo "WARNING: webtunnel-client build failed for ${ABI}, continuing with other components..."
+    fi
+
     # ── Verify this ABI's outputs ─────────────────────────────
     echo ""
     echo "Verifying ${ABI} binaries..."
     MISSING=0
-    for expected in libtor.so libobfs4proxy.so libsnowflake.so libsnowflake-proxy.so libtun2socks.so; do
+    for expected in libtor.so libobfs4proxy.so libsnowflake.so libsnowflake-proxy.so libtun2socks.so libwebtunnel.so; do
         if [ ! -f "${OUTPUT_DIR}/${expected}" ]; then
             echo "  MISSING: ${expected}"
             MISSING=1
@@ -176,7 +190,7 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     if [ "${MISSING}" -eq 1 ]; then
         echo ""
         echo "WARNING: Some ${ABI} binaries are missing."
-        echo "Component results: tor=${COMPONENT_STATUS[tor]} obfs4=${COMPONENT_STATUS[obfs4]} snowflake=${COMPONENT_STATUS[snowflake]} tun2socks=${COMPONENT_STATUS[tun2socks]}"
+        echo "Component results: tor=${COMPONENT_STATUS[tor]} obfs4=${COMPONENT_STATUS[obfs4]} snowflake=${COMPONENT_STATUS[snowflake]} tun2socks=${COMPONENT_STATUS[tun2socks]} webtunnel=${COMPONENT_STATUS[webtunnel]}"
     else
         echo ""
         echo "ABI ${ABI} build complete! All binaries present."

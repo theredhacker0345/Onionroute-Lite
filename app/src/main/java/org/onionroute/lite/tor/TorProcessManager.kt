@@ -23,12 +23,21 @@ import java.io.FileOutputStream
  *   so that Android extracts the .so files to disk where we can exec() them.
  *   We execute them directly from nativeLibraryDir without copying.
  */
-class TorProcessManager(private val context: Context) {
+class TorProcessManager(
+    private val context: Context,
+    /** Invoked when the tor process exits on its own (NOT after an explicit
+     *  [stopTor] call). Runs on the monitor thread — dispatch appropriately. */
+    private val onProcessExited: ((exitCode: Int) -> Unit)? = null
+) {
 
     private val tag = "TorProcessManager"
 
     private var torProcess: Process? = null
     private var monitorThread: Thread? = null
+
+    /** Set to true by [stopTor] so the monitor thread can distinguish an
+     *  intentional shutdown (destroy()) from an unexpected tor crash. */
+    @Volatile private var stopRequested = false
 
     val controlCookieFile: String
         get() = File(context.filesDir, "${Constants.TOR_DATA_DIR}/${Constants.TOR_CONTROL_COOKIE}").absolutePath
@@ -78,6 +87,10 @@ class TorProcessManager(private val context: Context) {
      */
     fun stopTor() {
         try {
+            // Mark intentional shutdown BEFORE destroy() so the monitor
+            // thread doesn't report this exit as an unexpected crash.
+            stopRequested = true
+
             monitorThread?.interrupt()
             monitorThread = null
 
@@ -111,7 +124,8 @@ class TorProcessManager(private val context: Context) {
             Constants.BINARY_OBFS4PROXY,
             Constants.BINARY_SNOWFLAKE,
             Constants.BINARY_SNOWFLAKE_PROXY,
-            Constants.BINARY_TUN2SOCKS
+            Constants.BINARY_TUN2SOCKS,
+            Constants.BINARY_WEBTUNNEL
         )
 
         var torValid = false
@@ -188,12 +202,113 @@ class TorProcessManager(private val context: Context) {
         // Resolve executable paths from nativeLibraryDir
         val snowflakePath = getBinaryPath(Constants.BINARY_SNOWFLAKE)
         val obfs4Path = getBinaryPath(Constants.BINARY_OBFS4PROXY)
+        val webtunnelPath = getBinaryPath(Constants.BINARY_WEBTUNNEL)
 
         // BridgeUpdater — fetches alive bridges from GitHub at runtime.
         // Falls back to hardcoded bridges in Constants.kt if fetch fails.
         // Use the process-wide singleton so the cache is shared with
         // MainActivity (which triggers fetchBridges on startup).
         val bridgeUpdater = BridgeUpdater.get(context)
+
+        // Bridge lines and their ClientTransportPlugin registrations are
+        // collected first, then emitted. Tor REQUIRES a ClientTransportPlugin
+        // for EVERY transport referenced by a Bridge line — without it, tor
+        // passes --verify-config but bootstrap stalls forever at 5% with
+        // PT_MISSING ("can't find a pluggable transport proxy supporting
+        // 'webtunnel'"). So a bridge line is only emitted when its plugin
+        // binary actually exists, and 'UseBridges 1' is only emitted when at
+        // least one bridge line survived (UseBridges 1 with zero bridges =
+        // tor can never connect).
+        val pluginLines = LinkedHashSet<String>()
+        val bridgeLines = mutableListOf<String>()
+
+        fun transportOf(line: String): String? = line.trim().split(" ").firstOrNull()?.lowercase()
+
+        fun pluginAvailable(transport: String): Boolean = when (transport) {
+            "obfs4" -> obfs4Path != null
+            "snowflake" -> snowflakePath != null
+            "webtunnel" -> webtunnelPath != null
+            else -> false  // meek & other transports have no bundled binary
+        }
+
+        fun registerPlugin(transport: String) {
+            when (transport) {
+                "obfs4" -> obfs4Path?.let { pluginLines += "ClientTransportPlugin obfs4 exec $it" }
+                "snowflake" -> snowflakePath?.let { pluginLines += "ClientTransportPlugin snowflake exec $it" }
+                "webtunnel" -> webtunnelPath?.let { pluginLines += "ClientTransportPlugin webtunnel exec $it" }
+            }
+        }
+
+        fun addBridges(lines: List<String>, source: String) {
+            for (bridge in lines) {
+                val transport = transportOf(bridge)
+                if (transport == null || !pluginAvailable(transport)) {
+                    Log.w(tag, "$source: skipping bridge line — no plugin binary for transport '$transport': ${bridge.take(48)}…")
+                    continue
+                }
+                registerPlugin(transport)
+                bridgeLines += bridge
+            }
+        }
+
+        if (useSnowflake) {
+            if (pluginAvailable("snowflake")) {
+                val bridges = bridgeUpdater.getBridges("snowflake")
+                if (bridges.isNotEmpty()) {
+                    Log.i(tag, "Using ${bridges.size} snowflake bridges from BridgeUpdater")
+                } else {
+                    Log.i(tag, "No runtime snowflake bridges — using hardcoded")
+                }
+                addBridges(bridges.ifEmpty { listOf(snowflakeFallbackLine()) }, "snowflake")
+            } else {
+                Log.e(tag, "Snowflake requested but libsnowflake.so not found in $nativeLibDir — skipping Snowflake bridges")
+            }
+        }
+
+        if (useObfs4) {
+            if (pluginAvailable("obfs4")) {
+                val bridges = bridgeUpdater.getBridges("obfs4")
+                if (bridges.isNotEmpty()) {
+                    Log.i(tag, "Using ${bridges.size} obfs4 bridges from BridgeUpdater")
+                } else {
+                    Log.i(tag, "No runtime obfs4 bridges — using hardcoded")
+                }
+                addBridges(bridges.ifEmpty { Constants.DEFAULT_OBFS4_BRIDGES }, "obfs4")
+            } else {
+                Log.e(tag, "obfs4 requested but libobfs4proxy.so not found in $nativeLibDir — skipping obfs4 bridges")
+            }
+        }
+
+        if (useWebTunnel) {
+            if (pluginAvailable("webtunnel")) {
+                val bridges = bridgeUpdater.getBridges("webtunnel")
+                if (bridges.isNotEmpty()) {
+                    Log.i(tag, "Using ${bridges.size} webtunnel bridges from BridgeUpdater")
+                } else {
+                    Log.i(tag, "No runtime webtunnel bridges — using hardcoded")
+                }
+                addBridges(bridges.ifEmpty { Constants.DEFAULT_WEBTUNNEL_BRIDGES }, "webtunnel")
+            } else {
+                // WebTunnel IS a pluggable transport: it needs its own client
+                // binary (libwebtunnel.so) registered via ClientTransportPlugin.
+                // Emitting bare webtunnel Bridge lines without the plugin makes
+                // tor stall at PT_MISSING — worse than not using WebTunnel at
+                // all. Skip with a loud error instead of producing a config
+                // that can never bootstrap.
+                Log.e(tag, "WebTunnel requested but libwebtunnel.so not found in $nativeLibDir — skipping WebTunnel bridges. " +
+                    "Rebuild natives with ./scripts/build-webtunnel.sh to enable WebTunnel.")
+            }
+        }
+
+        // Custom bridges (manually added by user via Bridge screen) are added
+        // IN ADDITION to any toggle-controlled bridge sets. Each line is
+        // checked against available plugins so an unsupported custom transport
+        // can't stall the whole bootstrap.
+        val customBridges = BridgeConfig(context).getCustomBridges()
+        if (customBridges.isNotEmpty()) {
+            addBridges(customBridges, "custom")
+            Log.i(tag, "Added ${customBridges.size} custom bridges from user prefs")
+        }
 
         val torrcContent = buildString {
             appendLine("# OnionRoute Lite torrc — auto-generated")
@@ -228,95 +343,18 @@ class TorProcessManager(private val context: Context) {
             }
             appendLine()
 
-            if (useSnowflake && snowflakePath != null) {
-                appendLine("# Snowflake bridge configuration")
-                appendLine("ClientTransportPlugin snowflake exec $snowflakePath")
-                // Use runtime-fetched bridges if available, fall back to hardcoded
-                val snowflakeBridges = bridgeUpdater.getBridges("snowflake")
-                if (snowflakeBridges.isNotEmpty()) {
-                    Log.i(tag, "Using ${snowflakeBridges.size} snowflake bridges from BridgeUpdater")
-                    snowflakeBridges.forEach { bridge ->
-                        appendLine("Bridge $bridge")
-                    }
-                } else {
-                    appendLine("Bridge snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=${Constants.SNOWFLAKE_BROKER_URL} fronts=${Constants.SNOWFLAKE_FRONT_DOMAIN} ice=${Constants.SNOWFLAKE_ICE_SERVERS}")
-                }
-                appendLine("UseBridges 1")
+            // Pluggable transport plugins + bridge lines
+            if (pluginLines.isNotEmpty() || bridgeLines.isNotEmpty()) {
+                appendLine("# Pluggable transport clients")
+                pluginLines.forEach { appendLine(it) }
                 appendLine()
-            } else if (useSnowflake && snowflakePath == null) {
-                appendLine("# WARNING: Snowflake requested but libsnowflake.so not found")
-                appendLine("# Falling back to direct connection")
-                Log.e(tag, "Snowflake requested but libsnowflake.so not found in $nativeLibDir")
-            }
-
-            if (useObfs4 && obfs4Path != null) {
-                appendLine("# obfs4 bridge configuration")
-                appendLine("ClientTransportPlugin obfs4 exec $obfs4Path")
-                // Use runtime-fetched bridges if available, fall back to hardcoded
-                val obfs4Bridges = bridgeUpdater.getBridges("obfs4")
-                if (obfs4Bridges.isNotEmpty()) {
-                    Log.i(tag, "Using ${obfs4Bridges.size} obfs4 bridges from BridgeUpdater")
-                    obfs4Bridges.forEach { bridge ->
-                        appendLine("Bridge $bridge")
-                    }
-                } else {
-                    Log.i(tag, "No runtime obfs4 bridges — using hardcoded")
-                    Constants.DEFAULT_OBFS4_BRIDGES.forEach { bridge ->
-                        appendLine("Bridge $bridge")
-                    }
+                if (bridgeLines.isNotEmpty()) {
+                    appendLine("# Bridges (${bridgeLines.size})")
+                    bridgeLines.forEach { appendLine("Bridge $it") }
+                    appendLine("UseBridges 1")
+                    appendLine()
+                    Log.i(tag, "torrc: ${bridgeLines.size} bridge line(s), ${pluginLines.size} plugin(s), UseBridges 1")
                 }
-                appendLine("UseBridges 1")
-                appendLine()
-            } else if (useObfs4 && obfs4Path == null) {
-                appendLine("# WARNING: obfs4 requested but libobfs4proxy.so not found")
-                Log.e(tag, "obfs4 requested but libobfs4proxy.so not found in $nativeLibDir")
-            }
-
-            if (useWebTunnel) {
-                appendLine("# WebTunnel bridge configuration")
-                // Use runtime-fetched bridges if available, fall back to hardcoded
-                val webtunnelBridges = bridgeUpdater.getBridges("webtunnel")
-                if (webtunnelBridges.isNotEmpty()) {
-                    Log.i(tag, "Using ${webtunnelBridges.size} webtunnel bridges from BridgeUpdater")
-                    webtunnelBridges.forEach { bridge ->
-                        appendLine("Bridge $bridge")
-                    }
-                } else {
-                    Log.i(tag, "No runtime webtunnel bridges — using hardcoded")
-                    Constants.DEFAULT_WEBTUNNEL_BRIDGES.forEach { bridge ->
-                        appendLine("Bridge $bridge")
-                    }
-                }
-                appendLine("UseBridges 1")
-                appendLine()
-            }
-
-            // ── Custom bridges (manually added by user via Bridge screen) ──
-            // These are user-supplied bridge lines stored in SharedPreferences
-            // by BridgeConfig.parseAndAddBridges(). They are ADDED IN ADDITION
-            // to any of the toggle-controlled bridge sets above — the user can
-            // mix custom bridges with built-in ones. If any bridge is in the
-            // config (built-in or custom), UseBridges must be 1.
-            val customBridges = BridgeConfig(context).getCustomBridges()
-            if (customBridges.isNotEmpty()) {
-                appendLine("# User-supplied custom bridges")
-                // For obfs4/snowflake/meek bridges that need a transport plugin,
-                // make sure the plugin is registered even if the user didn't
-                // toggle the corresponding built-in set on.
-                val needsObfs4Plugin = customBridges.any { it.startsWith("obfs4", ignoreCase = true) }
-                val needsSnowflakePlugin = customBridges.any { it.startsWith("snowflake", ignoreCase = true) }
-                if (needsObfs4Plugin && obfs4Path != null && !useObfs4) {
-                    appendLine("ClientTransportPlugin obfs4 exec $obfs4Path")
-                }
-                if (needsSnowflakePlugin && snowflakePath != null && !useSnowflake) {
-                    appendLine("ClientTransportPlugin snowflake exec $snowflakePath")
-                }
-                customBridges.forEach { bridge ->
-                    appendLine("Bridge $bridge")
-                }
-                appendLine("UseBridges 1")
-                appendLine()
-                Log.i(tag, "Added ${customBridges.size} custom bridges from user prefs")
             }
         }
 
@@ -324,6 +362,14 @@ class TorProcessManager(private val context: Context) {
         FileOutputStream(torrcFile).use { it.write(torrcContent.toByteArray()) }
         Log.d(tag, "Generated torrc at ${torrcFile.absolutePath}")
     }
+
+    /** Hardcoded fallback snowflake bridge line (used only when the runtime
+     *  bridge list is empty AND libsnowflake.so exists). */
+    private fun snowflakeFallbackLine(): String =
+        "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 " +
+            "fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 " +
+            "url=${Constants.SNOWFLAKE_BROKER_URL} fronts=${Constants.SNOWFLAKE_FRONT_DOMAIN} " +
+            "ice=${Constants.SNOWFLAKE_ICE_SERVERS}"
 
     // ── Process Management ────────────────────────────────────────
 
@@ -419,6 +465,15 @@ class TorProcessManager(private val context: Context) {
                 val exitCode = process.waitFor()
                 Log.w(tag, "Tor process exited with code $exitCode")
                 torProcess = null
+
+                // Notify the owner about UNEXPECTED exits only. An intentional
+                // stop (stopTor) sets stopRequested BEFORE destroy(), so if we
+                // reach this point with the flag clear, tor died on its own —
+                // previously this was silently swallowed and the app kept
+                // showing CONNECTED forever.
+                if (!stopRequested) {
+                    onProcessExited?.invoke(exitCode)
+                }
             } catch (e: InterruptedException) {
                 Log.d(tag, "Process monitor interrupted")
             } catch (e: Exception) {

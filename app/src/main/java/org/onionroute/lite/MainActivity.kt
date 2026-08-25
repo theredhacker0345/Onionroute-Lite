@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
                 Constants.ACTION_STATUS_UPDATE -> handleStatusUpdate(intent)
                 Constants.ACTION_BANDWIDTH_UPDATE -> handleBandwidthUpdate(intent)
                 Constants.ACTION_KINDNESS_STATS -> handleKindnessStats(intent)
+                Constants.ACTION_KINDNESS_UPDATE -> handleKindnessUpdate(intent)
                 Constants.ACTION_EXIT_IP_UPDATE -> handleExitIpUpdate(intent)
             }
         }
@@ -294,6 +295,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * KindnessService broadcasts its actual active/inactive state (e.g. when
+     * the proxy process dies and restarts fail, or after a clean stop).
+     * This was previously broadcast but never listened to. We update the UI
+     * state SILENTLY (no service command re-trigger) to avoid a feedback
+     * loop of start/stop intents.
+     */
+    private fun handleKindnessUpdate(intent: Intent) {
+        val active = intent.getBooleanExtra(Constants.EXTRA_KINDNESS_ACTIVE, false)
+        runOnUiThread {
+            appState.updateKindnessState(active)
+        }
+    }
+
     private fun sendCommandToService(action: String) {
         val intent = Intent(this, TorService::class.java).apply { this.action = action }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -309,6 +324,7 @@ class MainActivity : ComponentActivity() {
             addAction(Constants.ACTION_BANDWIDTH_UPDATE)
             addAction(Constants.ACTION_EXIT_IP_UPDATE)
             addAction(Constants.ACTION_KINDNESS_STATS)
+            addAction(Constants.ACTION_KINDNESS_UPDATE)
         }
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)

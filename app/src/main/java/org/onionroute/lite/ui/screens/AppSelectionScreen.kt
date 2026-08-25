@@ -2,6 +2,7 @@ package org.onionroute.lite.ui.screens
 
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -122,6 +123,15 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
                 onModeChange = { mode ->
                     routingMode = mode
                     manager.setMode(mode)
+                    // The VPN builder snapshots allowed/disallowed lists at
+                    // startVpn() time — a running session keeps the OLD rules
+                    // until it is restarted. Tell the user instead of leaving
+                    // them wondering why nothing changed.
+                    Toast.makeText(
+                        context,
+                        "Routing mode saved. Toggle VPN off/on to apply.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             )
 

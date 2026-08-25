@@ -24,6 +24,11 @@ object Constants {
     const val BINARY_SNOWFLAKE_PROXY = "libsnowflake-proxy.so"
     const val BINARY_TUN2SOCKS = "libtun2socks.so"
 
+    // WebTunnel pluggable transport client. Tor REQUIRES a
+    // ClientTransportPlugin binary for webtunnel bridge lines — without it,
+    // bootstrap stalls at PT_MISSING (5%) and never completes.
+    const val BINARY_WEBTUNNEL = "libwebtunnel.so"
+
     // ── Executable Names (symlinks in app data dir) ───────────
     const val EXEC_TOR = "tor"
     const val EXEC_OBFS4PROXY = "obfs4proxy"
@@ -162,8 +167,14 @@ object Constants {
     // WebTunnel bridges mimic HTTPS traffic, making them effective
     // against deep packet inspection (DPI) systems. These default
     // bridges are operated by the Tor Project.
-    // No separate transport plugin binary is needed — the bridge
-    // lines contain HTTPS URL endpoints that Tor connects to directly.
+    //
+    // IMPORTANT: WebTunnel is a pluggable transport — these lines only
+    // work together with the libwebtunnel.so client binary registered
+    // via ClientTransportPlugin (see scripts/build-webtunnel.sh and
+    // TorProcessManager.generateTorrc). The second entry is an obfs4
+    // fallback bridge; TorProcessManager registers whichever plugin each
+    // line's transport needs and skips lines whose plugin binary is
+    // missing.
     val DEFAULT_WEBTUNNEL_BRIDGES = listOf(
         "webtunnel 159.69.22.241:443 40D1E0A98733F1E3E0548BD2F2B3C7B6B08C93B7 url=https://wt-1.broker.torproject.org/webtunnel/line/5a5a6463-05a0-4c44-bef7-40e3e2e128f2 ver=0.4.0",
         "obfs4 67.205.142.190:9889 656C06D42A01D25138F2F52E459C6DC27B209F73 cert=Y8MM/9CEGC7PshNot9XYQQncWugSGeu/p6hbvNOsU1zl2U4TL50l4OBzyOhD6dLw4LVMSw iat-mode=0"

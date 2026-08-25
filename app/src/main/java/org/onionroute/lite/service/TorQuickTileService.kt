@@ -251,12 +251,23 @@ class RefreshTileService : TileService() {
 
         Log.i(tag, "Requesting new Tor circuit (NEWNYM)")
 
-        // Send NEWNYM request via broadcast to TorService instead of
-        // creating a competing control port connection. TorService owns
-        // the single control connection and can safely send the signal.
-        val intent = Intent(Constants.ACTION_NEW_CIRCUIT)
-        intent.setPackage(packageName)
-        sendBroadcast(intent)
+        // Send NEWNYM request to TorService via startService(). Previously
+        // this used sendBroadcast(), but NOTHING registered a receiver for
+        // ACTION_NEW_CIRCUIT (TorService only handles it as a started-service
+        // intent action, and no manifest receiver exists) — so the tile was
+        // a silent no-op. TorService owns the single control connection and
+        // safely serializes the SIGNAL via its request lock.
+        // NOTE: starting an FGS from an interactive QS tile is an explicitly
+        // allowed foreground-service-start exemption (same pattern as
+        // ConnectTileService above).
+        val intent = Intent(this, TorService::class.java).apply {
+            action = Constants.ACTION_NEW_CIRCUIT
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
 
         // Brief visual feedback — flash the tile active then revert
         val tile = qsTile

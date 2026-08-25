@@ -192,6 +192,16 @@ class OnionRouteAppState {
         onKindnessToggle?.invoke(enabled)
     }
 
+    /**
+     * Updates the Kindness Mode UI state WITHOUT invoking [onKindnessToggle].
+     * Used when the service reports its actual state via broadcast — routing
+     * that through the toggle callback would re-send start/stop commands and
+     * create a feedback loop.
+     */
+    fun updateKindnessState(enabled: Boolean) {
+        isKindnessEnabled = enabled
+    }
+
     fun updateBandwidth(upload: String, download: String, totalUp: String, totalDown: String) {
         uploadSpeed = upload
         downloadSpeed = download

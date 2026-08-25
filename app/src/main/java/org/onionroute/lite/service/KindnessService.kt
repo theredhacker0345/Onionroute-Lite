@@ -304,7 +304,13 @@ class KindnessService : Service() {
      * Known patterns from snowflake-proxy v2:
      *   "proxy: client <n> connected"                              -> increment current count
      *   "proxy: client <n> disconnected, data relayed: <bytes> B"  -> decrement current, add data
-     *   "proxy: In the snowflake proxy session, ... data relayed: <bytes>"  -> session total
+     *
+     * NOTE: we deliberately parse ONLY per-client disconnect lines.
+     * Earlier revisions ALSO added bytes from periodic/session-summary
+     * lines ("... data relayed ... session ..." and any "<n> bytes
+     * sent/received" with a <10MB guess), which double-counted the same
+     * traffic that was already counted when each client disconnected,
+     * inflating the DATA DONATED stat.
      */
     private fun parseProxyLine(line: String) {
         Log.d(tag, "Proxy: $line")
@@ -333,27 +339,6 @@ class KindnessService : Service() {
             val dataMatch = Regex("""data\s+relayed:\s+(\d+)""").find(trimmed)
             dataMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
                 dataDonated.addAndGet(bytes)
-            }
-            broadcastKindnessStats()
-        }
-
-        // Session summary data
-        if (trimmed.contains("data relayed:") && trimmed.contains("session")) {
-            val dataMatch = Regex("""data\s+relayed:\s+(\d+)""").find(trimmed)
-            dataMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
-                dataDonated.addAndGet(bytes)
-            }
-            broadcastKindnessStats()
-        }
-
-        // Periodic stats update (every ~30s the proxy may report status)
-        if (trimmed.contains("bytes") && (trimmed.contains("sent") || trimmed.contains("received"))) {
-            val byteMatch = Regex("""(\d+)\s+bytes""").find(trimmed)
-            byteMatch?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
-                // Only add if it looks like a delta, not a cumulative total
-                if (bytes < 10_000_000) {
-                    dataDonated.addAndGet(bytes)
-                }
             }
             broadcastKindnessStats()
         }

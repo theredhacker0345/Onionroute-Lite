@@ -128,15 +128,27 @@ class TorVpnService : VpnService() {
                 .addRoute("0.0.0.0", 0)
                 .addDnsServer(Constants.VPN_DNS)
 
-            // Always exclude our own package to prevent VPN recursion
-            builder.addDisallowedApplication(packageName)
-
-            // Apply per-app routing rules
+            // Apply per-app routing rules.
+            //
+            // IMPORTANT: VpnService.Builder allows EITHER an allowed list OR a
+            // disallowed list — never both. Mixing them throws
+            // UnsupportedOperationException (see VpnService.Builder Javadoc),
+            // so our own package is only excluded via the disallowed list in
+            // ALL mode. In SELECTED_ONLY mode the own package cannot be part
+            // of the allowed list anyway (AppSelectionManager.getInstalledApps()
+            // filters it out), so no explicit exclusion is needed there.
             val appSelectionManager = AppSelectionManager(this)
             when (appSelectionManager.getRoutingMode()) {
                 RoutingMode.ALL -> {
-                    // Route all apps through Tor; exclude user-selected apps
+                    // Route all apps through Tor; exclude ourselves and any
+                    // user-selected apps from the TUN interface.
+                    try {
+                        builder.addDisallowedApplication(packageName)
+                    } catch (e: Exception) {
+                        Log.w(tag, "Cannot exclude own package", e)
+                    }
                     for (excludedPkg in appSelectionManager.getExcludedApps()) {
+                        if (excludedPkg == packageName) continue  // already added above
                         try {
                             builder.addDisallowedApplication(excludedPkg)
                         } catch (e: Exception) {
@@ -149,12 +161,15 @@ class TorVpnService : VpnService() {
                     //
                     // If no apps are selected, REFUSE to start the VPN. The
                     // VpnService.Builder API doesn't support "block all apps"
-                    // — calling addAllowedApplication(packageName) here would
-                    // throw IllegalArgumentException because packageName is
-                    // already in the disallowed list (line above). And calling
-                    // addAllowedApplication on a non-existent package throws
-                    // NameNotFoundException. The safest behavior is to not
+                    // — an allowed list that is empty means ALL apps are
+                    // routed, which would silently contradict the user's
+                    // SELECTED_ONLY choice. The safest behavior is to not
                     // start the VPN at all and tell the user to select apps.
+                    // NOTE: we must NOT call addDisallowedApplication here —
+                    // mixing allowed and disallowed lists throws
+                    // UnsupportedOperationException. Our own package cannot
+                    // appear in the selected list (AppSelectionManager filters
+                    // it out), so VPN recursion is impossible in this mode.
                     val selectedApps = appSelectionManager.getSelectedApps()
                     if (selectedApps.isEmpty()) {
                         Log.w(tag, "SELECTED_ONLY mode with no apps selected — refusing to start VPN")
@@ -264,6 +279,18 @@ class TorVpnService : VpnService() {
         // Update preferences
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(Constants.PREF_VPN_ENABLED, false).apply()
+
+        // Clear the stale "VPN active" foreground notification and stop the
+        // service. Without this, the FGS (and its misleading notification)
+        // lingered after ACTION_STOP_VPN until the system killed the process.
+        updateNotification("OnionRoute Lite — VPN stopped")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        stopSelf()
     }
 
     // ── tun2socks ─────────────────────────────────────────────────
