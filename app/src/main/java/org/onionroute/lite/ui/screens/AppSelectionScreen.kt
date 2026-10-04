@@ -5,6 +5,7 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.widget.ImageView
 import android.widget.Toast
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +41,8 @@ import org.onionroute.lite.service.TorVpnService
 import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.theme.*
 
+private const val TAG = "AppSelectionScreen"
+
 @Composable
 fun AppSelectionScreen(appState: OnionRouteAppState) {
     val context = LocalContext.current
@@ -65,18 +68,30 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
     LaunchedEffect(routingMode) {
         isLoading = true
         routedStates.clear()
-        // Run the PackageManager queries + icon loads off the main thread.
-        // Default Dispatchers.IO is appropriate — this is exactly the kind
-        // of blocking I/O it's designed for.
-        installedApps = withContext(Dispatchers.IO) {
-            manager.getInstalledApps()
+        try {
+            // Run the PackageManager queries + icon loads off the main thread.
+            // Default Dispatchers.IO is appropriate — this is exactly the kind
+            // of blocking I/O it's designed for.
+            val loaded = withContext(Dispatchers.IO) {
+                manager.getInstalledApps()
+            }
+            installedApps = loaded
+            // Pre-populate routed state for every app in one shot. This is
+            // fast because isAppTorRouted just reads from SharedPreferences.
+            for (app in loaded) {
+                routedStates[app.packageName] = manager.isAppTorRouted(app.packageName)
+            }
+        } catch (t: Throwable) {
+            // Anything thrown here — including OutOfMemoryError from icon
+            // rasterisation, and CancellationException — used to abandon the
+            // LaunchedEffect before isLoading was reset, leaving the screen
+            // permanently on "Loading apps…" with no way out but recreating it.
+            // Report and fall through to the empty state instead.
+            Log.w(TAG, "Failed to load installed apps", t)
+            installedApps = emptyList()
+        } finally {
+            isLoading = false
         }
-        // Pre-populate routed state for every app in one shot. This is
-        // fast because isAppTorRouted just reads from SharedPreferences.
-        for (app in installedApps) {
-            routedStates[app.packageName] = manager.isAppTorRouted(app.packageName)
-        }
-        isLoading = false
     }
 
     val filteredApps = remember(installedApps, searchQuery) {

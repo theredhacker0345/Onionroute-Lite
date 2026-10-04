@@ -15,14 +15,22 @@ import org.onionroute.lite.Constants
 /**
  * Data class representing an installed application.
  *
- * @Immutable so Compose treats it as skippable. Without it, [Drawable] has no
- * stability contract, the compiler infers this class as unstable, and AppRow
- * re-executes on every LazyColumn scroll/recycle/re-measure — with three
- * TextStyle copies, three RoundedCornerShapes and two Color copies each time.
- * Every field is a `val` assigned once at construction, so the annotation is
- * truthful.
+ * DELIBERATELY NOT @Immutable.
+ *
+ * An earlier version annotated this @Immutable so Compose would skip AppRow on
+ * scroll/recycle/re-measure. That was unsound: @Immutable promises that no read
+ * of any property can change without Compose being notified, and a
+ * `val icon: Drawable?` only fixes the REFERENCE. The Drawable itself is
+ * mutable and framework-owned — invalidateSelf(), setTint, setAlpha, mutate(),
+ * and PackageManager-cached instances shared across rows — so it can change
+ * under a skipped composable, leaving rows painting stale pixels.
+ *
+ * Making the annotation true would require wrapping the icon in an immutable
+ * value type (ImageBitmap or an ImageVector) rather than a Drawable. That is
+ * the correct fix if this screen's allocation profile ever justifies it; for
+ * now the per-row styles are hoisted to file scope, which is where most of the
+ * saving actually came from.
  */
-@Immutable
 data class AppInfo(
     val packageName: String,
     val appName: String,
@@ -162,6 +170,19 @@ class AppSelectionManager(context: Context) {
             raw.setBounds(0, 0, size, size)
             raw.draw(canvas)
             BitmapDrawable(appContext.resources, bitmap)
+        } catch (e: OutOfMemoryError) {
+            // MUST be caught separately: OutOfMemoryError extends Error, not
+            // Exception, so `catch (e: Exception)` does not catch it — yet OOM
+            // is the entire motivating case for this function.
+            //
+            // Uncaught, it propagated out of getInstalledApps(), cancelled the
+            // AppSelectionScreen LaunchedEffect (which has no try/catch, so
+            // isLoading was never reset) and left the screen stuck on
+            // "Loading apps…" forever. The previous code at least degraded
+            // per-row. Recovery here is what the whole rasterization cap is for.
+            Log.w(TAG, "Out of memory rasterizing ${appInfo.packageName}; " +
+                "using letter avatar")
+            null
         } catch (e: Exception) {
             // Rasterization failed. Deliberately return null rather than `raw`.
             //

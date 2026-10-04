@@ -104,6 +104,30 @@ class TorService : Service() {
     private var bootstrapLatch: CountDownLatch? = null
 
     /**
+     * True when the in-flight bootstrap was released by something other than
+     * Tor reaching 100%.
+     *
+     * A [CountDownLatch] cannot express WHY it was counted down: the release
+     * path and the genuine `PROGRESS=100` path both arrive at
+     * `countDown()`, and the waiter cannot tell them apart. Releasing the latch
+     * when tor crashes mid-bootstrap therefore made the waiter take the SUCCESS
+     * branch — `isTorRunning = true`, `broadcastStatus("CONNECTED")`,
+     * `PREF_TOR_CONNECTED = true` — for a process that was already dead.
+     *
+     * That was worse than the 120s stall it fixed, because it also suppressed
+     * recovery: the auto-restart coroutine's teardown ran *after* the waiter had
+     * already claimed success, so its subsequent `startTor()` hit the
+     * `if (isTorRunning) return` guard and was dropped. End state: no tunnel, no
+     * retry, and the UI, the QS tile and the persisted preference all reporting
+     * CONNECTED until the process was killed.
+     *
+     * This flag is the missing "why". It is set under [bootstrapLatchLock]
+     * immediately before the countDown, reset when a new wait is published, and
+     * checked by the waiter alongside [stopRequested].
+     */
+    private var bootstrapAborted = false
+
+    /**
      * Releases the in-flight bootstrap wait, if there is one, so the thread
      * parked in `CountDownLatch.await` resumes immediately.
      *
@@ -123,7 +147,10 @@ class TorService : Service() {
     private fun releaseBootstrapWait(): Boolean {
         synchronized(bootstrapLatchLock) {
             val latch = bootstrapLatch ?: return false
-            Log.d(tag, "Releasing in-flight bootstrap wait")
+            // Record the reason BEFORE the countDown, and inside the same lock,
+            // so the waiter cannot observe an aborted latch as a success.
+            bootstrapAborted = true
+            Log.d(tag, "Releasing in-flight bootstrap wait (aborted)")
             latch.countDown()
             return true
         }
@@ -132,6 +159,15 @@ class TorService : Service() {
     /** True while a startTor() is blocked waiting for bootstrap. */
     private fun isBootstrapInProgress(): Boolean =
         synchronized(bootstrapLatchLock) { bootstrapLatch != null }
+
+    /**
+     * True if the wait we just performed ended because it was released rather
+     * than because Tor reported 100%.
+     *
+     * @see bootstrapAborted
+     */
+    private fun wasBootstrapAborted(): Boolean =
+        synchronized(bootstrapLatchLock) { bootstrapAborted }
 
     /** Coroutine scope tied to this service's lifecycle. Uses SupervisorJob so
      *  one failed child coroutine doesn't cancel siblings. */
@@ -173,7 +209,7 @@ class TorService : Service() {
         val action = intent?.action
         when (action) {
             Constants.ACTION_START_TOR -> startTorAsync()
-            Constants.ACTION_STOP_TOR -> stopTor()
+            Constants.ACTION_STOP_TOR -> stopTor(startId)
             Constants.ACTION_STOP_VPN -> handleVpnStop()
             Constants.ACTION_TOGGLE_SNOWFLAKE -> toggleSnowflake()
             Constants.ACTION_TOGGLE_OBFS4 -> toggleObfs4()
@@ -303,6 +339,13 @@ class TorService : Service() {
                 return
             }
 
+            // Declared BEFORE the control-port wait loop because the latch is
+            // published from inside it (see the comment there): everything
+            // between the control port coming up and the await below is
+            // blocking work on the thread holding startMutex, and a user stop
+            // during that window must be able to release the wait.
+            val thisLatch = CountDownLatch(1)
+
             // Wait for Tor to initialize and open the control port.
             // The daemon needs time to bind the control port after launch.
             // Retry with exponential backoff: 500ms, 1s, 1.5s, 2s, 2.5s, 3s.
@@ -327,6 +370,19 @@ class TorService : Service() {
                     )
                     if (connected) {
                         controlConnection = conn
+                        // Publish the bootstrap latch NOW, before the GETINFO and
+                        // before the await. Everything between here and the
+                        // await is blocking work on a thread holding
+                        // startMutex, so a user stop or a crash in that window
+                        // must already be able to release the wait.
+                        //
+                        // Counting down a latch nobody awaits yet is harmless:
+                        // the await below returns immediately and the
+                        // bootstrapAborted check rejects the result.
+                        synchronized(bootstrapLatchLock) {
+                            bootstrapAborted = false
+                            bootstrapLatch = thisLatch
+                        }
                         break
                     } else {
                         conn.disconnect()
@@ -354,7 +410,6 @@ class TorService : Service() {
             // Premature "CONNECTED" was the previous behaviour — the UI would
             // show CONNECTED while Tor was actually still bootstrapping (or had
             // failed to bootstrap at all).
-            val thisLatch = CountDownLatch(1)
             val lastProgress = AtomicInteger(0)
 
             bandwidthTracker?.start(controlConnection) { progress, bootstrapTag ->
@@ -398,12 +453,15 @@ class TorService : Service() {
             // Tor on a clean connection typically bootstraps in 5–30s; 120s
             // gives headroom for slow networks or bridge connections.
             //
-            // Publish the latch so a concurrent stop can release this wait. The
-            // blocking await below is NOT cancellable — cancelling the job does
-            // not interrupt a thread parked in CountDownLatch.await — so without
-            // this handle a disconnect during bootstrap would keep the thread
-            // parked for the full 120s and then report a bogus timeout.
-            synchronized(bootstrapLatchLock) { bootstrapLatch = thisLatch }
+            // The latch was already PUBLISHED above (before the GETINFO), so a
+            // stop arriving at any point from the moment the control port came
+            // up can release this wait. The blocking await below is NOT
+            // cancellable — cancelling the job does not interrupt a thread
+            // parked in CountDownLatch.await — so without that early handle a
+            // disconnect during the (up to 10s) GETINFO would leave the latch
+            // unpublished, and the start would park for the full 120s holding
+            // startMutex, silently dropping every later start request via
+            // tryLock().
             val bootstrapped = try {
                 thisLatch.await(120, TimeUnit.SECONDS)
             } finally {
@@ -417,8 +475,9 @@ class TorService : Service() {
             // Abort quietly if the user stopped us mid-bootstrap:
             // stopTor()/stopTorInternal() already cleaned up and broadcast
             // DISCONNECTED — don't report a confusing ERROR afterwards.
-            if (stopRequested) {
-                Log.i(tag, "startTor aborted — stop requested during bootstrap")
+            if (stopRequested || wasBootstrapAborted()) {
+                Log.i(tag, "startTor aborted during bootstrap (deliberate stop=" +
+                    "$stopRequested, tor died=" + wasBootstrapAborted() + ")")
                 return
             }
 
@@ -528,7 +587,7 @@ class TorService : Service() {
         }
     }
 
-    private fun stopTor() {
+    private fun stopTor(startId: Int) {
         // User-intent flag FIRST so any in-flight startTor() aborts quietly
         // at its next checkpoint. Internal failure paths (bootstrap timeout,
         // control-connect failure, crash give-up) deliberately do NOT set
@@ -559,7 +618,13 @@ class TorService : Service() {
             @Suppress("DEPRECATION")
             stopForeground(true)
         }
-        stopSelf()
+        // stopSelfResult, not stopSelf: stopTor() runs from onStartCommand, so a
+        // fast QS-tile double toggle queues ACTION_STOP_TOR then
+        // ACTION_START_TOR. Plain stopSelf() tears the service down after the
+        // first one, so the START is delivered into a dying service and dropped
+        // — the tile then showed "on" with no Tor behind it. stopSelfResult only
+        // stops if this startId is still the most recent one.
+        stopSelfResult(startId)
     }
 
     /**

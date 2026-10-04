@@ -300,7 +300,16 @@ class TorControlConnection(private val context: Context) {
         //
         // Reading the ack here is safe because no listener thread is running,
         // so this is the only reader on the socket.
+        //
+        // The read is bounded. connect() reset soTimeout to 0 for the listener
+        // (see the long comment there), and this happens BEFORE the listener
+        // exists, so nothing else can drain the socket — an unbounded read here
+        // would block the thread holding TorService's startMutex for the life of
+        // the process, and every later start/reconnect would fail tryLock()
+        // with no way out short of killing the app. That is precisely the hazard
+        // the auth phase is bounded to avoid, so it applies here too.
         val setEventsReply = try {
+            controlSocket?.soTimeout = AUTH_TIMEOUT_MS
             synchronized(outputStream!!) {
                 outputStream!!.write("SETEVENTS BW CIRC STATUS_CLIENT\r\n".toByteArray())
                 outputStream!!.flush()
@@ -309,8 +318,18 @@ class TorControlConnection(private val context: Context) {
         } catch (e: Exception) {
             Log.e(tag, "SETEVENTS failed", e)
             null
+        } finally {
+            // Hand the socket back to the listener, which must block
+            // indefinitely waiting for async events.
+            try { controlSocket?.soTimeout = 0 } catch (_: Exception) {}
         }
-        if (setEventsReply != null && !setEventsReply.startsWith("250")) {
+        if (setEventsReply == null) {
+            // The write or the read threw. Fall through to the branches below
+            // would leave this unreported, so say so explicitly: the listener is
+            // about to run against an unsubscribed port, and without this the
+            // user sees only a 120s timeout with no diagnostic anywhere.
+            Log.e(tag, "SETEVENTS produced no reply — no events will be subscribed")
+        } else if (!setEventsReply.startsWith("250")) {
             // e.g. 552 Unrecognized event. Nothing is subscribed, so bootstrap
             // progress can never arrive. Fail loudly instead of waiting out a
             // 120s timeout that can no longer be satisfied.
@@ -560,6 +579,11 @@ class TorControlConnection(private val context: Context) {
                             }
                             responseValues[keyword] = data.toString()
                             pendingResponses.remove(keyword)?.countDown()
+                            // Must also leave the FIFO queue. Only
+                            // completeOldestPending() polls pendingOrder, and
+                            // it is driven solely by UNKEYED replies, so a
+                            // keyed reply used to leave its key behind forever
+                            pendingOrder.remove(keyword)
                         }
                     }
 
@@ -572,6 +596,13 @@ class TorControlConnection(private val context: Context) {
                             val value = line.substring(eqIdx + 1)
                             responseValues[keyword] = value
                             pendingResponses.remove(keyword)?.countDown()
+                            // See the note in the 250+ branch: keyed replies
+                            // must dequeue their key too, or pendingOrder grows
+                            // by one entry per request for the life of the
+                            // connection (~2.6 MB/day at the circuit-polling
+                            // rate) and every bare "250 OK" walks a longer and
+                            // longer stale prefix.
+                            pendingOrder.remove(keyword)
                         }
                     }
                     line.startsWith("250 ") -> {
@@ -590,6 +621,17 @@ class TorControlConnection(private val context: Context) {
                 }
             }
             // Loop exited — either EOF, interrupted, or isConnected=false.
+            //
+            // Clear isConnected FIRST. It used to stay true here, so every
+            // subsequent getInfo/signal/setExitCountry passed its "am I
+            // connected?" guard, wrote into a dead socket (the flag was only
+            // cleared by sendCommand's catch, i.e. after the write) and then
+            // blocked for its full timeout while holding requestLock. In
+            // TorService that 10s stall sits immediately before the bootstrap
+            // wait, and requestCircuits() blocked the control channel for 10s
+            // per poll.
+            isConnected = false
+
             // Unblock any pending GETINFO/SIGNAL callers so they don't wait
             // the full 5-10s timeout. They'll see null/false (no response
             // value stored) which is the correct "disconnected" behaviour.

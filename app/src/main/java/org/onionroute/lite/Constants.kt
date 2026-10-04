@@ -268,6 +268,4 @@ object Constants {
 
     // ── Quick Settings Tile ───────────────────────────────────
     const val PREF_TOR_CONNECTED = "tor_connected"
-    const val TILE_ICON_ONION = "ic_tile_onion"
-    const val TILE_ICON_REFRESH = "ic_tile_refresh"
 }

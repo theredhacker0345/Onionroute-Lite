@@ -70,14 +70,20 @@ fun CircuitScreen(appState: OnionRouteAppState) {
     // and days. Quantising the clock to 30s means a sub-minute age label is at
     // most half a minute stale — imperceptible — while cutting the
     // recomposition rate by 30x. Anything coarser would visibly lag.
-    var nowBucket by remember { mutableLongStateOf(System.currentTimeMillis() / AGE_BUCKET_MS) }
+    var nowBucket by remember { mutableLongStateOf(ageBucket(System.currentTimeMillis())) }
     LaunchedEffect(Unit) {
         while (true) {
-            nowBucket = System.currentTimeMillis() / AGE_BUCKET_MS
+            nowBucket = ageBucket(System.currentTimeMillis())
             delay(AGE_BUCKET_MS)
         }
     }
-    val nowMs = nowBucket * AGE_BUCKET_MS
+    // Round the bucket UP to its next boundary. Dividing down and multiplying
+    // back floors, so nowMs was always <= the real time and only ever jumped
+    // once per bucket. Combined with CircuitCard's coerceAtLeast(0) that pinned
+    // every sub-minute age to "0s ago" for up to 30s at a time — and Tor
+    // circuits are usually seconds old, so the common case was a frozen label,
+    // which is the opposite of what the bucketing was meant to achieve.
+    val nowMs = (nowBucket + 1) * AGE_BUCKET_MS
 
     Column(
         modifier = Modifier
@@ -157,6 +163,16 @@ private const val MAX_SHOWN = 20
  * avoided re-layouts every second.
  */
 private const val AGE_BUCKET_MS = 30_000L
+
+/**
+ * Quantises [now] to a bucket index that ADVANCES at each bucket boundary.
+ *
+ * Rounding up means `(bucket + 1) * AGE_BUCKET_MS` is >= `now`, so an age
+ * computed from it is never more than one bucket stale and never negative for a
+ * circuit that genuinely exists.
+ */
+private fun ageBucket(now: Long): Long =
+    (now + AGE_BUCKET_MS - 1) / AGE_BUCKET_MS
 
 /** Bottom scroll padding (kept as a helper for readability). */
 @Composable

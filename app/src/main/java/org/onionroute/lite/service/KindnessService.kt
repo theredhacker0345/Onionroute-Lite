@@ -301,7 +301,15 @@ class KindnessService : Service() {
             }
 
             // Restore accumulated stats from preferences
-            dataDonated.set(prefs.getLong(Constants.PREF_KINDNESS_DATA_DONATED, 0L))
+            // Flush the live counters BEFORE any restart path re-reads them from
+        // prefs. Both restart paths (the monitor's own backoff restart and
+        // ACTION_RESTART_KINDNESS_PROXY) call startProxyLocked directly and so
+        // never went through stopProxy()'s exact flush; without this, the
+        // restore below would overwrite the in-memory totals with the last
+        // THROTTLED value, permanently losing up to 30s of relayed bytes and
+        // helped-client counts.
+        persistStats()
+        dataDonated.set(prefs.getLong(Constants.PREF_KINDNESS_DATA_DONATED, 0L))
             peopleHelpedTotal.set(prefs.getLong(Constants.PREF_KINDNESS_PEOPLE_HELPED_TOTAL, 0L))
 
             startStdoutReader()
@@ -371,6 +379,18 @@ class KindnessService : Service() {
         // first interrupt skipped process destruction entirely — leaving the
         // proxy running and unreachable. Each cleanup step is independent, and
         // destroying the process is the one that must never be skipped.
+        // Destroy BEFORE joining. The monitor is parked in Process.waitFor(),
+        // which returns only when the process actually exits, so joining first
+        // always burned the full timeout on a healthy proxy — on the main thread,
+        // since stopProxyInternal is reached from onStartCommand/onDestroy. That
+        // was a guaranteed visible freeze on every stop, on every donation-level
+        // restart, and on service teardown.
+        try {
+            orphanedProcess?.destroy()
+        } catch (e: Exception) {
+            Log.e(tag, "Error destroying snowflake proxy", e)
+        }
+
         try {
             orphanedStdout?.interrupt()
         } catch (e: Exception) {
@@ -398,12 +418,7 @@ class KindnessService : Service() {
             Log.w(tag, "Error joining snowflake monitor", e)
         }
 
-        try {
-            orphanedProcess?.destroy()
-            Log.i(tag, "Snowflake proxy stopped")
-        } catch (e: Exception) {
-            Log.e(tag, "Error destroying snowflake proxy", e)
-        }
+        Log.i(tag, "Snowflake proxy stopped")
 
         // Reset active connection count since proxy is stopped
         peopleHelpedNow.set(0)
@@ -613,7 +628,17 @@ class KindnessService : Service() {
                 val process = proxyProcess ?: return@Thread
                 val exitCode = process.waitFor()
                 Log.w(tag, "Snowflake proxy exited with code $exitCode")
-                proxyProcess = null
+                // Identity-checked. An unconditional `proxyProcess = null` here
+                // could land AFTER stopProxyInternal() returned and a
+                // replacement proxy had already been assigned, wiping the NEW
+                // process's handle. stopProxyInternal() would then see null and
+                // never destroy it — reintroducing exactly the orphaned proxy
+                // that proxyLifecycleLock was added to prevent, and defeating
+                // the `if (proxyProcess != null)` guard so a second proxy could
+                // be started on top of the first.
+                if (proxyProcess === process) {
+                    proxyProcess = null
+                }
 
                 val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
                 val kindnessEnabled = prefs.getBoolean(Constants.PREF_KINDNESS_ENABLED, false)

@@ -319,74 +319,36 @@ class OnionRouteAppState {
     }
 
     /**
-     * Fixed-capacity ring buffer for a windowed sample series.
+     * Appends a latency sample, keeping the most recent [HEALTH_SAMPLE_CAPACITY].
      *
-     * WHY NOT A LIST
-     * --------------
-     * Both windows are appended to once per second for as long as Tor is
-     * connected. The previous implementation was
+     * A primitive ring buffer was tried here and REVERTED. It stores into a
+     * LongArray and publishes `ring.add(v).toList()`, which avoids the
+     * removeAt(0) shift — but `toList()` allocates a fresh ArrayList, its
+     * backing Object[], and boxes all 60 elements, because `Long.valueOf` only
+     * caches -128..127 and latencies in milliseconds never fall in that range.
+     * So the ring version cost ~62 allocations per sample versus 2 for the
+     * plain copy below, and roughly double the bytes, for the same steady GC
+     * load it was meant to remove. The primitive ring only pays off if the
+     * consumer can read the array directly, which would mean changing the
+     * observable type on OnionRouteAppState away from List<Long>.
      *
-     *     val current = points.toMutableList(); current.add(x)
-     *     if (current.size > 60) current.removeAt(0); points = current
-     *
-     * which allocated a fresh 60-element ArrayList plus its backing Object[],
-     * then shifted all 60 references down one slot — twice per second,
-     * indefinitely, purely to hold 60 values that were already bounded. On a
-     * 1.5GB device that is a steady, needless GC load for the whole life of a
-     * Tor session.
-     *
-     * The ring overwrites one slot instead. One array copy per append remains
-     * unavoidable: Compose has to observe the change through a new reference.
-     * But it is a single exactly-sized primitive-array copy rather than a list,
-     * an Object[] and a 60-element shift.
-     *
-     * Not synchronized by design — every caller is on the main thread (the
-     * broadcast receiver posts through runOnUiThread), so a lock on this path
-     * would be pure cost.
+     * At one sample per second this is two short-lived objects, which is not
+     * worth trading correctness or clarity for. Revisit only if the sampling
+     * rate rises or the type stops being a List.
      */
-    private class LongRing(private val capacity: Int) {
-        private val buf = LongArray(capacity)
-        private var head = 0 // index the next sample is written to
-        private var count = 0 // live entries, saturating at capacity
-
-        /** @return a fresh oldest-to-newest array of the live entries. */
-        fun add(v: Long): LongArray {
-            buf[head] = v
-            head = (head + 1) % capacity
-            if (count < capacity) count++
-            val out = LongArray(count)
-            val start = (head - count + capacity) % capacity
-            for (i in 0 until count) out[i] = buf[(start + i) % capacity]
-            return out
-        }
-    }
-
-    private class FloatRing(private val capacity: Int) {
-        private val buf = FloatArray(capacity)
-        private var head = 0
-        private var count = 0
-
-        fun add(v: Float): FloatArray {
-            buf[head] = v
-            head = (head + 1) % capacity
-            if (count < capacity) count++
-            val out = FloatArray(count)
-            val start = (head - count + capacity) % capacity
-            for (i in 0 until count) out[i] = buf[(start + i) % capacity]
-            return out
-        }
-    }
-
-    private val healthRing = LongRing(HEALTH_SAMPLE_CAPACITY)
-    private val speedRing = FloatRing(SPEED_SAMPLE_CAPACITY)
-
-    /** Called by MainActivity on each ACTION_HEALTH_UPDATE broadcast. */
     fun addHealthPoint(latencyMs: Long) {
-        healthPoints = healthRing.add(latencyMs).toList()
+        val current = healthPoints.toMutableList()
+        current.add(latencyMs)
+        if (current.size > HEALTH_SAMPLE_CAPACITY) current.removeAt(0)
+        healthPoints = current
     }
 
+    /** @see addHealthPoint */
     fun addSpeedDataPoint(speed: Float) {
-        speedDataPoints = speedRing.add(speed).toList()
+        val current = speedDataPoints.toMutableList()
+        current.add(speed)
+        if (current.size > SPEED_SAMPLE_CAPACITY) current.removeAt(0)
+        speedDataPoints = current
     }
 
     fun toggleConnection() {

@@ -183,7 +183,13 @@ JNI_CLSNAME="Tun2SocksNative"
     NDK_PROJECT_PATH="${NDK_TMPDIR}" \
     APP_BUILD_SCRIPT="${NDK_TMPDIR}/jni/Android.mk" \
     APP_ABI="${ABI}" \
-    APP_PLATFORM=android-29 \
+    # Must not exceed the app's minSdk (23, Android 6.0 — the primary target).
+    # This was android-29, which means any symbol newer than API 23 would make
+    # System.loadLibrary throw UnsatisfiedLinkError on the oldest devices the
+    # app supports — surfacing as "VPN unavailable" rather than as a build
+    # error. No other native script sets APP_PLATFORM at all (they take the NDK
+    # floor), so this was an outlier as well as a portability risk.
+    APP_PLATFORM=android-23 \
     NDK_LIBS_OUT="${NDK_TMPDIR}/libs" \
     NDK_OUT="${NDK_TMPDIR}/obj" \
     APP_OPTIM=release \

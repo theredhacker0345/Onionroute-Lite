@@ -14,6 +14,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import java.io.File
+import java.util.concurrent.Executors
 import org.onionroute.lite.Constants
 import org.onionroute.lite.MainActivity
 import org.onionroute.lite.service.AppSelectionManager
@@ -42,6 +43,35 @@ class TorVpnService : VpnService() {
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private var isRunning = false
+
+    /**
+     * Single daemon thread for tunnel shutdown.
+     *
+     * hev's quit path is a blocking pthread_join whose cost depends on how many
+     * SOCKS5 sessions are still live, so it must not run on the service main
+     * thread. Single-threaded on purpose: teardown must not be able to overlap
+     * itself, and one at a time is all a phone ever needs.
+     */
+    private val shutdownExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "Tun2SocksShutdown").apply { isDaemon = true }
+    }
+
+    /**
+     * Set once VPN mode has failed because libtun2socks.so could not be loaded.
+     *
+     * Without this, always-on VPN turns the failure into a foreground-service
+     * spin: failAndStop() ends in stopSelf(), Lockdown mode redelivers
+     * ACTION_VPN_ALWAYS_ON, and the cycle repeats with no progress — each pass
+     * calling startForeground and establishing a TUN it immediately throws away.
+     * START_STICKY compounds it, since a null-intent redelivery took the
+     * `else -> startVpn()` branch.
+     *
+     * A missing or unloadable native library cannot become loadable without a
+     * reinstall, so failing once and refusing thereafter is both correct and
+     * the only thing that keeps the battery alive.
+     */
+    @Volatile
+    private var forwarderPermanentlyUnavailable = false
 
     private val notificationManager by lazy {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -137,6 +167,19 @@ class TorVpnService : VpnService() {
 
         try {
             // Build VPN interface with per-app routing
+            // Refuse BEFORE establishing a TUN or doing any setup if we already
+            // know the forwarder cannot run. See
+            // forwarderPermanentlyUnavailable for why this is a hard stop
+            // rather than a retry: with always-on VPN, failAndStop() ends in
+            // stopSelf() and Lockdown mode immediately redelivers, so without
+            // this the service spins, calling startForeground and establishing a
+            // TUN it immediately throws away, once per redelivery.
+            if (forwarderPermanentlyUnavailable) {
+                Log.w(tag, "VPN start refused — tun2socks unavailable on this install")
+                stopSelf()
+                return
+            }
+
             val builder = Builder()
                 .setSession("OnionRoute Lite")
                 .setMtu(Constants.VPN_MTU)
@@ -235,6 +278,11 @@ class TorVpnService : VpnService() {
             // reporting success — otherwise every app on the device loses
             // connectivity into a black hole while the UI claims a healthy VPN.
             if (!startTun2Socks()) {
+                // A missing or unloadable .so cannot become loadable without a
+                // reinstall, so stop retrying — see the field's comment.
+                if (!Tun2SocksNative.isAvailable) {
+                    forwarderPermanentlyUnavailable = true
+                }
                 failAndStop("Traffic forwarder failed to start — VPN mode unavailable")
                 return
             }
@@ -307,12 +355,16 @@ class TorVpnService : VpnService() {
     private fun failAndStop(reason: String) {
         Log.w(tag, "VPN start aborted: $reason")
         teardownTunnel()
-        updateNotification("OnionRoute Lite — VPN unavailable")
+        // DETACH, not REMOVE. REMOVE (and stopForeground(true) on API 23) deleted
+        // the notification posted one line above, so "VPN unavailable" was
+        // created and torn down inside the same main-loop turn and was never
+        // visible to anyone. Posting the reason only helps if it survives.
+        updateNotification("OnionRoute Lite — VPN unavailable ($reason)")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopForeground(STOP_FOREGROUND_DETACH)
         } else {
             @Suppress("DEPRECATION")
-            stopForeground(true)
+            stopForeground(false)
         }
         stopSelf()
     }
@@ -331,21 +383,44 @@ class TorVpnService : VpnService() {
         // Stop the forwarder BEFORE closing the fd. hev is blocked reading that
         // descriptor, and TProxyStopService joins its worker thread, so it must
         // finish using the fd first.
-        try {
-            if (Tun2SocksNative.isAvailable) {
-                Tun2SocksNative.TProxyStopService()
-            }
-        } catch (e: Exception) {
-            Log.e(tag, "Error stopping tun2socks forwarder", e)
-        } catch (e: UnsatisfiedLinkError) {
-            Log.e(tag, "tun2socks JNI methods unbound", e)
-        }
-
-        try {
-            vpnInterface?.close()
+        // TProxyStopService() -> hev_socks5_tunnel_quit() + pthread_join(), and
+        // the join waits for the worker to terminate EVERY live SOCKS5 session
+        // and for the lwip IO task to observe run = 0. That cost scales with
+        // concurrent sessions, so on a 1.4GHz device it is squarely ANR
+        // territory — and it was being run on the service main thread, because
+        // teardownTunnel is reached from stopVpn, restartVpn, failAndStop,
+        // onDestroy and onRevoke, all of which are main-thread callbacks.
+        //
+        // Moved to a dedicated daemon thread. The fd is closed in that task's
+        // completion, after the join, so the "stop before close" ordering is
+        // preserved: hev must be finished with the descriptor before
+        // VpnService lets go of it.
+        if (Tun2SocksNative.isAvailable) {
+            val fdToClose = vpnInterface
             vpnInterface = null
-        } catch (e: Exception) {
-            Log.e(tag, "Error closing VPN interface", e)
+            shutdownExecutor.execute {
+                try {
+                    Tun2SocksNative.TProxyStopService()
+                } catch (e: Exception) {
+                    Log.e(tag, "Error stopping tun2socks forwarder", e)
+                } catch (e: UnsatisfiedLinkError) {
+                    Log.e(tag, "tun2socks JNI methods unbound", e)
+                } finally {
+                    try {
+                        fdToClose?.close()
+                        Log.i(tag, "hev-socks5-tunnel stopped, TUN descriptor closed")
+                    } catch (e: Exception) {
+                        Log.e(tag, "Error closing TUN descriptor", e)
+                    }
+                }
+            }
+        } else {
+            try {
+                vpnInterface?.close()
+            } catch (e: Exception) {
+                Log.e(tag, "Error closing VPN interface", e)
+            }
+            vpnInterface = null
         }
 
         isRunning = false
@@ -474,8 +549,14 @@ class TorVpnService : VpnService() {
         appendLine("socks5:")
         appendLine("  address: 127.0.0.1")
         appendLine("  port: ${Constants.TOR_SOCKS_PORT}")
-        // 'udp' relays UDP through the SOCKS5 UDP ASSOCIATE, so DNS (and
-        // QUIC) traverse Tor instead of being dropped.
+        // 'udp' selects UDP_IN_UDP, i.e. datagrams relayed over a SOCKS5 TCP
+        // stream. This is upstream's documented default.
+        //
+        // Scope note: mapped DNS does NOT depend on this — hev answers port-53
+        // itself in-process (hev_mapped_dns_handle) over that TCP stream. And
+        // Tor's SOCKS5 port 9050 implements CONNECT only, not UDP ASSOCIATE, so
+        // non-DNS UDP such as QUIC/HTTP3 will still fail to establish; `udp:
+        // tcp` would not help, since UDP_IN_TCP uses the same SOCKS5 server.
         appendLine("  udp: udp")
         appendLine("mapdns:")
         // Must equal the DNS server advertised in Builder.addDnsServer(), or
