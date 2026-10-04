@@ -100,7 +100,7 @@ class BridgeUpdater private constructor(private val context: Context) {
             val body = conn.inputStream.bufferedReader().use { it.readText() }
             conn.disconnect()
 
-            parseAndCache(body)
+            parseAndPersistFetched(body)
             Log.i(tag, "Fetched ${cachedBridges.values.sumOf { it.size }} alive bridges from GitLab")
             true
         } catch (e: Exception) {
@@ -117,7 +117,7 @@ class BridgeUpdater private constructor(private val context: Context) {
      * cert with `&#43;` — it needs the literal `+`. We decode all known
      * HTML entities here so the bridge lines are valid when written to torrc.
      */
-    private fun parseAndCache(json: String) {
+    private fun parseBridges(json: String): Map<String, List<String>> {
         val obj = JSONObject(json)
         val bridges = mutableMapOf<String, List<String>>()
 
@@ -129,17 +129,40 @@ class BridgeUpdater private constructor(private val context: Context) {
                     .filter { it.isNotEmpty() }
             }
         }
+        return bridges
+    }
 
-        cachedBridges = bridges
-        lastFetchTime = System.currentTimeMillis()
+    /**
+     * Parses a freshly FETCHED payload, stamps the fetch time and rewrites the
+     * cache file.
+     *
+     * Split from [parseBridges] so that loading the cache cannot masquerade as a
+     * successful fetch. Previously both paths ran this one function, which set
+     * `lastFetchTime = now` and re-wrote the file — so `loadFromCache()` on every
+     * process start made the cache look freshly fetched, and `fetchBridges()`
+     * then short-circuited on the 24h check without ever touching the network.
+     *
+     * The net effect was that the bridge list was frozen permanently after the
+     * first successful download: dead bridges accumulated and were never
+     * replaced, which in a censored country is precisely the failure this
+     * updater exists to prevent. The `last_updated` field it wrote was never
+     * read back by anything. The rewrite also cost one flash write per app
+     * start for no benefit.
+     *
+     * The cache stores the DECODED bridges so future loads skip decoding.
+     */
+    private fun parseAndPersistFetched(json: String) {
+        cachedBridges = parseBridges(json)
+        val fetchedAt = System.currentTimeMillis()
+        lastFetchTime = fetchedAt
 
-        // Save to local cache file (save the DECODED version so future loads
-        // don't need to decode again).
         try {
-            // Re-serialize the decoded bridges back to JSON for caching.
             val cacheObj = JSONObject()
             cacheObj.put("last_updated", isoUtcNow())
-            for ((transport, list) in bridges) {
+            // Absolute epoch millis alongside the human-readable form, so the
+            // cache can be aged without re-parsing a date string on every start.
+            cacheObj.put("last_fetched_at", fetchedAt)
+            for ((transport, list) in cachedBridges) {
                 cacheObj.put(transport, org.json.JSONArray(list))
             }
             File(context.filesDir, CACHE_FILE).writeText(cacheObj.toString())
@@ -187,13 +210,49 @@ class BridgeUpdater private constructor(private val context: Context) {
     private fun loadFromCache() {
         try {
             val cacheFile = File(context.filesDir, CACHE_FILE)
-            if (cacheFile.exists()) {
-                val json = cacheFile.readText()
-                parseAndCache(json)
-                Log.d(tag, "Loaded ${cachedBridges.values.sumOf { it.size }} bridges from cache")
+            if (!cacheFile.exists()) return
+
+            val json = cacheFile.readText()
+            // Parse WITHOUT stamping lastFetchTime — see parseAndPersistFetched.
+            cachedBridges = parseBridges(json)
+
+            // Restore the cache's real age from the epoch stamp written at fetch
+            // time, so the 24h freshness check in fetchBridges() means what it
+            // says. Falls back to parsing last_updated for caches written before
+            // last_fetched_at existed.
+            val obj = JSONObject(json)
+            val stamped = obj.optLong("last_fetched_at", 0L)
+            lastFetchTime = when {
+                stamped > 0L -> stamped
+                else -> parseIsoUtcMillis(obj.optString("last_updated", ""))
             }
+
+            val ageHours = if (lastFetchTime > 0L) {
+                (System.currentTimeMillis() - lastFetchTime) / 3_600_000L
+            } else -1L
+            Log.d(tag, "Loaded ${cachedBridges.values.sumOf { it.size }} bridges from cache " +
+                "(age=${ageHours}h)")
         } catch (e: Exception) {
             Log.w(tag, "Failed to load cache: ${e.message}")
+        }
+    }
+
+    /**
+     * Parses the human-readable `last_updated` stamp (ISO-8601 UTC) to epoch
+     * millis, or 0 if it is absent or unparsable.
+     *
+     * Returning 0 makes the cache read as infinitely old, which sends
+     * fetchBridges() to the network — the safe direction: a stale bridge list is
+     * worse than one extra request.
+     */
+    private fun parseIsoUtcMillis(raw: String): Long {
+        if (raw.isBlank()) return 0L
+        return try {
+            val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+            fmt.timeZone = TimeZone.getTimeZone("UTC")
+            fmt.parse(raw)?.time ?: 0L
+        } catch (_: Exception) {
+            0L
         }
     }
 
@@ -225,24 +284,4 @@ class BridgeUpdater private constructor(private val context: Context) {
         }
     }
 
-    /**
-     * Get all alive bridges across all transports.
-     */
-    fun getAllBridges(): List<String> {
-        val all = mutableListOf<String>()
-        for (transport in listOf("obfs4", "webtunnel", "snowflake")) {
-            all.addAll(getBridges(transport))
-        }
-        return all
-    }
-
-    /**
-     * Get the timestamp of the last successful fetch (for UI display).
-     */
-    fun getLastFetchTime(): Long = lastFetchTime
-
-    /**
-     * Check if we have runtime data (vs using hardcoded fallback).
-     */
-    fun hasRuntimeData(): Boolean = cachedBridges.values.any { it.isNotEmpty() }
 }

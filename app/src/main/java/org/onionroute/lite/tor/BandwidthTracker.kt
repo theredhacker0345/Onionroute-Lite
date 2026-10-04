@@ -72,15 +72,6 @@ class BandwidthTracker(
         Log.i(tag, "BandwidthTracker stopped")
     }
 
-    /**
-     * Resets cumulative totals.
-     */
-    fun resetTotals() {
-        totalDown.set(0)
-        totalUp.set(0)
-        Log.d(tag, "Bandwidth totals reset")
-    }
-
     // ── Internal ──────────────────────────────────────────────────
 
     /**

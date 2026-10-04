@@ -50,7 +50,22 @@ class TorProcessManager(
 
     /** Minimum valid binary size in bytes. Anything smaller is a placeholder/stub. */
     companion object {
-        private const val MIN_BINARY_SIZE = 1024L
+        /**
+         * Smallest plausible size for a real native binary.
+         *
+         * Was 1KB, which accepted essentially anything — including the
+         * placeholder .so files the build scripts warn about, so the "reject
+         * stubs" check could never reject anything. The comment beside it even
+         * claimed "several hundred KB".
+         *
+         * 128KB rather than something larger: the smallest real binary is
+         * libtun2socks.so, and armeabi-v7a builds of it come out noticeably
+         * below the x86_64 build (~340KB). 128KB stays comfortably clear of a
+         * text placeholder — which is a few hundred bytes at most — without
+         * risking a false rejection of a legitimate 32-bit binary, which would
+         * disable a transport on exactly the low-end devices this app targets.
+         */
+        private const val MIN_BINARY_SIZE = 128L * 1024L
 
         /**
          * The exit-country preference must look like an ISO-3166 alpha-2 code
@@ -168,17 +183,25 @@ class TorProcessManager(
                 continue
             }
 
-            // Ensure execute permission (should already be set, but be safe)
-            if (!file.canExecute()) {
-                val set = file.setExecutable(true, false)
-                Log.d(tag, "Set executable on $libName: $set")
-            }
-
-            // Also chmod as safety net for certain Android versions/filesystems
-            try {
-                Runtime.getRuntime().exec(arrayOf("chmod", "755", file.absolutePath)).waitFor()
-            } catch (e: Exception) {
-                Log.w(tag, "chmod fallback failed for ${file.absolutePath}: ${e.message}")
+            // Ensure execute permission, but ONLY if it is actually missing.
+            //
+            // The previous code additionally forked `Runtime.exec("chmod 755 …")`
+            // unconditionally for every binary, on every start and every
+            // auto-restart. That is six extra processes per start; each fork
+            // duplicates the parent's address space, and this app's heap holds
+            // the circuit list, bandwidth history and icon bitmaps, so on a
+            // 1.5GB device each fork is a real cost for a no-op. waitFor() also
+            // had no timeout and its streams were never closed, so a wedged
+            // chmod would hang whatever thread called this — the same thread
+            // that holds startMutex, which would then block every later
+            // start/reconnect.
+            //
+            // Files under nativeLibraryDir are extracted by the installer with
+            // 0755 already set, so canExecute() is true in practice and the
+            // fork never ran usefully anyway.
+            if (!file.canExecute() && !file.setExecutable(true, false)) {
+                Log.w(tag, "Cannot set execute permission on $libName " +
+                    "(size=$size) — that transport will be unavailable")
             }
 
             Log.d(tag, "Found native binary: $libName ($size bytes, executable=${file.canExecute()})")
@@ -425,17 +448,58 @@ class TorProcessManager(
             // it got there — can leave the daemon running with the network
             // switched off, which presents as "connected but nothing loads".
             appendLine("DisableNetwork 0")
+            appendLine("ClientOnly 1")
+
+            // Orphan watchdog.
+            //
+            // Without this, tor can outlive the app: the process is killed (an
+            // OEM low-memory kill on a 1.5GB device is routine, as is the
+            // user's "clear recent apps"), but the tor daemon is a separate
+            // process and keeps running. It then holds SOCKS/control/DNS ports,
+            // and worse, the app's next launch authenticates against that
+            // orphan using the same on-disk cookie — driving a process it does
+            // not own, with no way to stop it. On this target hardware, where
+            // low-memory kills are the norm rather than the exception, that is
+            // not a corner case.
+            //
+            // __OwningControllerProcess makes tor poll our pid every 15s and
+            // self-terminate when we are gone. Cheap insurance against exactly
+            // that failure mode.
+            appendLine("__OwningControllerProcess ${android.os.Process.myPid()}")
+
             appendLine("AvoidDiskWrites 1")
-            appendLine("StrictNodes 1")
+            // StrictNodes 1 is emitted only where it has an effect, alongside
+            // ExcludeNodes below. Emitting it unconditionally was misleading:
+            // with no ExcludeNodes in the torrc it changes nothing at all, and
+            // the adjacent comment wrongly implied it hardened ExitNodes too.
             // LOW-RAM: bound tor's in-memory queue buffers (default scales
             // with system RAM and can grow under heavy multi-app VPN load).
             // See Constants.TOR_MAX_MEM_IN_QUEUE.
             appendLine("MaxMemInQueue ${Constants.TOR_MAX_MEM_IN_QUEUE}")
             // Exit-country restriction (Settings → EXIT NODE). Persisted here
-            // so it survives restarts; StrictNodes 1 above makes the
-            // restriction hard (no fallback to other exits). Changes made
-            // while connected are applied live via SETCONF — this line keeps
-            // the same choice for the NEXT daemon start.
+            // so it survives restarts. Changes made while connected are applied
+            // live via SETCONF — this line keeps the same choice for the NEXT
+            // daemon start.
+            //
+            // THIS IS A PREFERENCE, NOT A GUARANTEE.
+            //
+            // The previous comment claimed "StrictNodes 1 above makes the
+            // restriction hard (no fallback to other exits)". That is not what
+            // tor does. Per the tor(1) manual, StrictNodes 1 makes only
+            // ExcludeNodes a requirement: "StrictNodes does not apply to
+            // ExcludeExitNodes, ExitNodes, MiddleNodes, or MapAddress".
+            // StrictExitNodes, the directive one would reach for instead, is
+            // marked OBSOLETE and is a no-op.
+            //
+            // So when no exit in the requested country will serve the
+            // destination, tor may still pick one elsewhere rather than fail.
+            // The UI must not promise otherwise; the honest description is a
+            // preference. Enforcing it truly would mean validating the achieved
+            // exit with `GETINFO ip-to-country` and signalling NEWNYM until it
+            // matched, at the cost of failing closed when the country has no
+            // usable exit. That is a product decision, so the behaviour is left
+            // as-is here with the limitation documented instead of silently
+            // overstated.
             //
             // SECURITY: this value is interpolated into an `ExitNodes {…}`
             // brace group, so an embedded newline (or a crafted `}`) would
@@ -474,7 +538,21 @@ class TorProcessManager(
         }
 
         val torrcFile = File(appDataDir, Constants.TORRC_FILENAME)
-        FileOutputStream(torrcFile).use { it.write(torrcContent.toByteArray()) }
+        // Write to a sibling temp file and rename, rather than truncating torrc in
+        // place. A kill between truncate and write — or ENOSPC on an 8GB
+        // device — left a partial torrc, and every subsequent start then failed
+        // `--verify-config` with "Failed to start Tor process" until some later
+        // start happened to rewrite it cleanly. rename() within a directory is
+        // atomic, so a reader ever only sees the old file or the new one.
+        val torrcTmp = File(torrcFile.absolutePath + ".tmp")
+        FileOutputStream(torrcTmp).use { it.write(torrcContent.toByteArray()) }
+        if (!torrcTmp.renameTo(torrcFile)) {
+            // renameTo can fail across some filesystems; fall back to a direct
+            // write rather than leaving only the .tmp behind.
+            Log.w(tag, "Atomic torrc rename failed; writing in place")
+            torrcTmp.copyTo(torrcFile, overwrite = true)
+            torrcTmp.delete()
+        }
         Log.d(tag, "Generated torrc at ${torrcFile.absolutePath}")
     }
 

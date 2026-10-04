@@ -70,21 +70,6 @@ class BridgeConfig(private val context: Context) {
         Log.i(tag, "obfs4 ${if (enabled) "enabled" else "disabled"}")
     }
 
-    /**
-     * Returns the obfs4 bridge configuration lines for torrc.
-     */
-    fun getObfs4Config(): List<String> {
-        val nativeLibDir = context.applicationInfo.nativeLibraryDir
-        val lines = mutableListOf(
-            "ClientTransportPlugin obfs4 exec $nativeLibDir/${Constants.BINARY_OBFS4PROXY}"
-        )
-        Constants.DEFAULT_OBFS4_BRIDGES.forEach { bridge ->
-            lines.add("Bridge $bridge")
-        }
-        lines.add("UseBridges 1")
-        return lines
-    }
-
     // ── WebTunnel ────────────────────────────────────────────────
 
     /**
@@ -100,23 +85,6 @@ class BridgeConfig(private val context: Context) {
     fun setWebTunnelEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(Constants.PREF_WEBTUNNEL_ENABLED, enabled).apply()
         Log.i(tag, "WebTunnel ${if (enabled) "enabled" else "disabled"}")
-    }
-
-    /**
-     * Returns the WebTunnel bridge configuration lines for torrc.
-     *
-     * WebTunnel bridges mimic HTTPS traffic. NOTE: WebTunnel IS a pluggable
-     * transport and requires the libwebtunnel.so client binary registered
-     * via ClientTransportPlugin — TorProcessManager emits that line when
-     * the binary exists and skips these bridges when it doesn't.
-     */
-    fun getWebTunnelConfig(): List<String> {
-        val lines = mutableListOf<String>()
-        Constants.DEFAULT_WEBTUNNEL_BRIDGES.forEach { bridge ->
-            lines.add("Bridge $bridge")
-        }
-        lines.add("UseBridges 1")
-        return lines
     }
 
     // ── Custom Bridges ────────────────────────────────────────────
@@ -149,18 +117,6 @@ class BridgeConfig(private val context: Context) {
     fun setCustomBridges(bridges: List<String>) {
         prefs.edit().putString(Constants.PREF_CUSTOM_BRIDGES, bridges.joinToString("\n")).apply()
         Log.i(tag, "Saved ${bridges.size} custom bridge(s)")
-    }
-
-    /**
-     * Removes a single custom bridge line by index.
-     */
-    fun removeCustomBridge(index: Int) {
-        val current = getCustomBridges().toMutableList()
-        if (index in current.indices) {
-            current.removeAt(index)
-            setCustomBridges(current)
-            Log.i(tag, "Removed custom bridge at index $index")
-        }
     }
 
     /**
@@ -463,14 +419,4 @@ class BridgeConfig(private val context: Context) {
 
     // ── Full Configuration ────────────────────────────────────────
 
-    /**
-     * Disables all bridges (Snowflake, obfs4, WebTunnel, and custom).
-     */
-    fun disableAllBridges() {
-        setSnowflakeEnabled(false)
-        setObfs4Enabled(false)
-        setWebTunnelEnabled(false)
-        setCustomBridges(emptyList())
-        Log.i(tag, "All bridges disabled")
-    }
 }

@@ -31,7 +31,6 @@ object Constants {
 
     // ── File Paths ────────────────────────────────────────────
     const val TORRC_FILENAME = "torrc"
-    const val TORRC_TEMPLATE = "torrc.template"
     const val TOR_DATA_DIR = "tor"
     const val TOR_CONTROL_COOKIE = "control_auth_cookie"
 
@@ -48,7 +47,6 @@ object Constants {
     const val PREF_SELECTED_APPS = "selected_apps"
     const val PREF_EXCLUDED_APPS = "excluded_apps"
     const val PREF_APP_ICON = "app_icon"
-    const val PREF_WEBTUNNEL_CUSTOM_BRIDGES = "webtunnel_custom_bridges"
     const val PREF_CUSTOM_BRIDGES = "custom_bridges"
 
     // One-shot prompt: ask the user to exempt the app from battery
