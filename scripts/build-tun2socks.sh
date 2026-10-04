@@ -213,14 +213,32 @@ JNI_CLSNAME="Tun2SocksNative"
 # failure even though the string IS present. -a makes grep treat the binary as
 # text, and the target lives in .rodata so it is found verbatim.
 SO_PATH="${NDK_TMPDIR}/libs/${ABI}/libhev-socks5-tunnel.so"
-if [ -f "${SO_PATH}" ]; then
-    if grep -qaF "${JNI_PKGNAME}/${JNI_CLSNAME}" "${SO_PATH}"; then
-        echo "JNI binding target OK: ${JNI_PKGNAME}/${JNI_CLSNAME}"
-    else
-        echo "ERROR: libhev-socks5-tunnel.so does not reference ${JNI_PKGNAME}/${JNI_CLSNAME}."
-        echo "       JNI_OnLoad will not be able to bind its methods."
-        exit 1
+
+# A MISSING intermediate is a hard failure, not a skip.
+#
+# This block used to be wrapped in `if [ -f "${SO_PATH}" ]`, so when ndk-build's
+# output was not where the check expected, the entire verification was skipped
+# and the build reported success. That is not hypothetical: a full build-all.sh
+# pass shipped an armeabi-v7a libtun2socks.so containing upstream's DEFAULT
+# `hev/htproxy/TProxyService` instead of our class, with no warning. On that ABI
+# JNI_OnLoad's FindClass would return null and RegisterNatives would crash the
+# app natively on System.loadLibrary — i.e. VPN mode dead on the 32-bit devices
+# that are this app's primary target, and the APK still built clean.
+if [ ! -f "${SO_PATH}" ]; then
+    echo "ERROR: expected ndk-build output missing: ${SO_PATH}"
+    exit 1
+fi
+
+if grep -qaF "${JNI_PKGNAME}/${JNI_CLSNAME}" "${SO_PATH}"; then
+    echo "JNI binding target OK: ${JNI_PKGNAME}/${JNI_CLSNAME}"
+else
+    echo "ERROR: libhev-socks5-tunnel.so does not reference ${JNI_PKGNAME}/${JNI_CLSNAME}."
+    if grep -qaF "hev/htproxy/TProxyService" "${SO_PATH}"; then
+        echo "       It still carries upstream's DEFAULT class, so -DPKGNAME/-DCLSNAME"
+        echo "       did not reach the compiler for this ABI."
     fi
+    echo "       JNI_OnLoad will not be able to bind its methods."
+    exit 1
 fi
 
 # ── Copy from ndk-build output ───────────────────────────────
@@ -236,6 +254,21 @@ fi
 
 mkdir -p "${OUTPUT_DIR}"
 cp "${HEV_OUTPUT}" "${OUTPUT_DIR}/libtun2socks.so"
+
+# Verify the artifact that ACTUALLY SHIPS, not just the ndk-build intermediate.
+# They are different files, and a copy that silently no-ops would leave a correct
+# intermediate and a wrong APK — which is exactly the failure that let a
+# default-class armeabi-v7a library reach the previous build unnoticed.
+FINAL_SO="${OUTPUT_DIR}/libtun2socks.so"
+if [ ! -f "${FINAL_SO}" ]; then
+    echo "ERROR: copy produced nothing at ${FINAL_SO}" >&2
+    exit 1
+fi
+if ! grep -qaF "${JNI_PKGNAME}/${JNI_CLSNAME}" "${FINAL_SO}"; then
+    echo "ERROR: ${FINAL_SO} does not carry the JNI binding string." >&2
+    echo "       The shipped library is not the one that was just verified." >&2
+    exit 1
+fi
 
 echo "Built: ${OUTPUT_DIR}/libtun2socks.so"
 ls -lh "${OUTPUT_DIR}/libtun2socks.so"
