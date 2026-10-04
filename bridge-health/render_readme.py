@@ -16,6 +16,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from health_common import normalize_bridge_line, normalize_failure_counts  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HEALTH_FILE = REPO_ROOT / "bridge-health" / "health.json"
 README_FILE = REPO_ROOT / "README.md"
@@ -34,7 +37,7 @@ def render_health_table(health: dict) -> str:
 
     latest = checks[-1]
     bridges = latest.get("bridges", [])
-    failure_counts = health.get("failure_counts", {})
+    failure_counts = normalize_failure_counts(health.get("failure_counts", {}))
 
     if not bridges:
         return "_(no bridges found in Constants.kt)_"
@@ -56,7 +59,7 @@ def render_health_table(health: dict) -> str:
         bridge_id = ip_match.group(1) if ip_match else (line[:25] + "..." if len(line) > 25 else line)
         status = b.get("status", "?")
         bootstrap = b.get("bootstrap_time", 0)
-        failures = failure_counts.get(line, 0)
+        failures = failure_counts.get(normalize_bridge_line(line), 0)
 
         # Status with emoji
         if status == "alive":

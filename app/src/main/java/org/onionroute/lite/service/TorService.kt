@@ -103,6 +103,36 @@ class TorService : Service() {
     @Volatile
     private var bootstrapLatch: CountDownLatch? = null
 
+    /**
+     * Releases the in-flight bootstrap wait, if there is one, so the thread
+     * parked in `CountDownLatch.await` resumes immediately.
+     *
+     * That await is a blocking call which coroutine cancellation cannot
+     * interrupt, so without this the starting thread stays parked for up to the
+     * full 120s timeout and then reports a timeout that is no longer true.
+     *
+     * Needed from two places, and missing from the second was the bug: a
+     * deliberate stop (stopTorInternal), and tor dying on its own mid-bootstrap
+     * (onTorProcessExited). The latter left the UI showing "CONNECTING 40%"
+     * for two minutes after tor had already exited, followed by a bogus
+     * "bootstrap timed out" error, and — because the handler also bailed out
+     * before its restart logic — never actually reconnected at all.
+     *
+     * @return true if a wait was released.
+     */
+    private fun releaseBootstrapWait(): Boolean {
+        synchronized(bootstrapLatchLock) {
+            val latch = bootstrapLatch ?: return false
+            Log.d(tag, "Releasing in-flight bootstrap wait")
+            latch.countDown()
+            return true
+        }
+    }
+
+    /** True while a startTor() is blocked waiting for bootstrap. */
+    private fun isBootstrapInProgress(): Boolean =
+        synchronized(bootstrapLatchLock) { bootstrapLatch != null }
+
     /** Coroutine scope tied to this service's lifecycle. Uses SupervisorJob so
      *  one failed child coroutine doesn't cancel siblings. */
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -312,7 +342,7 @@ class TorService : Service() {
                 // Clean up the half-started stack — without this the tor
                 // daemon kept running orphaned (holding ports 9050/9051),
                 // breaking every subsequent start attempt.
-                stopTorInternal()
+                stopTorInternal(unexpectedDisconnect = true)
                 return
             }
             torControlConnection = controlConnection
@@ -395,7 +425,10 @@ class TorService : Service() {
             if (!bootstrapped) {
                 Log.e(tag, "Tor bootstrap timed out at ${lastProgress.get()}% after 120s")
                 broadcastStatus("ERROR", "Tor bootstrap timed out at ${lastProgress.get()}%")
-                stopTorInternal()
+                // The forwarder died on its own, so the kill switch has work to
+                // do in VPN mode: traffic must fail closed rather than fall back
+                // to the cleartext interface.
+                stopTorInternal(unexpectedDisconnect = true)
                 return
             }
 
@@ -439,16 +472,38 @@ class TorService : Service() {
      * timeout path owns the error, so no auto-restart is attempted here.
      */
     private fun onTorProcessExited(exitCode: Int) {
+        // Sample the in-progress state FIRST, then release. Order matters: the
+        // awaiting thread clears the field in its own finally block, so reading
+        // it after the release could observe "false" purely because the waiter
+        // got scheduled quickly, and we would then skip the restart.
+        val wasBootstrapping = isBootstrapInProgress()
+
+        // Release any bootstrap wait BEFORE the early return below. Tor exiting
+        // mid-bootstrap is the case this exists for: the waiter must not sit out
+        // the full 120s timeout for a process that is already gone.
+        releaseBootstrapWait()
+
         serviceScope.launch {
-            // An intentional stop or a mid-bootstrap failure: don't interfere.
-            if (stopRequested || !isTorRunning) return@launch
+            // An intentional stop, or a start that had already failed before it
+            // ever reached the bootstrap wait: don't interfere.
+            //
+            // `wasBootstrapping` matters here. The previous condition was
+            // `!isTorRunning`, which is also true while a bootstrap is still in
+            // progress (isTorRunning is only set after 100%). So tor dying at
+            // 40% returned early: no auto-restart, and the UI sat on
+            // "CONNECTING 40%" until the latch timed out and reported a
+            // misleading "bootstrap timed out". Retry instead.
+            if (stopRequested || (!isTorRunning && !wasBootstrapping)) return@launch
 
             val attempt = autoRestartAttempts.incrementAndGet()
             if (attempt > Constants.TOR_AUTO_RESTART_ATTEMPTS) {
                 autoRestartAttempts.set(0)
                 Log.e(tag, "Auto-restart exhausted after $exitCode exit — giving up")
                 broadcastStatus("ERROR", "Tor exited repeatedly (last exit code $exitCode)")
-                stopTorInternal()
+                // Tor crashed out repeatedly and we are giving up, so from here
+                // on there is no tunnel at all. Fire the kill switch so VPN mode
+                // blocks rather than silently leaking.
+                stopTorInternal(unexpectedDisconnect = true)
                 return@launch
             }
 
@@ -507,7 +562,25 @@ class TorService : Service() {
         stopSelf()
     }
 
-    private fun stopTorInternal() {
+    /**
+     * Tears down tor, the control connection and the polling jobs.
+     *
+     * @param unexpectedDisconnect true only when tor failed on its own (as
+     *   opposed to the user, a restart, or service teardown asking for it).
+     *
+     *   This selects whether the KILL SWITCH fires, and it matters more than it
+     *   looks. `onTorDisconnected()` broadcasts
+     *   "ERROR — Kill switch triggered, Tor disconnected unexpectedly", and this
+     *   method used to call it unconditionally. So every ordinary disconnect —
+     *   the Home toggle, the QS tile, the service shutting down — surfaced a
+     *   spurious error banner claiming an unexpected failure. Since
+     *   PREF_KILL_SWITCH_ENABLED defaults to TRUE, that was the behaviour for
+     *   every user, every time.
+     *
+     *   Defaulting to false means a caller must now state explicitly that a
+     *   failure was unexpected, so the error is raised when it means something.
+     */
+    private fun stopTorInternal(unexpectedDisconnect: Boolean = false) {
         if (!isTorRunning) {
             // Even if Tor wasn't fully running, we may have a half-started
             // process + control connection to clean up. Also: this is called
@@ -518,19 +591,7 @@ class TorService : Service() {
 
         Log.i(tag, "Stopping Tor daemon…")
 
-        // Release an in-flight bootstrap wait FIRST. That wait is a blocking
-        // CountDownLatch.await that job cancellation cannot interrupt, so
-        // without this the starting thread stays parked for up to 120s after a
-        // disconnect and then broadcasts a bogus "bootstrap timed out" ERROR
-        // over the DISCONNECTED the user just saw. Counting it down makes the
-        // await return at once and the existing stopRequested checkpoint abort
-        // quietly.
-        synchronized(bootstrapLatchLock) {
-            bootstrapLatch?.let {
-                Log.d(tag, "Releasing in-flight bootstrap wait")
-                it.countDown()
-            }
-        }
+        releaseBootstrapWait()
 
         // Stop the exit-IP polling job and clear the cached value so
         // the UI doesn't show a stale IP after disconnect.
@@ -580,7 +641,11 @@ class TorService : Service() {
                 .apply()
         }
 
-        killSwitch?.onTorDisconnected()
+        // Only an unexpected loss of tor is a kill-switch event. See the
+        // unexpectedDisconnect parameter.
+        if (unexpectedDisconnect) {
+            killSwitch?.onTorDisconnected()
+        }
         Log.i(tag, "Tor stopped")
     }
 

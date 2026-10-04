@@ -62,16 +62,37 @@ def parse_bridges_from_constants():
     )
     if obfs4_match:
         for line in re.findall(r'"([^"]+)"', obfs4_match.group(1)):
-            bridges.append({"transport": "obfs4", "line": line, "raw": line})
+            # Derive the transport from the line rather than trusting the
+            # variable name; see the DEFAULT_WEBTUNNEL_BRIDGES note below.
+            transport = line.split(" ")[0].strip().lower()
+            bridges.append({"transport": transport, "line": line, "raw": line})
 
-    # Extract webtunnel bridges
+    # Extract bridges from DEFAULT_WEBTUNNEL_BRIDGES.
+    #
+    # The transport is derived from each line's FIRST TOKEN, not hardcoded to
+    # "webtunnel" as it was. That list is not homogeneous: it also carries an
+    # obfs4 fallback (67.205.142.190:9889) for when the webtunnel bridges are
+    # unreachable. Labelling that line "webtunnel" made health.json - and the
+    # README table rendered from it - report an obfs4 bridge as a webtunnel
+    # one.
+    #
+    # That is not cosmetic. TorProcessManager picks the proxy binary by parsing
+    # the transport off the line itself, so the app connected it correctly; but
+    # the health tooling tested obfs4 connectivity while labelling it webtunnel,
+    # so the results table attributed obfs4 outcomes to the wrong transport and
+    # could retire a working obfs4 bridge - or keep a dead webtunnel one -
+    # based on the other transport's results.
+    #
+    # Deriving the token also means a future mixed list is handled correctly
+    # without touching this code.
     wt_match = re.search(
         r'DEFAULT_WEBTUNNEL_BRIDGES\s*=\s*(?:listOf|arrayOf)\((.*?)\)',
         content, re.DOTALL
     )
     if wt_match:
         for line in re.findall(r'"([^"]+)"', wt_match.group(1)):
-            bridges.append({"transport": "webtunnel", "line": line, "raw": line})
+            transport = line.split(" ")[0].strip().lower()
+            bridges.append({"transport": transport, "line": line, "raw": line})
 
     # Extract snowflake bridge — it's embedded in the Bridge line in torrc
     # generation (TorProcessManager.kt), not directly in Constants. We

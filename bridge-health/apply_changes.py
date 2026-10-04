@@ -23,6 +23,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from health_common import normalize_bridge_line, normalize_failure_counts  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONSTANTS_FILE = REPO_ROOT / "app" / "src" / "main" / "java" / "org" / "onionroute" / "lite" / "Constants.kt"
 HEALTH_FILE = REPO_ROOT / "bridge-health" / "health.json"
@@ -64,10 +67,17 @@ def update_health_json(current_results: list, decisions: dict):
     if len(health["checks"]) > 100:
         health["checks"] = health["checks"][-100:]
 
-    # Update failure counts
-    failure_counts = health.get("failure_counts", {})
+    # Update failure counts.
+    #
+    # Re-keyed canonically (see health_common.normalize_bridge_line): this file
+    # mixes keys captured from raw BridgeDB output with ones captured from the
+    # decoded lines in Constants.kt, and the two spellings of the same bridge
+    # never matched on read. Normalising here collapses them.
+    failure_counts = normalize_failure_counts(health.get("failure_counts", {}))
     for bridge in current_results:
-        line = bridge["line"]
+        line = normalize_bridge_line(bridge["line"])
+        if not line:
+            continue
         if bridge["status"] == "alive":
             failure_counts[line] = 0  # reset on success
         else:
@@ -76,7 +86,7 @@ def update_health_json(current_results: list, decisions: dict):
     # If a bridge was swapped, remove its failure count (it's gone)
     for action in decisions.get("actions", []):
         if action.get("type") == "swap":
-            dead_line = action.get("dead_bridge_line", "")
+            dead_line = normalize_bridge_line(action.get("dead_bridge_line", ""))
             if dead_line in failure_counts:
                 del failure_counts[dead_line]
 

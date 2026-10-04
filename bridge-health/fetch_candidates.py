@@ -30,6 +30,9 @@ import urllib.error
 import ipaddress
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from health_common import normalize_bridge_line, normalize_failure_counts  # noqa: E402
+
 BRIDGEDB_URL = "https://bridges.torproject.org/bridges"
 USER_AGENT = "OnionRoute-Lite/1.0 (manual bridge diagnostics; +https://gitlab.com/theredhacker0345/Onionroute-Lite)"
 SUPPORTED_TRANSPORTS = ["obfs4", "webtunnel", "snowflake"]
@@ -152,7 +155,7 @@ def main():
     try:
         with open("bridge-health/health.json") as f:
             health = json.load(f)
-        failure_counts = health.get("failure_counts", {})
+        failure_counts = normalize_failure_counts(health.get("failure_counts", {}))
     except (FileNotFoundError, json.JSONDecodeError):
         failure_counts = {}
 
@@ -168,7 +171,7 @@ def main():
     # proposes replacements; a maintainer must review any resulting change.
     dead_bridges = []
     for r in results:
-        if r["status"] != "alive" and failure_counts.get(r["line"], 0) >= 2:
+        if r["status"] != "alive" and failure_counts.get(normalize_bridge_line(r["line"]), 0) >= 2:
             dead_bridges.append(r)
 
     if not dead_bridges:
@@ -237,7 +240,7 @@ def main():
     for dead in dead_bridges:
         dead_transport = dead["transport"]
         dead_line = dead["line"]
-        failure_count = failure_counts.get(dead_line, 0)
+        failure_count = failure_counts.get(normalize_bridge_line(dead_line), 0)
 
         # Never swap snowflake — the bridge line is a virtual placeholder
         # pointing at the Tor Project broker. If snowflake is "dead", it's
