@@ -358,6 +358,53 @@ All contributions must be compatible with GPL-3.0-or-later.
 
 ---
 
+## Acknowledgements
+
+### Battery and energy profiling — [EcoTrace](https://github.com/theredhacker0345/Eco-Trace)
+
+The energy-efficiency work in this release was done using **EcoTrace**'s rule
+set — the Android Energy Intelligence Platform by
+[theredhacker0345](https://github.com/theredhacker0345).
+
+EcoTrace's distinguishing claim is that it finds not just *what* drains a
+battery's worth of energy but *why* the code architecture causes it, and its
+23-pattern detector catalogue is what this app was audited against. Three of
+its rules found real problems here:
+
+| Rule | Finding in OnionRoute Lite | Fix |
+|---|---|---|
+| **N01 / N06** — network call inside a loop, polling where an event would do | The exit-IP probe issued an HTTPS-through-Tor request every 15s for the whole session — 5,760 multi-hop Tor transactions per connected day | Made event-driven off `SIGNAL NEWNYM`, with a 5-minute backstop: **5,760 → 288/day** |
+| **N06 / N01** — `LaunchedEffect` poller outliving the screen | The Circuit Viewer refreshed `GETINFO circuit-status` every 5s inside a composition-scoped loop, which survives screen-off and the Home button | `repeatOnLifecycle(STARTED)`, and 5s → 15s (circuits rotate over minutes, not seconds) |
+| **N01 (adjacent)** — needless work at 1Hz | `broadcastBandwidth` rebuilt the entire notification — including two `PendingIntent` allocations — once per second, because that is Tor's `BW` event rate | Throttled to 5s. **86,400 → ~17,280 notification rebuilds/day.** The in-app graph still updates at 1Hz |
+
+Two more worth recording because the tool's own detector missed them and they
+were found by reading its rule *semantics* rather than its regexes:
+
+- **`Service` with no `stopSelf` on a terminal path.** EcoTrace treats one
+  `stopSelf()` anywhere in a class as proof of termination, so all three of this
+  app's services pass its A01 check — while `TorVpnService.stopVpn()` genuinely
+  could reach a foreground state with a live notification and nothing left to
+  clear it. Fixed by making teardown idempotent rather than early-returning.
+- **Coroutine timers and Compose animations are invisible to the pattern
+  matcher.** EcoTrace's N01 requires an OkHttp-style call site within 16 lines
+  of the loop header, and A04 requires `ValueAnimator.INFINITE`. Neither fires
+  on `while (true) { … delay(n) }` or `rememberInfiniteTransition`, which is how
+  these anti-patterns are now idiomatically written — in Kotlin and Compose.
+  A Kotlin/Compose-aware detector would be a genuinely useful upstream
+  contribution.
+
+Also of note: EcoTrace's `getentropy` finding does **not** apply here. It
+correctly flagged a weak undefined `getentropy` in `libtor.so`, and traced it to
+OpenSSL 1.1.1w's `rand_unix.c`, which guards the call at runtime and falls back
+to `/dev/urandom`. `getentropy` is absent from Bionic below API 28, so Android
+6.0 never calls it — the weak undefined symbol does not fail the link. Worth
+knowing before anyone relinks tor against API ≥ 28 stubs.
+
+Full rule catalogue and methodology:
+<https://github.com/theredhacker0345/Eco-Trace>
+
+---
+
 ## License
 
 ```

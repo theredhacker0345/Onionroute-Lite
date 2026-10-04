@@ -13,6 +13,7 @@ import android.os.PowerManager
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,6 +22,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -63,6 +65,23 @@ import org.onionroute.lite.tor.TorProcessManager
 /** Wake-lock tag, visible in battery stats and dumpsys. */
 private const val WAKE_LOCK_TAG = "onionroute:tor"
 
+/**
+ * Minimum gap between notification rebuilds.
+ *
+ * 5s keeps the speed readout feeling live while cutting the rebuild rate from
+ * ~86,400/day to ~17,280/day at 1Hz input.
+ */
+private const val NOTIFICATION_UPDATE_INTERVAL_MS = 5_000L
+
+/**
+ * Floor between exit-IP probes while Tor is healthy.
+ *
+ * Only a backstop for a change nobody signalled; the normal trigger is
+ * requestExitIpRefresh() on NEWNYM or a circuit event. 288 probes/day instead
+ * of 5,760.
+ */
+private const val EXIT_IP_FALLBACK_INTERVAL_MS = 5L * 60L * 1000L
+
 private const val WAKE_LOCK_TIMEOUT_MS = 6L * 60L * 60L * 1000L
 
 class TorService : Service() {
@@ -94,6 +113,13 @@ class TorService : Service() {
      *  updates to the UI. Cancelled in stopTorInternal(). */
     private var exitIpUpdateJob: Job? = null
     private var lastExitIp: String = ""
+
+    /**
+     * Elapsed-realtime of the last notification rebuild, for throttling.
+     * 0 means "not yet rebuilt this session".
+     */
+    @Volatile
+    private var lastNotificationUpdateMs = 0L
 
     /**
      * Latch for the bootstrap wait of the in-flight startTor, if any.
@@ -782,6 +808,9 @@ class TorService : Service() {
         // Stop the exit-IP polling job and clear the cached value so
         // the UI doesn't show a stale IP after disconnect.
         exitIpUpdateJob?.cancel()
+        // Release the waiter so its withTimeoutOrNull cannot linger past teardown.
+        exitIpRefreshSignal?.complete(Unit)
+        exitIpRefreshSignal = null
         exitIpUpdateJob = null
         lastExitIp = ""
 
@@ -952,6 +981,11 @@ class TorService : Service() {
                 if (result == true) {
                     Log.i(tag, "New circuit requested (NEWNYM signal sent)")
                     updateNotification("OnionRoute Lite — New circuit")
+                    // NEWNYM is the one event that reliably changes the exit, so
+                    // it is the primary trigger for re-probing it. Without this
+                    // the UI would show the old exit IP until the 5-minute
+                    // fallback, having just asked for a new one.
+                    requestExitIpRefresh()
                 } else {
                     Log.w(tag, "NEWNYM signal failed — control connection may be closed")
                 }
@@ -1126,10 +1160,19 @@ class TorService : Service() {
      * HTTPS request to check.torproject.org/api/ip through the Tor SOCKS5
      * proxy on 127.0.0.1:9050.
      *
-     * The first fetch happens immediately so the user sees their IP within
-     * a few seconds of connecting. Subsequent fetches happen every 15s so
-     * the user is notified when their exit node changes (e.g., after a
-     * NEWNYM signal or circuit rotation).
+     * The first fetch happens immediately so the user sees their IP within a
+     * few seconds of connecting.
+     *
+     * Subsequent fetches are EVENT-DRIVEN. This used to be a network request
+     * inside a loop every 15s for the whole session — 5,760 HTTPS requests per
+     * connected day, each a full multi-hop Tor transaction (SOCKS → guard →
+     * middle → exit → check.torproject.org) with its own cell crypto and radio
+     * hold. But the exit IP only changes when tor is told to get a new one
+     * (SIGNAL NEWNYM) or when the circuit rotates, and both arrive as control
+     * events we already subscribe to (SETEVENTS includes CIRC). So the fetch
+     * waits on [requestExitIpRefresh], called from those paths, with a
+     * [EXIT_IP_FALLBACK_INTERVAL_MS] floor purely to catch drift nobody
+     * reported: 288 requests/day instead of 5,760.
      *
      * The job is cancelled in [stopTorInternal] when Tor disconnects.
      */
@@ -1168,9 +1211,42 @@ class TorService : Service() {
                     broadcastHealthSample(-1L)
                 }
                 val backoffFactor = 1L + consecutiveFailures.coerceAtMost(3)
-                delay(Constants.EXIT_IP_UPDATE_INTERVAL_MS * backoffFactor)
+                if (consecutiveFailures > 0) {
+                    delay(Constants.EXIT_IP_UPDATE_INTERVAL_MS * backoffFactor)
+                } else {
+                    // EVENT-DRIVEN while healthy: sleep until something asks for
+                    // a refresh, or until the long fallback catches drift.
+                    exitIpRefreshSignal?.let { signal ->
+                        withTimeoutOrNull(EXIT_IP_FALLBACK_INTERVAL_MS) { signal.await() }
+                    }
+                }
             }
             Log.i(tag, "Exit IP update job ended")
+        }
+    }
+
+    /**
+     * One-shot "something changed, re-check the exit IP" signal.
+     *
+     * A fresh CompletableDeferred is installed after each completion rather than
+     * reusing one, so a burst of events during a fetch collapses into exactly
+     * ONE follow-up probe instead of queueing N of them.
+     */
+    @Volatile
+    private var exitIpRefreshSignal: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
+    /**
+     * Asks the exit-IP job to re-probe promptly.
+     *
+     * Called from the only two moments the exit can change: after SIGNAL NEWNYM,
+     * and on a control-connection CIRC event. Cheap and idempotent when nothing
+     * is waiting.
+     */
+    private fun requestExitIpRefresh() {
+        val signal = exitIpRefreshSignal
+        if (signal != null) {
+            signal.complete(Unit)
+            exitIpRefreshSignal = kotlinx.coroutines.CompletableDeferred()
         }
     }
 
@@ -1235,11 +1311,27 @@ class TorService : Service() {
         }
         sendBroadcast(intent)
 
-        // Update notification with bandwidth info
+        // Rebuilding the notification is throttled; the BROADCAST above is not.
+        //
+        // Tor emits a BW event about once a second for as long as it moves data,
+        // and updateNotification() calls buildNotification() — a fresh
+        // NotificationCompat.Builder plus two PendingIntent allocations. That
+        // was 86,400 full notification rebuilds per connected day, which is
+        // real CPU and binder traffic for a number whose displayed precision
+        // (one decimal place) does not change meaningfully that fast.
+        //
+        // The in-app graph still updates at 1Hz, because that is a Compose state
+        // write rather than a system IPC + object rebuild. Only the notification
+        // — the expensive, cross-process one — is slowed to every 5s.
         if (isTorRunning) {
-            val downStr = formatSpeed(speedDown)
-            val upStr = formatSpeed(speedUp)
-            updateNotification("↓ $downStr  ↑ $upStr")
+            val now = android.os.SystemClock.elapsedRealtime()
+            val last = lastNotificationUpdateMs
+            if (last == 0L || now - last >= NOTIFICATION_UPDATE_INTERVAL_MS) {
+                lastNotificationUpdateMs = now
+                val downStr = formatSpeed(speedDown)
+                val upStr = formatSpeed(speedUp)
+                updateNotification("↓ $downStr  ↑ $upStr")
+            }
         }
     }
 

@@ -20,6 +20,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,12 +54,50 @@ import org.onionroute.lite.ui.theme.SyneFontFamily
  */
 @Composable
 fun CircuitScreen(appState: OnionRouteAppState) {
-    // Auto-refresh while the screen is composed. LaunchedEffect is cancelled
-    // automatically when the user navigates away — no leaks.
-    LaunchedEffect(Unit) {
-        while (true) {
-            appState.onRefreshCircuits?.invoke()
-            delay(5000L)
+    // Auto-refresh, gated on the screen being VISIBLE.
+    //
+    // The previous `LaunchedEffect(Unit) { while (true) { … delay(5000) } }` was
+    // scoped to the COMPOSITION, and the old comment claimed "cancelled
+    // automatically when the user navigates away — no leaks". True for
+    // navigation, false for the case that matters most: the composition survives
+    // screen-off and the Home button, so the loop kept running with the app in
+    // the background.
+    //
+    // Each iteration is not cheap. It crosses a process boundary into
+    // TorService, takes requestLock on the shared control connection for a
+    // `GETINFO circuit-status` with a 10s latch timeout, and sends a broadcast
+    // that MainActivity parses on every delivery. A user who opens the Circuit
+    // Viewer and then locks the phone — entirely plausible, since the point of
+    // the screen is to watch a circuit build — paid 17,280 of those per day.
+    //
+    // Tor circuits rotate on the order of minutes, not seconds, so the cadence
+    // is also relaxed to 15s: for a screen documenting a multi-hop route, a
+    // 15s refresh is indistinguishable from live and costs a third as much.
+    // Auto-refresh, gated on the screen being VISIBLE.
+    //
+    // The previous `LaunchedEffect(Unit) { while (true) { … delay(5000) } }` was
+    // scoped to the COMPOSITION, and the old comment claimed "cancelled
+    // automatically when the user navigates away — no leaks". True for
+    // navigation, false for the case that matters: the composition survives
+    // screen-off and the Home button, so the loop kept running in the
+    // background.
+    //
+    // Each iteration is not cheap. It crosses into TorService, takes
+    // requestLock on the shared control connection for a `GETINFO
+    // circuit-status` with a 10s latch timeout, and broadcasts a payload
+    // MainActivity parses on delivery. A user who opens the Circuit Viewer and
+    // then locks the phone paid 17,280 of those per day.
+    //
+    // repeatOnLifecycle(STARTED) suspends the loop while the screen is not
+    // started and restarts it on return, which is exactly the intended
+    // behaviour — and unlike a hand-rolled observer it cannot leak one.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                appState.onRefreshCircuits?.invoke()
+                delay(CIRCUIT_POLL_INTERVAL_MS)
+            }
         }
     }
 
@@ -151,6 +194,15 @@ fun CircuitScreen(appState: OnionRouteAppState) {
         item0Spacer()
     }
 }
+
+/**
+ * How often to re-read `GETINFO circuit-status` while the screen is visible.
+ *
+ * Tor circuits are built and rotated over minutes, so a 5s poll was spending a
+ * control-port round trip and a broadcast to redraw a picture that had not
+ * changed. 15s is visually indistinguishable for a route diagram.
+ */
+private const val CIRCUIT_POLL_INTERVAL_MS = 15_000L
 
 private const val MAX_SHOWN = 20
 
