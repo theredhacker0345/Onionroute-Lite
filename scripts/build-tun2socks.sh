@@ -179,16 +179,21 @@ cd "${NDK_TMPDIR}"
 JNI_PKGNAME="org/onionroute/lite/tor"
 JNI_CLSNAME="Tun2SocksNative"
 
+# APP_PLATFORM must not exceed the app's minSdk (23, Android 6.0 — the primary
+# target). This was android-29, which means any symbol newer than API 23 would
+# make System.loadLibrary throw UnsatisfiedLinkError on the oldest devices the
+# app supports — surfacing as "VPN unavailable" at runtime rather than as a
+# build error. No other native script sets APP_PLATFORM at all (they take the
+# NDK floor), so this was an outlier as well as a portability risk.
+#
+# NOTE: keep every comment ABOVE this invocation. A comment line inside a
+# backslash-continued argument list terminates the continuation, which silently
+# ran the following argument as a separate command (`-j4: command not found`)
+# while ndk-build appeared to succeed on a stale output directory.
 "${NDK_BUILD}" \
     NDK_PROJECT_PATH="${NDK_TMPDIR}" \
     APP_BUILD_SCRIPT="${NDK_TMPDIR}/jni/Android.mk" \
     APP_ABI="${ABI}" \
-    # Must not exceed the app's minSdk (23, Android 6.0 — the primary target).
-    # This was android-29, which means any symbol newer than API 23 would make
-    # System.loadLibrary throw UnsatisfiedLinkError on the oldest devices the
-    # app supports — surfacing as "VPN unavailable" rather than as a build
-    # error. No other native script sets APP_PLATFORM at all (they take the NDK
-    # floor), so this was an outlier as well as a portability risk.
     APP_PLATFORM=android-23 \
     NDK_LIBS_OUT="${NDK_TMPDIR}/libs" \
     NDK_OUT="${NDK_TMPDIR}/obj" \

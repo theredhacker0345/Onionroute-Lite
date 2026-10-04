@@ -51,7 +51,15 @@ cd "${BUILD_DIR}"
 SF_MODULE="gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2"
 
 echo "Downloading Snowflake v${SNOWFLAKE_VERSION} for ${ABI}..."
-go mod init onionroute-build/snowflake
+# `go mod init` FAILS if go.mod already exists, and the build aborts on
+# a non-zero status. That makes the script non-idempotent: any re-run
+# over a dirty tree (an interrupted build, a partial clone, or simply
+# building a second ABI into the same per-ABI dir) fails here and the
+# component is reported MISSING even though nothing is actually wrong.
+# Guard it so re-running is always safe.
+if [ ! -f go.mod ]; then
+    go mod init onionroute-build/snowflake
+fi
 
 # go get the specific packages so all transitive deps are resolved.
 go get "${SF_MODULE}/client@v${SNOWFLAKE_VERSION}"

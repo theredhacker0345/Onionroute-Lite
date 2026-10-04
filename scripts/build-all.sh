@@ -189,11 +189,36 @@ for ABI in "${SELECTED_ABIS[@]}"; do
         fi
     done
 
+    # A component whose BUILD STEP failed also fails the ABI, even when a
+    # binary of the right name is already sitting in OUTPUT_DIR.
+    #
+    # The presence check alone is not sufficient: it cannot tell a freshly built
+    # binary from one left by an earlier run. That is not hypothetical — a
+    # comment line accidentally placed inside ndk-build's backslash-continued
+    # argument list terminated the continuation, so `-j$(nproc)` ran as a
+    # separate command and the hev build never ran. The file-presence check then
+    # found last run's libtun2socks.so and reported "All binaries present",
+    # which shipped a stale library. Both conditions must hold: the build step
+    # succeeded AND the file is there.
+    COMPONENT_FAILED=0
+    for comp in tor obfs4 snowflake tun2socks webtunnel; do
+        if [ "${COMPONENT_STATUS[$comp]}" = "FAILED" ]; then
+            COMPONENT_FAILED=1
+            echo "  FAILED BUILD: ${comp} (a stale binary may be present for it)"
+        fi
+    done
+
     ABI_OK=true
     if [ "${MISSING}" -eq 1 ]; then
         ABI_OK=false
         echo ""
         echo "WARNING: Some ${ABI} binaries are missing."
+        echo "Component results: tor=${COMPONENT_STATUS[tor]} obfs4=${COMPONENT_STATUS[obfs4]} snowflake=${COMPONENT_STATUS[snowflake]} tun2socks=${COMPONENT_STATUS[tun2socks]} webtunnel=${COMPONENT_STATUS[webtunnel]}"
+    elif [ "${COMPONENT_FAILED}" -eq 1 ]; then
+        ABI_OK=false
+        echo ""
+        echo "WARNING: All ${ABI} binaries are present, but at least one component FAILED to build."
+        echo "Any binary left over from a previous run is STALE and must not be shipped."
         echo "Component results: tor=${COMPONENT_STATUS[tor]} obfs4=${COMPONENT_STATUS[obfs4]} snowflake=${COMPONENT_STATUS[snowflake]} tun2socks=${COMPONENT_STATUS[tun2socks]} webtunnel=${COMPONENT_STATUS[webtunnel]}"
     else
         echo ""
