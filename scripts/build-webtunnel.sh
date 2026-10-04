@@ -15,7 +15,9 @@ set -euo pipefail
 ABI="${1:-armeabi-v7a}"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-/opt/android-ndk}}"
 OUTPUT_DIR="${3:-./app/src/main/jniLibs/${ABI}}"
-WEBTUNNEL_VERSION="v0.0.3"
+# v0.0.7 is the first release whose module tree exposes the client under
+# main/client. Pinned explicitly for reproducible builds.
+WEBTUNNEL_VERSION="v0.0.7"
 
 API=23
 TOOLCHAIN="${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64"
@@ -51,14 +53,29 @@ cd "${BUILD_DIR}"
 # Same strategy as build-obfs4.sh:
 #   go mod init → go get <package>@<version> (resolves transitive deps
 #   into go.sum) → go build <package>.
-WEBTUNNEL_PKG="gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel/client"
+#
+# PACKAGE PATH: the client lives under main/client, NOT client/ or
+# cmd/client/. Verified against the v0.0.7 module tree:
+#   main/client/main.go     ← the webtunnel client (package main)
+#   main/server/main.go     ← the relay-side server
+#   webtunnel.go            ← root library package
+# Pointing this at ".../webtunnel/client" fails with "does not contain
+# package", which build-all.sh then swallows as a WARNING.
+WEBTUNNEL_PKG="gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel/main/client"
 
 echo "Downloading webtunnel ${WEBTUNNEL_VERSION} for ${ABI}..."
-go mod init onionroute-build/webtunnel
+if [ ! -f go.mod ]; then
+    go mod init onionroute-build/webtunnel
+fi
 
+# Fail loudly instead of silently falling back to @latest. A floating
+# @latest would break F-Droid's reproducible-build requirement, because
+# two builds of the same commit could resolve to different sources.
 if ! go get "${WEBTUNNEL_PKG}@${WEBTUNNEL_VERSION}"; then
-    echo "Tag ${WEBTUNNEL_VERSION} not found, falling back to @latest..."
-    go get "${WEBTUNNEL_PKG}@latest"
+    echo "ERROR: webtunnel ${WEBTUNNEL_VERSION} not resolvable at ${WEBTUNNEL_PKG}."
+    echo "       Refusing to fall back to @latest: that would break reproducible builds."
+    echo "       Bump WEBTUNNEL_VERSION in this script once the upstream tag exists."
+    exit 1
 fi
 
 echo "Building webtunnel-client for ${ABI}..."

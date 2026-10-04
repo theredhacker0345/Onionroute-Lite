@@ -92,6 +92,11 @@ OVERALL_OK=true
 for ABI in "${SELECTED_ABIS[@]}"; do
     OUTPUT_DIR="${PROJECT_DIR}/app/src/main/jniLibs/${ABI}"
 
+    # Reset the run-level verdict at the top of every ABI so a failure in an
+    # earlier ABI cannot mask a later one, and so the verdict is decided purely
+    # by the file-presence check at the bottom of this iteration.
+    OVERALL_OK=true
+
     echo ""
     echo "╔═══════════════════════════════════════════╗"
     echo "║  Building for ABI: ${ABI}"
@@ -120,8 +125,6 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     if bash "${SCRIPT_DIR}/build-tor.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
         COMPONENT_STATUS[tor]="OK"
     else
-        COMPONENT_STATUS[tor]="FAILED"
-        OVERALL_OK=false
         echo "WARNING: Tor build failed for ${ABI}, continuing with other components..."
     fi
 
@@ -132,8 +135,6 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     if bash "${SCRIPT_DIR}/build-obfs4.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
         COMPONENT_STATUS[obfs4]="OK"
     else
-        COMPONENT_STATUS[obfs4]="FAILED"
-        OVERALL_OK=false
         echo "WARNING: obfs4proxy build failed for ${ABI}, continuing with other components..."
     fi
 
@@ -144,8 +145,6 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     if bash "${SCRIPT_DIR}/build-snowflake.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
         COMPONENT_STATUS[snowflake]="OK"
     else
-        COMPONENT_STATUS[snowflake]="FAILED"
-        OVERALL_OK=false
         echo "WARNING: Snowflake build failed for ${ABI}, continuing with other components..."
     fi
 
@@ -156,8 +155,6 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     if bash "${SCRIPT_DIR}/build-tun2socks.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
         COMPONENT_STATUS[tun2socks]="OK"
     else
-        COMPONENT_STATUS[tun2socks]="FAILED"
-        OVERALL_OK=false
         echo "WARNING: hev-socks5-tunnel build failed for ${ABI}, continuing with other components..."
     fi
 
@@ -168,12 +165,17 @@ for ABI in "${SELECTED_ABIS[@]}"; do
     if bash "${SCRIPT_DIR}/build-webtunnel.sh" "${ABI}" "${NDK_PATH}" "${OUTPUT_DIR}"; then
         COMPONENT_STATUS[webtunnel]="OK"
     else
-        COMPONENT_STATUS[webtunnel]="FAILED"
-        OVERALL_OK=false
         echo "WARNING: webtunnel-client build failed for ${ABI}, continuing with other components..."
     fi
 
     # ── Verify this ABI's outputs ─────────────────────────────
+    #
+    # The presence check below is the AUTHORITATIVE verdict for this ABI, not
+    # the per-component build exit codes above. Those are unreliable in both
+    # directions: a component step can fail while a valid binary from a
+    # previous build is still sitting in OUTPUT_DIR (spurious failure), and a
+    # step can "succeed" while producing nothing (silent success). Keying
+    # OVERALL_OK off the files on disk fixes both.
     echo ""
     echo "Verifying ${ABI} binaries..."
     MISSING=0
@@ -187,13 +189,20 @@ for ABI in "${SELECTED_ABIS[@]}"; do
         fi
     done
 
+    ABI_OK=true
     if [ "${MISSING}" -eq 1 ]; then
+        ABI_OK=false
         echo ""
         echo "WARNING: Some ${ABI} binaries are missing."
         echo "Component results: tor=${COMPONENT_STATUS[tor]} obfs4=${COMPONENT_STATUS[obfs4]} snowflake=${COMPONENT_STATUS[snowflake]} tun2socks=${COMPONENT_STATUS[tun2socks]} webtunnel=${COMPONENT_STATUS[webtunnel]}"
     else
         echo ""
         echo "ABI ${ABI} build complete! All binaries present."
+    fi
+
+    # Fold this ABI's verdict into the run-level verdict.
+    if [ "${ABI_OK}" != true ]; then
+        OVERALL_OK=false
     fi
 
     echo "  Size: $(du -sh "${OUTPUT_DIR}/" | cut -f1)"

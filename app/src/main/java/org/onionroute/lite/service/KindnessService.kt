@@ -361,7 +361,7 @@ class KindnessService : Service() {
 
         // Client disconnected — look for data relayed
         if (trimmed.contains("disconnected")) {
-            peopleHelpedNow.getAndUpdate { (it - 1).coerceAtLeast(0) }
+            decrementClampedAtZero(peopleHelpedNow)
             // Extract bytes: "data relayed: 1234567 B" or "data relayed: 1234567 bytes"
             DATA_RELAYED_REGEX.find(trimmed)?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
                 dataDonated.addAndGet(bytes)
@@ -371,6 +371,32 @@ class KindnessService : Service() {
     }
 
     // ── Stats Persistence & Broadcasting ──────────────────────────
+
+    /**
+     * Decrements [counter] by one, clamping at zero.
+     *
+     * API-23 COMPAT: `AtomicLong.getAndUpdate` is a Java 8 default method that
+     * Android only added in API 24. This app's minSdk is 23 and its primary
+     * target is an Android 6.0 device, so calling it there throws
+     * NoSuchMethodError — and it fired from the proxy's stdout reader thread on
+     * every "disconnected" line, i.e. the crash path was reachable in normal
+     * use, not just at startup. A compare-and-set loop gives identical
+     * semantics on every supported API level.
+     *
+     * CAS loop rather than a synchronized block: the stdout reader runs on a
+     * dedicated daemon thread while getStats() reads from the UI thread, and
+     * the increment side already uses lock-free atomics, so this keeps both
+     * halves consistent without introducing a lock.
+     */
+    private fun decrementClampedAtZero(counter: AtomicLong) {
+        while (true) {
+            val current = counter.get()
+            if (current <= 0L) return
+            // compareAndSet fails only if another thread changed the value
+            // between get() and compareAndSet(); re-read and retry then.
+            if (counter.compareAndSet(current, current - 1L)) return
+        }
+    }
 
     private fun persistStats() {
         try {

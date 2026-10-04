@@ -10,6 +10,7 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import org.onionroute.lite.Constants
 import org.onionroute.lite.R
@@ -27,6 +28,21 @@ import org.onionroute.lite.R
  * its state stays in sync even when toggled from the main activity or
  * other entry points.
  */
+/**
+ * Quick Settings tile: toggle Tor on/off.
+ *
+ * API-24 CLASS ON A minSdk-23 APP: `TileService` itself is API 24+, so this
+ * class cannot even be loaded on Android 6.0. That is safe because Quick
+ * Settings tiles do not exist before API 24 — the system has no
+ * ServiceInfo.action.TILE_ACTION to resolve, so it never binds or instantiates
+ * this component there, and the class is never loaded. @RequiresApi states
+ * that contract explicitly instead of leaving the NewApi warnings to be
+ * suppressed file-wide.
+ *
+ * Declared in the manifest for all API levels, so nothing here may assume it
+ * is the only entry point to connecting.
+ */
+@RequiresApi(Build.VERSION_CODES.N)
 class ConnectTileService : TileService() {
 
     private val tag = "ConnectTileService"
@@ -60,7 +76,14 @@ class ConnectTileService : TileService() {
             }
         }
 
-        registerReceiver(statusReceiver, statusFilter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // ContextCompat, not the platform 3-arg overload: the platform flags
+        // overload needs API 26+, while this app supports 23. ContextCompat
+        // dispatches on API level internally and applies the
+        // RECEIVER_NOT_EXPORTED semantics the tile needs to keep Tor status
+        // broadcasts app-private on every supported version.
+        ContextCompat.registerReceiver(
+            this, statusReceiver, statusFilter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         updateTile()
     }
@@ -119,7 +142,7 @@ class ConnectTileService : TileService() {
             // to turn it OFF.
             qsTile?.let { t ->
                 t.state = Tile.STATE_INACTIVE
-                t.subtitle = "Disconnecting…"
+                t.setStatusSubtitle("Disconnecting…")
                 t.updateTile()
             }
         } else {
@@ -145,7 +168,7 @@ class ConnectTileService : TileService() {
             // until the first broadcast arrives.
             qsTile?.let { t ->
                 t.state = Tile.STATE_UNAVAILABLE
-                t.subtitle = "Connecting…"
+                t.setStatusSubtitle("Connecting…")
                 t.updateTile()
             }
         }
@@ -160,12 +183,12 @@ class ConnectTileService : TileService() {
         if (isConnected) {
             tile.state = Tile.STATE_ACTIVE
             tile.label = "OnionRoute"
-            tile.subtitle = "Connected"
+            tile.setStatusSubtitle("Connected")
             tile.icon = Icon.createWithResource(this, R.drawable.ic_tile_onion)
         } else {
             tile.state = Tile.STATE_INACTIVE
             tile.label = "OnionRoute"
-            tile.subtitle = "Disconnected"
+            tile.setStatusSubtitle("Disconnected")
             tile.icon = Icon.createWithResource(this, R.drawable.ic_tile_onion)
         }
 
@@ -187,6 +210,13 @@ class ConnectTileService : TileService() {
  * This gives users a one-tap "New Identity" feature from the
  * quick settings panel without opening the app.
  */
+/**
+ * Quick Settings tile: build a new Tor circuit.
+ *
+ * API-24 CLASS ON A minSdk-23 APP — see ConnectTileService for why this is safe
+ * and why the class is never loaded below API 24.
+ */
+@RequiresApi(Build.VERSION_CODES.N)
 class RefreshTileService : TileService() {
 
     private val tag = "RefreshTileService"
@@ -219,7 +249,14 @@ class RefreshTileService : TileService() {
             }
         }
 
-        registerReceiver(statusReceiver, statusFilter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // ContextCompat, not the platform 3-arg overload: the platform flags
+        // overload needs API 26+, while this app supports 23. ContextCompat
+        // dispatches on API level internally and applies the
+        // RECEIVER_NOT_EXPORTED semantics the tile needs to keep Tor status
+        // broadcasts app-private on every supported version.
+        ContextCompat.registerReceiver(
+            this, statusReceiver, statusFilter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         updateTile()
     }
@@ -273,7 +310,7 @@ class RefreshTileService : TileService() {
         val tile = qsTile
         if (tile != null) {
             tile.state = Tile.STATE_ACTIVE
-            tile.subtitle = "New Circuit Requested"
+            tile.setStatusSubtitle("New Circuit Requested")
             tile.updateTile()
 
             // Revert after a short delay
@@ -292,12 +329,12 @@ class RefreshTileService : TileService() {
         if (isConnected) {
             tile.state = Tile.STATE_INACTIVE
             tile.label = "New Circuit"
-            tile.subtitle = "Refresh Tor path"
+            tile.setStatusSubtitle("Refresh Tor path")
             tile.icon = Icon.createWithResource(this, R.drawable.ic_tile_refresh)
         } else {
             tile.state = Tile.STATE_UNAVAILABLE
             tile.label = "New Circuit"
-            tile.subtitle = "Tor not connected"
+            tile.setStatusSubtitle("Tor not connected")
             tile.icon = Icon.createWithResource(this, R.drawable.ic_tile_refresh)
         }
 
@@ -306,5 +343,23 @@ class RefreshTileService : TileService() {
 
     companion object {
         private val statusFilter = IntentFilter(Constants.ACTION_STATUS_UPDATE)
+    }
+}
+
+
+/**
+ * Sets a tile's secondary line, degrading gracefully below API 29.
+ *
+ * `Tile.setSubtitle` was added in Android 10 (API 29). On API 24-28 the tile
+ * shows only its label, which is acceptable: the subtitle is purely cosmetic
+ * ("Connecting…", "Connected"), never the sole carrier of state — the label
+ * and icon carry the connection state in `updateTile()`.
+ *
+ * Wrapping the call once here keeps the version check out of all seven call
+ * sites and means a future subtitle can never reintroduce an unguarded call.
+ */
+private fun Tile.setStatusSubtitle(text: String) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        subtitle = text
     }
 }

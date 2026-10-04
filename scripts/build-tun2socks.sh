@@ -40,9 +40,35 @@ set -euo pipefail
 ABI="${1:-armeabi-v7a}"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-/opt/android-ndk}}"
 OUTPUT_DIR="${3:-./app/src/main/jniLibs/${ABI}}"
-# NOTE: Version 3.0.5 does NOT exist. Latest is 2.15.0.
-# The 2.x series uses ndk-build; the project has never had a 3.x release.
+# NOTE: upstream has never released a 3.x; the current 2.x line tops out at
+# 2.18.0. This stays pinned to 2.15.0 for a reproducible build, but be aware
+# that is NOT the newest release.
 HEV_VERSION="2.15.0"
+
+# ─────────────────────────────────────────────────────────────
+# KNOWN BLOCKER — VPN mode cannot work as currently wired.
+#
+# This script produces libhev-socks5-tunnel.so via upstream's Android.mk,
+# which ends in `include $(BUILD_SHARED_LIBRARY)`. That yields an ELF
+# DYN with no PT_INTERP, so execve() fails with ENOEXEC. TorVpnService
+# launches it with ProcessBuilder(libtun2socksPath, ...), which requires an
+# interpreter — VPN mode therefore never establishes a forwarder.
+#
+# Fixing it is not a build-flag change: hev-socks5-tunnel has no CLI option
+# for an existing TUN descriptor. Its only fd-aware entry points are C APIs
+#
+#     int  hev_socks5_tunnel_main_from_str(const unsigned char *cfg,
+#                                          unsigned int len, int tun_fd);
+#     void hev_socks5_tunnel_quit(void);
+#
+# (main() always passes tun_fd = -1, i.e. "create my own TUN", which needs
+# root and is unavailable to an unprivileged app.) Reaching them requires a
+# JNI bridge that runs this function on a native thread with the
+# VpnService ParcelFileDescriptor — the approach Orbot uses. Until that
+# exists, VPN mode should be treated as non-functional rather than merely
+# untested, and the graceful-degradation path matters: TorService already
+# keeps the TUN up when the kill switch is enabled so traffic fails closed.
+# ─────────────────────────────────────────────────────────────
 
 # ── Validate ABI ─────────────────────────────────────────────
 case "${ABI}" in

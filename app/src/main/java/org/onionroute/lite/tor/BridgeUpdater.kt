@@ -6,6 +6,10 @@ import org.onionroute.lite.Constants
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
@@ -134,7 +138,7 @@ class BridgeUpdater private constructor(private val context: Context) {
         try {
             // Re-serialize the decoded bridges back to JSON for caching.
             val cacheObj = JSONObject()
-            cacheObj.put("last_updated", java.time.Instant.now().toString())
+            cacheObj.put("last_updated", isoUtcNow())
             for ((transport, list) in bridges) {
                 cacheObj.put(transport, org.json.JSONArray(list))
             }
@@ -142,6 +146,23 @@ class BridgeUpdater private constructor(private val context: Context) {
         } catch (e: Exception) {
             Log.w(tag, "Failed to save cache: ${e.message}")
         }
+    }
+
+    /**
+     * Current UTC time as an ISO-8601 string.
+     *
+     * API-23 COMPAT: `java.time.Instant` is API 26+ and this app's minSdk is
+     * 23 (its primary target is a 1.5GB Android 6.0 device). Formatting
+     * directly avoids enabling core-library desugaring just for a cosmetic
+     * cache timestamp. Produces the same shape as `Instant.now().toString()`,
+     * e.g. `2026-07-13T16:09:14.123Z`.
+     *
+     * SimpleDateFormat is not thread-safe; a fresh instance is used per call.
+     */
+    private fun isoUtcNow(): String {
+        val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        fmt.timeZone = TimeZone.getTimeZone("UTC")
+        return fmt.format(Date())
     }
 
     /**

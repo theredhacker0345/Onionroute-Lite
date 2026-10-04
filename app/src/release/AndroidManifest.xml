@@ -2,18 +2,39 @@
 <!--
     Release-specific manifest overlay.
     These merge rules remove debug/build-only components from release APKs.
+
+    FIX (WrongManifestParent): the <activity> and <receiver> elements MUST be
+    direct children of <application>. They were previously direct children of
+    <manifest>, which made two things go wrong:
+
+      1. Lint reported WrongManifestParent errors for both elements.
+      2. More importantly, the merger could not match them against the
+         <application> children they are meant to remove, so it emitted
+         "tagged ... to remove other declarations but no other declaration
+         present" and the removal was a NO-OP. That is the real reason
+         PreviewActivity and ProfileInstallReceiver survived into the release
+         APK (BUGS.md findings W-01 / W-03).
+
+    Note on W-01: ui-tooling is debugImplementation-only, so PreviewActivity
+    should already be absent from release. The removal is kept as defence in
+    depth so a future accidental `implementation` of ui-tooling cannot leak
+    an exported debug activity into a release build.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Remove Compose PreviewActivity (debug-only, W-01) -->
-    <activity
-        android:name="androidx.compose.ui.tooling.PreviewActivity"
-        tools:node="remove" />
+    <application>
 
-    <!-- Remove ProfileInstallReceiver (build-time optimization, W-03) -->
-    <receiver
-        android:name="androidx.profileinstaller.ProfileInstallReceiver"
-        tools:node="remove" />
+        <!-- Remove Compose PreviewActivity (debug-only, W-01) -->
+        <activity
+            android:name="androidx.compose.ui.tooling.PreviewActivity"
+            tools:node="remove" />
+
+        <!-- Remove ProfileInstallReceiver (build-time optimization, W-03) -->
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:node="remove" />
+
+    </application>
 
 </manifest>

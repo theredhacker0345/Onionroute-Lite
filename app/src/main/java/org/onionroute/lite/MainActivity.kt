@@ -3,17 +3,18 @@ package org.onionroute.lite
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.Context
+import android.content.IntentFilter
 import android.net.Uri
+import android.net.VpnService
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -426,11 +427,25 @@ class MainActivity : ComponentActivity() {
             addAction(Constants.ACTION_CIRCUITS_UPDATE)
             addAction(Constants.ACTION_HEALTH_UPDATE)
         }
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(statusReceiver, filter)
-        }
+        // ContextCompat.registerReceiver, NOT the platform 3-arg overload.
+        //
+        // These seven broadcasts drive connection state, the exit IP, and the
+        // kill-switch banner, and they are unprotected — any app on the device
+        // can send them. RECEIVER_NOT_EXPORTED keeps them app-private.
+        //
+        // The previous code branched on SDK_INT >= 33 and called the platform
+        // 3-arg registerReceiver. That was wrong twice over:
+        //   - The platform flags overload only exists from API 26, so the guarded
+        //     branch was the only place it could legally be called.
+        //   - Between API 26 and 32 the else branch registered with no flag at
+        //     all, leaving the receiver open to spoofed broadcasts on eight
+        //     Android versions, including the ones this app most targets.
+        //
+        // ContextCompat does the version dispatch internally, so one call is
+        // correct on every supported API level (23+) and no guard is needed.
+        ContextCompat.registerReceiver(
+            this, statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     private fun formatSpeed(bytesPerSec: Long): String = when {

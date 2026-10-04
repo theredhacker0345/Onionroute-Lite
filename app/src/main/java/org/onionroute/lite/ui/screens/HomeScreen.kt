@@ -52,6 +52,7 @@ import org.onionroute.lite.ui.Screen
 import org.onionroute.lite.ui.theme.ConnectionState
 import org.onionroute.lite.ui.theme.OnionRouteColors
 import org.onionroute.lite.ui.theme.OnionRouteTypography
+import org.onionroute.lite.ui.theme.SyneFontFamily
 
 /**
  * Home screen — the primary UI for OnionRoute Lite.
