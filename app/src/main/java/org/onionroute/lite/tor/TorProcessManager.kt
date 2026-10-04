@@ -5,6 +5,9 @@ import android.util.Log
 import org.onionroute.lite.Constants
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * Manages the native Tor process lifecycle.
@@ -65,7 +68,17 @@ class TorProcessManager(
          * risking a false rejection of a legitimate 32-bit binary, which would
          * disable a transport on exactly the low-end devices this app targets.
          */
-        private const val MIN_BINARY_SIZE = 128L * 1024L
+        /**
+ * How long a no-argument runnability probe may take before it is considered
+ * "did not crash". Long enough for a cold start under NDK translation, short
+ * enough not to be felt at connect time.
+ */
+private const val RUNNABLE_PROBE_TIMEOUT_MS = 3_000L
+
+/** How often awaitExit re-checks a still-running probe. */
+private const val EXIT_PROBE_POLL_MS = 50L
+
+private const val MIN_BINARY_SIZE = 128L * 1024L
 
         /**
          * The exit-country preference must look like an ISO-3166 alpha-2 code
@@ -224,6 +237,16 @@ class TorProcessManager(
      * Returns the path to a native binary in nativeLibraryDir.
      * Returns null if the binary doesn't exist or is a placeholder stub.
      */
+    /**
+     * Runnability verdicts, keyed by binary name.
+     *
+     * Probing costs a fork + exec per binary, and generateTorrc can run more
+     * than once across a session (bridge toggles, auto-restart), so the answer
+     * is memoised. A crash verdict is stable for the process lifetime — the
+     * binary does not start working later.
+     */
+    private val runnableCache = ConcurrentHashMap<String, Boolean>()
+
     private fun getBinaryPath(libName: String): String? {
         val file = File(nativeLibDir, libName)
         if (!file.exists()) return null
@@ -231,7 +254,130 @@ class TorProcessManager(
             Log.w(tag, "Skipping stub binary: $libName (${file.length()} bytes)")
             return null
         }
+        // Presence and size are not sufficient: the binary still has to be
+        // able to RUN on this device. See isRunnable.
+        if (!isRunnable(file, libName)) return null
         return file.absolutePath
+    }
+
+    /**
+     * Probes whether a native binary can actually execute here, by running it
+     * once and looking at HOW it exited.
+     *
+     * WHY THIS IS NEEDED
+     * ------------------
+     * A device run produced this, roughly once a second for two minutes:
+     *
+     *   [warn] Managed proxy ".../libsnowflake.so" having PID 7994
+     *          terminated with status code 18446744073709551615
+     *   [warn] Managed proxy at '.../libsnowflake.so' died in state Launched
+     *
+     * 18446744073709551615 is (pid_t)-1 — tor reporting an unknown exit
+     * status. "died in state Launched" means the process was gone before tor
+     * could handshake with it. The standalone proxy failed the same way with
+     * "Snowflake proxy exited with code 139" (128 + SIGSEGV).
+     *
+     * So the binary is present, the right size, executable, and dies
+     * immediately on execution. The cause is most likely the emulator's NDK
+     * translation (the log shows `ndk_translation (aarch64)` on an x86_64
+     * host), which is hostile to cgo-enabled Go binaries — but whether real
+     * ARM hardware is affected is untested and out of scope here.
+     *
+     * WHY IT MATTERS ENOUGH TO HANDLE
+     * -------------------------------
+     * tor retries a dead managed proxy on its own schedule, roughly once a
+     * second, and it does not give up quickly. Every retry is a fork + exec +
+     * crash. Left alone the app pins a core and fills the log for as long as
+     * the user leaves Tor connected. We cannot bound tor's retry loop from
+     * Kotlin, but we CAN decline to hand it a binary that cannot run — the
+     * transport is then simply unavailable, the bridge line for it is dropped
+     * with the other unusable ones, and tor bootstraps over its remaining
+     * bridges instead of spinning forever.
+     *
+     * @return true if the binary exists and did not die by signal.
+     */
+    /**
+     * Waits for [process] to exit, up to [timeoutMs].
+     *
+     * Process.waitFor(long, TimeUnit) is API 26+, and this app's minSdk is 23
+     * with Android 6.0 as its primary target — calling it there is a
+     * NoSuchMethodError at connect time, which lint correctly flags. Polling
+     * exitValue() is the pre-26 idiom and behaves identically for this purpose.
+     *
+     * @return true if the process exited within the timeout.
+     */
+    private fun awaitExit(process: Process, timeoutMs: Long): Boolean {
+        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            try {
+                process.exitValue()
+                return true
+            } catch (_: IllegalThreadStateException) {
+                // Still running — that is the normal case here.
+            }
+            try {
+                Thread.sleep(EXIT_PROBE_POLL_MS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+        return false
+    }
+
+    private fun isRunnable(file: File, libName: String): Boolean {
+        if (runnableCache.containsKey(libName)) return runnableCache[libName] == true
+        val verdict = try {
+            val probe = ProcessBuilder(file.absolutePath)
+                .redirectErrorStream(true)
+                .start()
+            // No stdin: a pluggable transport asked for arguments and got none
+            // will print usage and exit, which is a NORMAL outcome, not a
+            // failure. Closing stdin also stops anything that would block on it.
+            runCatching { probe.outputStream.close() }
+            val exited = awaitExit(probe, RUNNABLE_PROBE_TIMEOUT_MS)
+            if (!exited) {
+                // Still running with no arguments: it did not crash, so the
+                // loader works even if the invocation was not meaningful.
+                probe.destroy()
+                true
+            } else {
+                val code = probe.exitValue()
+                // POSIX reports death-by-signal as 128 + signal, so anything
+                // >= 128 means it was killed rather than having exited. 139
+                // (SIGSEGV) and 134 (SIGABRT) are what we have actually seen.
+                val crashed = code >= 128
+                if (crashed) {
+                    Log.w(tag, "Binary cannot run on this device: $libName " +
+                        "(exited $code — killed by signal ${code - 128}). " +
+                        "That transport will be unavailable.")
+                }
+                !crashed
+            }
+        } catch (e: Exception) {
+            // Distinguish "cannot be executed" from "could not be probed".
+            //
+            // ProcessBuilder.start() throws IOException for both a file that
+            // exists but is not executable and a transient failure such as
+            // EMFILE (too many open files). Collapsing them would mean either
+            // silently enabling a transport that can never run, or disabling a
+            // working one because the device was momentarily out of
+            // descriptors. Only the former is provable, so only it disables.
+            val notExecutable = e is IOException &&
+                (e.message?.contains("Permission denied") == true ||
+                 e.message?.contains("EACCES") == true)
+            if (notExecutable) {
+                Log.w(tag, "Binary is not executable on this device: $libName " +
+                    "(${e.message}). That transport will be unavailable.")
+                false
+            } else {
+                Log.w(tag, "Could not probe $libName for runnability: " +
+                    "${e.javaClass.simpleName}: ${e.message}. Assuming it runs.")
+                true
+            }
+        }
+        runnableCache[libName] = verdict
+        return verdict
     }
 
     // ── torrc Generation ──────────────────────────────────────────
