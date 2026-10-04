@@ -17,6 +17,23 @@
     native <methods>;
 }
 
+# ── hev-socks5-tunnel JNI bridge ──────────────────────────────
+# This class is resolved BY NAME from native code, not from Kotlin.
+#
+# libtun2socks.so's JNI_OnLoad does:
+#     FindClass("org/onionroute/lite/tor/Tun2SocksNative")
+#     RegisterNatives(klass, {TProxyStartService, TProxyStopService, TProxyGetStats})
+# The lookup string is compiled into the .so at build time via
+# -DPKGNAME/-DCLSNAME in scripts/build-tun2socks.sh, so R8 cannot see the
+# dependency. If this class is renamed or stripped, FindClass returns null and
+# RegisterNatives dereferences it -> immediate native crash inside
+# System.loadLibrary, with no Java stack to explain it.
+#
+# The generic `native <methods>` rule above happens to cover this today, but the
+# failure mode is a native crash rather than a build error, so the dependency
+# is stated explicitly instead of left implicit.
+-keep class org.onionroute.lite.tor.Tun2SocksNative { *; }
+
 # ── Kotlin coroutines ─────────────────────────────────────────
 -keepclassmembers class kotlinx.coroutines.** {
     volatile <fields>;

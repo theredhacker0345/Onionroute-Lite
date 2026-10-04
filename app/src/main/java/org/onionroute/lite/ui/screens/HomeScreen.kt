@@ -35,11 +35,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -53,6 +55,54 @@ import org.onionroute.lite.ui.theme.ConnectionState
 import org.onionroute.lite.ui.theme.OnionRouteColors
 import org.onionroute.lite.ui.theme.OnionRouteTypography
 import org.onionroute.lite.ui.theme.SyneFontFamily
+
+// ═══════════════════════════════════════════════════════════════════
+// Hoisted paint / style constants
+//
+// PERF: every Brush built here allocates a List<Color>, boxes the Colors and
+// creates a native android.graphics shader — expensive enough to notice when it
+// happens on each recomposition or each drawn frame. Both gradients keep an
+// infinite end, so the shader is still resolved against the size of the node it
+// paints: hoisting them changes nothing visually. TextStyle.copy() allocates a
+// new immutable style for identical values, so the "CONNECTING" label style is
+// built once as well.
+// ═══════════════════════════════════════════════════════════════════
+
+private val CONNECTION_BUTTON_BACKGROUND = Brush.radialGradient(
+    colors = listOf(
+        OnionRouteColors.Surface2,
+        OnionRouteColors.Surface1
+    )
+)
+
+private val SPEED_GRAPH_FILL_GRADIENT = Brush.verticalGradient(
+    colors = listOf(
+        OnionRouteColors.Jade.copy(alpha = 0.15f),
+        OnionRouteColors.Jade.copy(alpha = 0.02f)
+    )
+)
+
+private val SPEED_GRAPH_LINE_COLOR = OnionRouteColors.Jade.copy(alpha = 0.6f)
+
+private val CONNECTING_LABEL_STYLE = OnionRouteTypography.LabelMedium.copy(
+    color = OnionRouteColors.StatusAmber
+)
+
+private val POWER_ICON_SIZE = 72.dp
+
+// Static arc geometry. The connecting spin comes from a rotating graphicsLayer,
+// so the drawn arc itself never has to change.
+private const val CONNECTING_ARC_START_ANGLE = 0f
+private const val CONNECTING_ARC_SWEEP_ANGLE = 270f
+private const val CONNECTED_ARC_START_ANGLE = 0f
+private const val CONNECTED_ARC_SWEEP_ANGLE = 360f
+private const val DISCONNECTED_ARC_START_ANGLE = 135f
+private const val DISCONNECTED_ARC_SWEEP_ANGLE = 270f
+
+// The "CONNECTING…" label cycles through 0..MAX_CONNECTING_DOTS dots. The
+// animation targets MAX + 1 because toInt() truncates: targeting MAX itself
+// would top out at MAX - 1 dots and the last dot could never be drawn.
+private const val MAX_CONNECTING_DOTS = 3
 
 /**
  * Home screen — the primary UI for OnionRoute Lite.
@@ -222,14 +272,7 @@ fun ConnectionButton(appState: OnionRouteAppState) {
                 spotColor = buttonColor.copy(alpha = glowAlpha)
             )
             .clip(CircleShape)
-            .background(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        OnionRouteColors.Surface2,
-                        OnionRouteColors.Surface1
-                    )
-                )
-            )
+            .background(brush = CONNECTION_BUTTON_BACKGROUND)
             .border(
                 width = 3.dp,
                 color = buttonColor,
@@ -265,7 +308,14 @@ fun PowerIcon(
     // keeping an animation clock ticking (and the canvas redrawing at 60fps)
     // even when the app was idle or connected. Compose disposes the branch's
     // transition as soon as isConnecting flips to false.
-    val rotation = if (isConnecting) {
+    //
+    // PERF: the rotation is kept as a State and never read in the composable
+    // body. Reading .value there invalidated PowerIcon itself 60 times a second
+    // — a fresh Canvas draw lambda plus a measure/layout of the icon on every
+    // single frame of a 30-90s Tor bootstrap. It is read DEFERRED inside the
+    // graphicsLayer lambda below, so the animation only updates a layer
+    // property: draw phase, zero recomposition, zero re-layout.
+    val rotationState = if (isConnecting) {
         val infiniteTransition = rememberInfiniteTransition(label = "power_pulse")
         infiniteTransition.animateFloat(
             initialValue = 0f,
@@ -275,51 +325,69 @@ fun PowerIcon(
                 repeatMode = RepeatMode.Restart
             ),
             label = "rotation"
-        ).value
+        )
     } else {
-        0f
+        null
     }
 
-    Canvas(modifier = Modifier.size(72.dp)) {
-        val strokeWidth = 4.dp.toPx()
-        val radius = (size.minDimension - strokeWidth) / 2
-        val center = Offset(size.width / 2, size.height / 2)
+    Box(modifier = Modifier.size(POWER_ICON_SIZE)) {
+        // Arc layer. The spin lives in the layer's rotationZ rather than in a
+        // per-frame startAngle passed to drawArc, so the arc geometry stays
+        // constant. Confining the layer to this node also leaves the power line
+        // below upright — rotating the whole icon would swing the line around,
+        // which is not what the old startAngle-based spin drew.
+        Canvas(
+            modifier = Modifier
+                .size(POWER_ICON_SIZE)
+                .graphicsLayer { rotationState?.let { rotationZ = it.value } }
+        ) {
+            val strokeWidth = 4.dp.toPx()
+            val radius = (size.minDimension - strokeWidth) / 2
+            val center = Offset(size.width / 2, size.height / 2)
 
-        if (isConnecting) {
-            // Spinning arc for connecting state
-            drawArc(
-                color = color,
-                startAngle = rotation,
-                sweepAngle = 270f,
-                useCenter = false,
-                topLeft = Offset(center.x - radius, center.y - radius),
-                size = Size(radius * 2, radius * 2),
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-        } else {
-            // Full circle for connected, partial for disconnected
-            val sweepAngle = if (isConnected) 360f else 270f
-            val startAngle = if (isConnected) 0f else 135f
-            drawArc(
-                color = color,
-                startAngle = startAngle,
-                sweepAngle = sweepAngle,
-                useCenter = false,
-                topLeft = Offset(center.x - radius, center.y - radius),
-                size = Size(radius * 2, radius * 2),
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
+            if (isConnecting) {
+                // Spinning arc for connecting state
+                drawArc(
+                    color = color,
+                    startAngle = CONNECTING_ARC_START_ANGLE,
+                    sweepAngle = CONNECTING_ARC_SWEEP_ANGLE,
+                    useCenter = false,
+                    topLeft = Offset(center.x - radius, center.y - radius),
+                    size = Size(radius * 2, radius * 2),
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+            } else {
+                // Full circle for connected, partial for disconnected
+                val sweepAngle =
+                    if (isConnected) CONNECTED_ARC_SWEEP_ANGLE else DISCONNECTED_ARC_SWEEP_ANGLE
+                val startAngle =
+                    if (isConnected) CONNECTED_ARC_START_ANGLE else DISCONNECTED_ARC_START_ANGLE
+                drawArc(
+                    color = color,
+                    startAngle = startAngle,
+                    sweepAngle = sweepAngle,
+                    useCenter = false,
+                    topLeft = Offset(center.x - radius, center.y - radius),
+                    size = Size(radius * 2, radius * 2),
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+            }
         }
 
         // Power line (vertical gap at top)
-        val gapLength = radius * 0.4f
-        drawLine(
-            color = color,
-            start = Offset(center.x, center.y - radius + strokeWidth),
-            end = Offset(center.x, center.y - radius + gapLength + strokeWidth),
-            strokeWidth = strokeWidth,
-            cap = StrokeCap.Round
-        )
+        Canvas(modifier = Modifier.size(POWER_ICON_SIZE)) {
+            val strokeWidth = 4.dp.toPx()
+            val radius = (size.minDimension - strokeWidth) / 2
+            val center = Offset(size.width / 2, size.height / 2)
+            val gapLength = radius * 0.4f
+            drawLine(
+                color = color,
+                start = Offset(center.x, center.y - radius + strokeWidth),
+                end = Offset(center.x, center.y - radius + gapLength + strokeWidth),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
     }
 }
 
@@ -424,25 +492,38 @@ fun StatusDisplay(appState: OnionRouteAppState) {
 
 @Composable
 fun AnimatedConnectingText(progress: Int = 0) {
-    val infiniteTransition = rememberInfiniteTransition(label = "dots")
-    val dotCount by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "dot_count"
-    )
+    // PERF: the dots are only shown when there is no bootstrap progress yet —
+    // once progress arrives the label becomes "CONNECTING n%". The transition
+    // used to exist unconditionally, so it kept the frame clock ticking at 60fps
+    // and still built a discarded String (plus a TextStyle.copy) on every frame
+    // for the whole 30-90s bootstrap. No transition, no frames.
+    val showDots = progress <= 0
 
-    val dots = ".".repeat(dotCount.toInt().coerceIn(0, 3))
-    // If we have bootstrap progress, show it; otherwise just "CONNECTING…"
-    val text = if (progress > 0) "CONNECTING $progress%" else "CONNECTING$dots"
-    Text(
-        text = text,
-        style = OnionRouteTypography.LabelMedium.copy(
-            color = OnionRouteColors.StatusAmber
+    val dotCountState = if (showDots) {
+        val infiniteTransition = rememberInfiniteTransition(label = "dots")
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = (MAX_CONNECTING_DOTS + 1).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "dot_count"
         )
+    } else {
+        null
+    }
+
+    // Only four distinct dot counts exist, so the String is rebuilt on a change
+    // of count instead of once per animation frame.
+    val dotCount = dotCountState?.value?.toInt() ?: 0
+    val dots = remember(dotCount) {
+        ".".repeat(dotCount.coerceIn(0, MAX_CONNECTING_DOTS))
+    }
+
+    Text(
+        text = if (showDots) "CONNECTING$dots" else "CONNECTING $progress%",
+        style = CONNECTING_LABEL_STYLE
     )
 }
 
@@ -549,7 +630,12 @@ fun SpeedGraph(appState: OnionRouteAppState) {
 
     if (dataPoints.isEmpty() && !isConnected) return
 
-    Canvas(
+    // PERF: drawWithCache instead of a Canvas draw block. The two Paths, the
+    // max/stepX math and the Stroke are built when the data (or the size)
+    // changes; the previous version rebuilt all of them — plus a List<Color>
+    // and a native gradient shader — on every draw, and the gradient Brush was
+    // recreated on every recomposition as well.
+    Spacer(
         modifier = Modifier
             .fillMaxWidth()
             .height(80.dp)
@@ -560,51 +646,52 @@ fun SpeedGraph(appState: OnionRouteAppState) {
                 color = OnionRouteColors.BorderSubtle,
                 shape = RoundedCornerShape(8.dp)
             )
-    ) {
-        // Need at least 2 data points to draw a meaningful line.
-        if (dataPoints.size < 2) return@Canvas
+            .drawWithCache {
+                // Need at least 2 data points to draw a meaningful line.
+                if (dataPoints.size < 2) {
+                    return@drawWithCache onDrawBehind { }
+                }
 
-        val maxSpeed = dataPoints.maxOrNull()?.coerceAtLeast(1f) ?: 1f
-        // Safe: dataPoints.size >= 2, so (size - 1) >= 1
-        val stepX = size.width / (dataPoints.size - 1)
+                val maxSpeed = dataPoints.maxOrNull()?.coerceAtLeast(1f) ?: 1f
+                // Safe: dataPoints.size >= 2, so (size - 1) >= 1
+                val stepX = size.width / (dataPoints.size - 1)
 
-        // Draw filled area
-        val path = androidx.compose.ui.graphics.Path().apply {
-            moveTo(0f, size.height)
-            dataPoints.forEachIndexed { index, speed ->
-                val x = index * stepX
-                val y = size.height - (speed / maxSpeed) * size.height * 0.8f
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
+                // Draw filled area
+                val fillPath = Path().apply {
+                    moveTo(0f, size.height)
+                    dataPoints.forEachIndexed { index, speed ->
+                        val x = index * stepX
+                        val y = size.height - (speed / maxSpeed) * size.height * 0.8f
+                        if (index == 0) moveTo(x, y) else lineTo(x, y)
+                    }
+                    lineTo(size.width, size.height)
+                    close()
+                }
+
+                // Draw line
+                val linePath = Path().apply {
+                    dataPoints.forEachIndexed { index, speed ->
+                        val x = index * stepX
+                        val y = size.height - (speed / maxSpeed) * size.height * 0.8f
+                        if (index == 0) moveTo(x, y) else lineTo(x, y)
+                    }
+                }
+
+                val lineStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+
+                onDrawBehind {
+                    drawPath(
+                        path = fillPath,
+                        brush = SPEED_GRAPH_FILL_GRADIENT
+                    )
+                    drawPath(
+                        path = linePath,
+                        color = SPEED_GRAPH_LINE_COLOR,
+                        style = lineStroke
+                    )
+                }
             }
-            lineTo(size.width, size.height)
-            close()
-        }
-
-        drawPath(
-            path = path,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    OnionRouteColors.Jade.copy(alpha = 0.15f),
-                    OnionRouteColors.Jade.copy(alpha = 0.02f)
-                )
-            )
-        )
-
-        // Draw line
-        val linePath = androidx.compose.ui.graphics.Path().apply {
-            dataPoints.forEachIndexed { index, speed ->
-                val x = index * stepX
-                val y = size.height - (speed / maxSpeed) * size.height * 0.8f
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
-            }
-        }
-
-        drawPath(
-            path = linePath,
-            color = OnionRouteColors.Jade.copy(alpha = 0.6f),
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-        )
-    }
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════

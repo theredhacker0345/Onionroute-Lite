@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,12 +33,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +48,35 @@ import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.Screen
 import org.onionroute.lite.ui.theme.OnionRouteColors
 import org.onionroute.lite.ui.theme.OnionRouteTypography
+
+// ═══════════════════════════════════════════════════════════════════
+// Hoisted paint / geometry constants
+//
+// PERF: these used to be rebuilt on every draw or recomposition. The radial
+// gradients allocate a List<Color>, box the Colors and build a native shader;
+// the branch directions were a listOf(-1, 1) allocated inside the canvas draw
+// block, i.e. six List<Int> per drawn frame on top of 24 Offsets and 24
+// trig calls. Everything here is now created once at class load.
+// ═══════════════════════════════════════════════════════════════════
+
+private val KINDNESS_ACTIVE_GRADIENT = Brush.radialGradient(
+    colors = listOf(OnionRouteColors.JadeGlow, OnionRouteColors.Surface1)
+)
+
+private val KINDNESS_INACTIVE_GRADIENT = Brush.radialGradient(
+    colors = listOf(OnionRouteColors.Surface2, OnionRouteColors.Surface1)
+)
+
+private const val STATUS_INDICATOR_SIZE_DP = 140
+private val STATUS_INDICATOR_SIZE = STATUS_INDICATOR_SIZE_DP.dp
+
+// Snowflake geometry: 6 arms, each with 2 short branches.
+private const val SNOWFLAKE_ARM_COUNT = 6
+private const val SNOWFLAKE_ARM_ANGLE_DEGREES = 60.0
+private const val SNOWFLAKE_BRANCH_ORIGIN = 0.6f
+private const val SNOWFLAKE_BRANCH_LENGTH = 0.3f
+private const val SNOWFLAKE_BRANCH_ANGLE_RADIANS = 0.5
+private val SNOWFLAKE_BRANCH_DIRECTIONS = floatArrayOf(-1f, 1f)
 
 /**
  * Kindness Mode stats screen — shows real-time Snowflake proxy statistics.
@@ -248,18 +275,26 @@ fun KindnessScreen(appState: OnionRouteAppState) {
 
 @Composable
 private fun ProxyStatusIndicator(isActive: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "kindness_pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
-
-    val scale = if (isActive) pulseScale else 1f
+    // PERF: the pulsing transition is composed ONLY while the proxy is active.
+    // It used to be created unconditionally, so the InfiniteTransition stayed
+    // registered with the frame clock even when its value was multiplied by 1f
+    // and discarded — an idle "PROXY INACTIVE" screen still requested a vsync
+    // frame 60 times a second. Compose disposes the branch's transition as
+    // soon as isActive flips to false.
+    val pulseScaleState = if (isActive) {
+        val infiniteTransition = rememberInfiniteTransition(label = "kindness_pulse")
+        infiniteTransition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse"
+        )
+    } else {
+        null
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -268,16 +303,25 @@ private fun ProxyStatusIndicator(isActive: Boolean) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size((140.dp * scale))
+                .size(STATUS_INDICATOR_SIZE)
+                // PERF: the pulse used to animate Modifier.size(), forcing a full
+                // measure+layout pass of the whole verticalScroll Column on every
+                // frame. The box is now a fixed size and the State is read DEFERRED
+                // inside the graphicsLayer lambda, so the breathing scales the
+                // layer in the draw phase with zero recomposition and zero
+                // re-layout.
+                .graphicsLayer {
+                    val scale = pulseScaleState?.value ?: 1f
+                    scaleX = scale
+                    scaleY = scale
+                }
                 .clip(CircleShape)
                 .background(
-                    brush = Brush.radialGradient(
-                        colors = if (isActive) {
-                            listOf(OnionRouteColors.JadeGlow, OnionRouteColors.Surface1)
-                        } else {
-                            listOf(OnionRouteColors.Surface2, OnionRouteColors.Surface1)
-                        }
-                    )
+                    brush = if (isActive) {
+                        KINDNESS_ACTIVE_GRADIENT
+                    } else {
+                        KINDNESS_INACTIVE_GRADIENT
+                    }
                 )
                 .border(
                     width = 2.dp,
@@ -285,49 +329,91 @@ private fun ProxyStatusIndicator(isActive: Boolean) {
                     shape = CircleShape
                 )
         ) {
-            // Snowflake-like icon using Canvas
-            Canvas(modifier = Modifier.size(48.dp)) {
-                val center = Offset(size.width / 2, size.height / 2)
-                val radius = size.minDimension / 2 - 4.dp.toPx()
-                val stroke = 2.5.dp.toPx()
+            // Snowflake-like icon. PERF: drawWithCache builds the 18 line
+            // endpoints once per size change instead of on every drawn frame.
+            Spacer(
+                modifier = Modifier
+                    .size(48.dp)
+                    .drawWithCache {
+                        val center = Offset(size.width / 2, size.height / 2)
+                        val radius = size.minDimension / 2 - 4.dp.toPx()
+                        val stroke = 2.5.dp.toPx()
+                        val branchLength = radius * SNOWFLAKE_BRANCH_LENGTH
+                        val armColor =
+                            if (isActive) OnionRouteColors.Jade else OnionRouteColors.BorderMid
+                        val branchColor = if (isActive) {
+                            OnionRouteColors.Jade.copy(alpha = 0.6f)
+                        } else {
+                            OnionRouteColors.BorderMid.copy(alpha = 0.5f)
+                        }
 
-                // Draw 6 lines radiating from center (snowflake)
-                for (i in 0 until 6) {
-                    val angle = Math.toRadians((i * 60.0))
-                    val endX = center.x + radius * kotlin.math.cos(angle).toFloat()
-                    val endY = center.y + radius * kotlin.math.sin(angle).toFloat()
-                    drawLine(
-                        color = if (isActive) OnionRouteColors.Jade else OnionRouteColors.BorderMid,
-                        start = center,
-                        end = Offset(endX, endY),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
-                    )
-                    // Small branches
-                    val branchLen = radius * 0.3f
-                    val branchStart = 0.6f
-                    for (dir in listOf(-1, 1)) {
-                        val bx = center.x + radius * branchStart * kotlin.math.cos(angle).toFloat()
-                        val by = center.y + radius * branchStart * kotlin.math.sin(angle).toFloat()
-                        val bAngle = angle + dir * 0.5
-                        val bEndX = bx + branchLen * kotlin.math.cos(bAngle).toFloat()
-                        val bEndY = by + branchLen * kotlin.math.sin(bAngle).toFloat()
-                        drawLine(
-                            color = if (isActive) OnionRouteColors.Jade.copy(alpha = 0.6f) else OnionRouteColors.BorderMid.copy(alpha = 0.5f),
-                            start = Offset(bx, by),
-                            end = Offset(bEndX, bEndY),
-                            strokeWidth = stroke * 0.7f,
-                            cap = StrokeCap.Round
-                        )
+                        // PERF: the 6 arm ends and 12 branch segments are laid
+                        // out here (once per size change) rather than allocating
+                        // a listOf(-1, 1) plus 24 Offsets on every frame of the
+                        // pulse. The draw block below only reads these arrays.
+                        val branchSegmentCount =
+                            SNOWFLAKE_ARM_COUNT * SNOWFLAKE_BRANCH_DIRECTIONS.size
+                        val armEnds = Array(SNOWFLAKE_ARM_COUNT) { Offset.Zero }
+                        val branchStarts = Array(branchSegmentCount) { Offset.Zero }
+                        val branchEnds = Array(branchSegmentCount) { Offset.Zero }
+
+                        var segment = 0
+                        for (arm in 0 until SNOWFLAKE_ARM_COUNT) {
+                            val angle = Math.toRadians((arm * SNOWFLAKE_ARM_ANGLE_DEGREES))
+                            // Draw 6 lines radiating from center (snowflake)
+                            armEnds[arm] = Offset(
+                                center.x + radius * kotlin.math.cos(angle).toFloat(),
+                                center.y + radius * kotlin.math.sin(angle).toFloat()
+                            )
+                            // Small branches
+                            val branchX = center.x +
+                                radius * SNOWFLAKE_BRANCH_ORIGIN * kotlin.math.cos(angle).toFloat()
+                            val branchY = center.y +
+                                radius * SNOWFLAKE_BRANCH_ORIGIN * kotlin.math.sin(angle).toFloat()
+                            for (direction in SNOWFLAKE_BRANCH_DIRECTIONS) {
+                                val branchAngle = angle + direction * SNOWFLAKE_BRANCH_ANGLE_RADIANS
+                                branchStarts[segment] = Offset(branchX, branchY)
+                                branchEnds[segment] = Offset(
+                                    branchX + branchLength *
+                                        kotlin.math.cos(branchAngle).toFloat(),
+                                    branchY + branchLength *
+                                        kotlin.math.sin(branchAngle).toFloat()
+                                )
+                                segment++
+                            }
+                        }
+
+                        val branchStroke = stroke * 0.7f
+                        val dotRadius = 4.dp.toPx()
+
+                        onDrawBehind {
+                            for (arm in 0 until armEnds.size) {
+                                drawLine(
+                                    color = armColor,
+                                    start = center,
+                                    end = armEnds[arm],
+                                    strokeWidth = stroke,
+                                    cap = StrokeCap.Round
+                                )
+                            }
+                            for (branch in 0 until branchEnds.size) {
+                                drawLine(
+                                    color = branchColor,
+                                    start = branchStarts[branch],
+                                    end = branchEnds[branch],
+                                    strokeWidth = branchStroke,
+                                    cap = StrokeCap.Round
+                                )
+                            }
+                            // Center dot
+                            drawCircle(
+                                color = armColor,
+                                radius = dotRadius,
+                                center = center
+                            )
+                        }
                     }
-                }
-                // Center dot
-                drawCircle(
-                    color = if (isActive) OnionRouteColors.Jade else OnionRouteColors.BorderMid,
-                    radius = 4.dp.toPx(),
-                    center = center
-                )
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))

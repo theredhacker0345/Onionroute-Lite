@@ -123,12 +123,24 @@ class BridgeConfig(private val context: Context) {
 
     /**
      * Returns all custom bridge lines stored in preferences.
+     *
+     * Rejected lines are logged rather than dropped in silence: this preference
+     * is fed by import/paste/QR paths that bypass [parseAndAddBridges], so a
+     * rejected line here means someone handed us something that is not a
+     * bridge, and hiding that would also hide an injection attempt.
      */
     fun getCustomBridges(): List<String> {
         val bridgesStr = prefs.getString(Constants.PREF_CUSTOM_BRIDGES, "") ?: ""
         return bridgesStr.split("\n")
             .map { it.trim() }
-            .filter { it.isNotEmpty() && isValidBridgeLine(it) }
+            .filter { line ->
+                if (line.isEmpty()) return@filter false
+                if (!isValidBridgeLine(line)) {
+                    Log.w(tag, "Stored custom bridge rejected: ${describeRejected(line)}")
+                    return@filter false
+                }
+                true
+            }
     }
 
     /**
@@ -201,7 +213,13 @@ class BridgeConfig(private val context: Context) {
                 }
 
                 val trimmed = bridgeLine.trim()
-                if (trimmed.isNotEmpty() && isValidBridgeLine(trimmed) &&
+                if (trimmed.isNotEmpty() && !isValidBridgeLine(trimmed)) {
+                    // Not a complete bridge line for any transport we support.
+                    // Tor's torrc parser has no quoting/escaping, so the only
+                    // sound response to a line we do not fully understand is to
+                    // refuse it — see validateBridgeLine.
+                    Log.w(tag, "Rejected pasted/QR bridge line: ${describeRejected(trimmed)}")
+                } else if (trimmed.isNotEmpty() &&
                     !existing.contains(trimmed) && !newBridges.contains(trimmed)
                 ) {
                     newBridges.add(trimmed)
@@ -262,47 +280,188 @@ class BridgeConfig(private val context: Context) {
     }
 
     /**
-     * Checks if a line is a valid bridge line (starts with a known transport name).
+     * Checks if a line is a valid bridge line (a complete specification for one
+     * of the transports this app ships a client binary for).
+     *
+     * This used to be a bare `startsWith("obfs4")` prefix test, which accepted
+     * ANY suffix — including a carriage return followed by further torrc
+     * directives. It now delegates to [validateBridgeLine], the very same
+     * check TorProcessManager applies before writing, so a line can never be
+     * accepted here and then judged by a weaker gate later.
      */
-    private fun isValidBridgeLine(line: String): Boolean {
-        val lower = line.lowercase()
-        return lower.startsWith("obfs4") ||
-                lower.startsWith("snowflake") ||
-                lower.startsWith("meek") ||
-                lower.startsWith("webtunnel")
-    }
+    private fun isValidBridgeLine(line: String): Boolean = validateBridgeLine(line)
 
-    // ── Full Configuration ────────────────────────────────────────
+    // ── Bridge Line Validation (the torrc injection boundary) ─────
 
-    /**
-     * Returns all active bridge configuration lines for torrc generation.
-     * This combines Snowflake, obfs4, WebTunnel, and custom bridges based on current preferences.
-     */
-    fun getActiveBridgeConfig(): List<String> {
-        val config = mutableListOf<String>()
+    companion object {
+        /**
+         * Strict validation for a single torrc `Bridge` argument.
+         *
+         * This is the trust boundary for everything that becomes a `Bridge`
+         * directive. All of it is attacker-influenced:
+         *
+         *   - the runtime bridge list is downloaded over HTTPS from a third-party
+         *     repository (BridgeUpdater) and cached, and a JSON string may legally
+         *     carry a real CR/LF (JSON `"\n"` decodes to a newline, not two
+         *     characters). BridgeUpdater decodes HTML entities but does not strip
+         *     control characters, and `&#10;`/`&#13;` style entities do not even
+         *     need to be present for the payload to arrive.
+         *   - custom bridges are typed, pasted, imported or QR-scanned by the user,
+         *     i.e. arbitrary text from an arbitrary camera.
+         *
+         * Tor reads torrc one LINE at a time and turns every line into its own
+         * directive, so a "bridge line" containing an embedded CR or LF stops
+         * being one argument and becomes several directives. For every
+         * single-valued option the LAST occurrence wins, so a payload that lands
+         * after the app's own line silently overrides it:
+         *
+         *     obfs4 1.2.3.4:1 <fpr> cert=x
+         *     CookieAuthentication 0
+         *     ControlPort 0.0.0.0:9052
+         *
+         * That hands any device on the network an unauthenticated Tor control
+         * port — exactly the exposure tor's `CL_PORT_FORBID_NONLOCAL` exists to
+         * prevent. `DisableNetwork 1`, a redirected `DataDirectory`, and
+         * `ClientTransportPlugin <t> exec <path>` (which swaps a transport proxy
+         * for an arbitrary executable the daemon will run) are equally reachable,
+         * as is a comment (`# …`) that hides the app's directives from a human
+         * reading the file.
+         *
+         * Tor's config parser has NO quoting or escaping mechanism, so there is
+         * nothing to sanitise with: a line is either a complete, valid bridge
+         * specification for a transport we bundle a binary for, or it is rejected.
+         * Rejecting is also the only failure mode that is safe — quietly keeping
+         * a line we could not parse is how an injection gets through.
+         *
+         * Every pattern below is fully anchored (`\A` … `\z`) and every field is
+         * restricted to an explicit character class, so no trailing junk, extra
+         * argument or embedded whitespace can ride along.
+         *
+         * @param line a candidate bridge line, WITHOUT the `Bridge ` prefix
+         * @return true only if [line] is safe to write verbatim into torrc
+         */
+        fun validateBridgeLine(line: String): Boolean {
+            // Bounds: a blank line is meaningless, and an unbounded line is an
+            // unbounded amount of attacker-chosen text in the config file.
+            if (line.isEmpty() || line.length > MAX_BRIDGE_LINE_LENGTH) return false
 
-        if (isSnowflakeEnabled()) {
-            config.addAll(getSnowflakeConfig())
+            // The control-character check is what actually stops torrc injection:
+            // CR/LF terminate a directive, and NUL (plus any other C0 byte and DEL)
+            // is never legitimate bridge syntax. Tabs are covered here too, so the
+            // patterns below only ever have to deal with single-space separators.
+            if (containsControlChars(line)) return false
+
+            return OBFS4_LINE.matches(line) ||
+                WEBTUNNEL_LINE.matches(line) ||
+                SNOWFLAKE_LINE.matches(line)
         }
 
-        if (isObfs4Enabled()) {
-            config.addAll(getObfs4Config())
-        }
+        /**
+         * True if [line] contains any C0 control character (< 0x20) or DEL (0x7F).
+         *
+         * Tor's torrc parser reads one directive per line, which makes CR and LF
+         * directive separators rather than data; a NUL byte can truncate the line
+         * in other config readers and is never valid bridge syntax either.
+         */
+        fun containsControlChars(line: String): Boolean =
+            line.any { it.code < 0x20 || it.code == 0x7F }
 
-        if (isWebTunnelEnabled()) {
-            config.addAll(getWebTunnelConfig())
-        }
-
-        val customBridges = getCustomBridges()
-        if (customBridges.isNotEmpty()) {
-            config.addAll(customBridges)
-            if (!config.contains("UseBridges 1")) {
-                config.add("UseBridges 1")
+        /**
+         * Short, LOG-SAFE rendering of a rejected value, for use in log messages.
+         *
+         * Control characters are escaped rather than dropped: `android.util.Log`
+         * writes each string as its own log line, so a rejected line carrying a
+         * newline could otherwise forge additional log entries (hiding the
+         * rejection, or faking a tor `[notice]`). Output is also truncated so a
+         * hostile feed cannot flood logcat.
+         */
+        fun describeRejected(line: String): String {
+            val clipped = if (line.length > REJECT_LOG_CLIP) line.take(REJECT_LOG_CLIP) + "…" else line
+            return buildString {
+                for (c in clipped) {
+                    when {
+                        c == '\n' -> append("\\n")
+                        c == '\r' -> append("\\r")
+                        c == '\t' -> append("\\t")
+                        c.code < 0x20 || c.code == 0x7F -> append("\\u").append(
+                            c.code.toString(16).padStart(4, '0')
+                        )
+                        else -> append(c)
+                    }
+                }
             }
         }
 
-        return config
+        /**
+         * Longest bridge line accepted. The built-in snowflake line (see
+         * `snowflakeFallbackLine` in TorProcessManager) is ~320 characters —
+         * five STUN servers plus a broker URL — so 1024 leaves generous
+         * headroom for a long certificate or STUN list while still bounding how
+         * much attacker-chosen text can reach torrc.
+         */
+        const val MAX_BRIDGE_LINE_LENGTH = 1024
+
+        /** How much of a rejected line ends up in the log message. */
+        private const val REJECT_LOG_CLIP = 80
+
+        // ── Bridge line grammar ──────────────────────────────────────
+        //
+        // Shapes taken from Constants.DEFAULT_OBFS4_BRIDGES,
+        // Constants.DEFAULT_WEBTUNNEL_BRIDGES and the snowflake line in
+        // BridgeConfig.getSnowflakeConfig():
+        //
+        //   obfs4    <addr> <fpr> cert=<base64> [iat-mode=N]
+        //   webtunnel <addr> <fpr> url=<https url> [ver=<version>]
+        //   snowflake <addr> <fpr> fingerprint=<fpr> url=<https url>
+        //            [fronts=<domains>] [ice=<stun list>] [iceserver=...]
+        //
+        // `(?i)` mirrors tor, which matches transport and argument names
+        // case-insensitively; it widens no character class.
+
+        /** Host part of `<addr>`: DNS name or IPv4 literal. No `/`, `:`, `@`,
+         *  shell metacharacter or whitespace can slip through. */
+        private const val HOST = "[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?"
+        private const val PORT = "[0-9]{1,5}"
+        private const val ADDR = "$HOST:$PORT"
+
+        /** Bridge identity: exactly 40 hex digits (RSA identity fingerprint).
+         *  Anything else is not a bridge we can pin. */
+        private const val FINGERPRINT = "[0-9A-Fa-f]{40}"
+
+        /** obfs4 `cert=` is base64 in the standard alphabet, padded or not.
+         *  `/` and `+` must stay in the class — real certs contain both. */
+        private const val OBFS4_CERT = "[A-Za-z0-9+/=]{40,200}"
+
+        /** HTTPS URL body. `#` is excluded on purpose: tor treats `#` as the
+         *  comment marker while reading a config line. Quotes, braces, brackets
+         *  and backslash are excluded so the value can never terminate the
+         *  argument list or open a brace group. */
+        private const val HTTPS_URL_BODY = "[A-Za-z0-9._~:/?@%&=-]{1,512}"
+
+        /** Comma-separated domain list (`fronts=`). */
+        private const val DOMAIN_LIST = "[A-Za-z0-9._,-]{1,256}"
+
+        /** Comma-separated STUN/TURN server list (`ice=`, `iceserver=`). */
+        private const val ICE_LIST = "[A-Za-z0-9._:,-]{1,512}"
+
+        private val OBFS4_LINE = Regex(
+            "(?i)\\Aobfs4 $ADDR $FINGERPRINT cert=$OBFS4_CERT" +
+                "( iat-mode=[0-9]{1,2}(,[0-9]{1,2}){0,3})?\\z"
+        )
+
+        private val WEBTUNNEL_LINE = Regex(
+            "(?i)\\Awebtunnel $ADDR $FINGERPRINT url=https://$HTTPS_URL_BODY" +
+                "( ver=[0-9A-Za-z.+-]{1,16})?\\z"
+        )
+
+        private val SNOWFLAKE_LINE = Regex(
+            "(?i)\\Asnowflake $ADDR $FINGERPRINT fingerprint=$FINGERPRINT" +
+                " url=https://$HTTPS_URL_BODY" +
+                "( fronts=$DOMAIN_LIST)?( ice=$ICE_LIST)?( iceserver=$ICE_LIST)?\\z"
+        )
     }
+
+    // ── Full Configuration ────────────────────────────────────────
 
     /**
      * Disables all bridges (Snowflake, obfs4, WebTunnel, and custom).

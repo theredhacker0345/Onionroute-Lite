@@ -157,7 +157,37 @@ object Constants {
     // IPv6 address for the TUN interface. Paired with the ::/0 route so
     // IPv6 traffic is captured into the tunnel instead of bypassing Tor.
     const val VPN_ADDRESS_V6 = "fdfe:dcba:9876::1"
-    const val VPN_DNS = "10.0.0.1"
+
+    // DNS server advertised to apps on the TUN.
+    //
+    // This address is deliberately NOT a real host. It exists only so that
+    // every DNS query is forced into the tunnel and lands on
+    // [TUN2SOCKS_MAPDNS_POOL_NETWORK] handling inside hev-socks5-tunnel's
+    // mapped-DNS resolver, which answers it over SOCKS5 -> Tor. Verified in
+    // hev-socks5-tunnel: udp_recv() hijacks a datagram when
+    // `dst_port == mapdns.port && dst_ip == mapdns.address`
+    // (hev-socks5-tunnel.c:243-248), so this value must match
+    // [VPN_MAPDNS_ADDRESS] below exactly or interception silently fails and
+    // queries are forwarded to a black hole.
+    //
+    // The previous value (10.0.0.1) was advertised with nothing listening on
+    // it, so every DNS lookup failed outright.
+    const val VPN_DNS = "10.111.222.3"
+
+    // ── hev-socks5-tunnel mapped DNS ───────────────────────────
+    // hev answers queries to VPN_DNS using synthetic A/AAAA records drawn from
+    // the CGNAT range below: it replies with `network | index` where
+    // `index < cache-size`, and reverse-maps them with `ip & ~netmask`
+    // (hev-mapped-dns.c:224, :259). So netmask must cover the low bits that
+    // vary, and cache-size both bounds the pool and caps RAM.
+    const val VPN_MAPDNS_ADDRESS = "10.111.222.3"
+    const val VPN_MAPDNS_PORT = 53
+    const val TUN2SOCKS_MAPDNS_POOL_NETWORK = "100.64.0.0"
+    const val TUN2SOCKS_MAPDNS_POOL_NETMASK = "255.192.0.0"
+    // 4096 synthetic names rather than upstream's suggested 10000: each entry
+    // holds a hostname string, and this device has 1.5GB of RAM. 4096 is far
+    // more than any browsing session needs.
+    const val TUN2SOCKS_MAPDNS_CACHE_SIZE = 4096
 
     // ── Snowflake Default Configuration ───────────────────────
     const val SNOWFLAKE_BROKER_URL = "https://snowflake-broker.torproject.net/"

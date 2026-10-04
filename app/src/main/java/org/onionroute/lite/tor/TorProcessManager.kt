@@ -51,6 +51,17 @@ class TorProcessManager(
     /** Minimum valid binary size in bytes. Anything smaller is a placeholder/stub. */
     companion object {
         private const val MIN_BINARY_SIZE = 1024L
+
+        /**
+         * The exit-country preference must look like an ISO-3166 alpha-2 code
+         * and nothing else, because it is interpolated into `ExitNodes {…}` in
+         * the torrc. Anchored and two letters exactly: a brace, a space or a
+         * newline in this value would end the brace group and turn the rest of
+         * the string into further torrc directives. Case-insensitive because
+         * Constants.EXIT_COUNTRY_OPTIONS stores lowercase ("de"); the value is
+         * upper-cased on the way out.
+         */
+        private val EXIT_COUNTRY_CODE = Regex("\\A[A-Za-z]{2}\\z")
     }
 
     // ── Public API ────────────────────────────────────────────────
@@ -115,6 +126,13 @@ class TorProcessManager(
      *
      * The nativeLibraryDir is the ONLY directory on Android where exec() is
      * guaranteed to work. The app's filesDir is mounted noexec on Android 10+.
+     *
+     * EXCEPTION — libtun2socks.so is LOADED, not executed. hev-socks5-tunnel
+     * is built as a shared library with no PT_INTERP and has no CLI for an
+     * existing TUN fd, so it is consumed via System.loadLibrary + JNI
+     * (see Tun2SocksNative). It is still verified here so a missing library is
+     * reported as a clear build/install problem rather than as a silent
+     * "VPN unavailable" at runtime.
      *
      * @return true if the critical Tor binary was found and is valid
      */
@@ -241,6 +259,22 @@ class TorProcessManager(
 
         fun addBridges(lines: List<String>, source: String) {
             for (bridge in lines) {
+                // SECURITY: the single choke point where an outside string
+                // becomes a `Bridge` directive, and therefore a torrc line.
+                // A bridge "line" is not necessarily one line — a JSON string in
+                // the fetched bridge report may carry a real CR/LF, and pasted
+                // or QR-scanned text is arbitrary — so an unvalidated line can
+                // split into several directives and, because tor takes the last
+                // occurrence of a single-valued option, override our own
+                // ControlPort / CookieAuthentication / DisableNetwork /
+                // DataDirectory. Validate first, before anything is inspected
+                // or emitted, and DROP anything not recognised. Never
+                // sanitise-and-keep: tor's config parser has no escaping.
+                if (!BridgeConfig.validateBridgeLine(bridge)) {
+                    Log.w(tag, "$source: DROPPED invalid bridge line (${BridgeConfig.describeRejected(bridge)}) — " +
+                        "not a complete obfs4/snowflake/webtunnel bridge line, or contains control characters")
+                    continue
+                }
                 val transport = transportOf(bridge)
                 if (transport == null || !pluginAvailable(transport)) {
                     Log.w(tag, "$source: skipping bridge line — no plugin binary for transport '$transport': ${bridge.take(48)}…")
@@ -310,12 +344,75 @@ class TorProcessManager(
             Log.i(tag, "Added ${customBridges.size} custom bridges from user prefs")
         }
 
+        // Defence in depth: every line in bridgeLines already passed
+        // BridgeConfig.validateBridgeLine inside addBridges(), but this is the
+        // last point at which a string could still become a torrc directive, so
+        // it is re-checked rather than trusted. Rejections are logged, never
+        // silently dropped — a line that fails here means something upstream
+        // stopped validating and needs looking at.
+        val safeBridges = bridgeLines.filter { line ->
+            val ok = BridgeConfig.validateBridgeLine(line)
+            if (!ok) {
+                Log.w(tag, "torrc: DROPPED invalid bridge line at write time (${BridgeConfig.describeRejected(line)})")
+            }
+            ok
+        }
+
         val torrcContent = buildString {
             appendLine("# OnionRoute Lite torrc — auto-generated")
             appendLine()
+
+            // ── Outside-controlled section ─────────────────────────────
+            //
+            // Pluggable-transport registrations and Bridge lines are the only
+            // content here that did not originate in this method: the bridge
+            // list is fetched from a third-party repository at runtime
+            // (BridgeUpdater) and custom bridges are typed, pasted, imported or
+            // QR-scanned by the user. Each one is written verbatim, so each one
+            // must have passed BridgeConfig.validateBridgeLine first.
+            //
+            // This block is written FIRST, deliberately. Tor's torrc parser is
+            // line-oriented — one directive per line, no quoting or escaping —
+            // and for every SINGLE-VALUED option the LAST occurrence wins.
+            // Emitting the app-owned directives after this block therefore
+            // means our value overrides theirs, not the reverse: a payload that
+            // somehow slipped past validation could not redefine ControlPort,
+            // CookieAuthentication, CookieAuthFile, DataDirectory,
+            // DisableNetwork, StrictNodes or the DNSPort/SocksPort binds.
+            //
+            // Do not move this block below the app-owned section, and do not
+            // append anything after it that a bridge could influence.
+            if (pluginLines.isNotEmpty() || safeBridges.isNotEmpty()) {
+                appendLine("# Pluggable transport clients")
+                pluginLines.forEach { appendLine(it) }
+                appendLine()
+                if (safeBridges.isNotEmpty()) {
+                    appendLine("# Bridges (${safeBridges.size})")
+                    safeBridges.forEach { appendLine("Bridge $it") }
+                    appendLine("UseBridges 1")
+                    appendLine()
+                    Log.i(tag, "torrc: ${safeBridges.size} bridge line(s), ${pluginLines.size} plugin(s), UseBridges 1")
+                }
+            }
+
+            // ── App-owned section ─────────────────────────────────────
+            //
+            // Everything from here to EOF is generated from app constants, the
+            // app's own filesDir and validated preferences — no value below is
+            // bridge- or network-supplied.
+
+            appendLine("# OnionRoute Lite settings (app-owned — must stay AFTER the bridges, see note above)")
             appendLine("SocksPort ${Constants.TOR_SOCKS_PORT}")
             appendLine("HTTPTunnelPort ${Constants.TOR_HTTP_PORT}")
-            appendLine("ControlPort ${Constants.TOR_CONTROL_PORT}")
+            // Loopback is spelled out rather than left to tor's default so the
+            // bind is unambiguous in the file. Tor enforces
+            // CL_PORT_FORBID_NONLOCAL, which makes a non-loopback ControlPort
+            // abort startup — but the daemon refusing to listen is a worse
+            // outcome than never being offered the address, and a file that
+            // merely reads "ControlPort 9051" is what an injected directive
+            // looks like. CookieAuthentication 1 below is what makes the port
+            // safe to expose even on loopback.
+            appendLine("ControlPort 127.0.0.1:${Constants.TOR_CONTROL_PORT}")
             appendLine("DNSPort 127.0.0.1:${Constants.TOR_DNS_PORT}")
             appendLine("CookieAuthentication 1")
             // Explicit cookie file path — TorProcessManager.controlCookieFile
@@ -324,6 +421,10 @@ class TorProcessManager(
             // but making it explicit avoids surprises if DataDirectory changes.
             appendLine("CookieAuthFile ${File(torDataDir, Constants.TOR_CONTROL_COOKIE).absolutePath}")
             appendLine("CookieAuthFileGroupReadable 1")
+            // Pinned explicitly (the default) so that no earlier line — however
+            // it got there — can leave the daemon running with the network
+            // switched off, which presents as "connected but nothing loads".
+            appendLine("DisableNetwork 0")
             appendLine("AvoidDiskWrites 1")
             appendLine("StrictNodes 1")
             // LOW-RAM: bound tor's in-memory queue buffers (default scales
@@ -335,12 +436,24 @@ class TorProcessManager(
             // restriction hard (no fallback to other exits). Changes made
             // while connected are applied live via SETCONF — this line keeps
             // the same choice for the NEXT daemon start.
+            //
+            // SECURITY: this value is interpolated into an `ExitNodes {…}`
+            // brace group, so an embedded newline (or a crafted `}`) would
+            // close the group and append further torrc directives. It is
+            // therefore restricted to exactly two letters before interpolation;
+            // anything else is discarded and tor starts unrestricted, which is
+            // the safe direction to fail — never a config that fails to start.
             val exitCountry = context.getSharedPreferences(
                 Constants.PREFS_NAME, android.content.Context.MODE_PRIVATE
             ).getString(Constants.PREF_EXIT_COUNTRY, "") ?: ""
-            if (exitCountry.isNotBlank()) {
-                appendLine("ExitNodes {$exitCountry}")
-                Log.i(tag, "torrc: exit country restricted to '$exitCountry'")
+            if (EXIT_COUNTRY_CODE.matches(exitCountry)) {
+                // SettingsScreen stores these lowercase ("de"); emit the
+                // canonical uppercase form so the torrc reads consistently.
+                appendLine("ExitNodes {${exitCountry.uppercase()}}")
+                Log.i(tag, "torrc: exit country restricted to '${exitCountry.uppercase()}'")
+            } else if (exitCountry.isNotBlank()) {
+                Log.w(tag, "torrc: rejecting malformed exit country preference " +
+                    "'${BridgeConfig.describeRejected(exitCountry)}' — starting with no country restriction")
             }
             appendLine("DataDirectory ${torDataDir.absolutePath}")
             appendLine("Log notice stdout")
@@ -358,20 +471,6 @@ class TorProcessManager(
                 appendLine("GeoIPv6File ${geoip6File.absolutePath}")
             }
             appendLine()
-
-            // Pluggable transport plugins + bridge lines
-            if (pluginLines.isNotEmpty() || bridgeLines.isNotEmpty()) {
-                appendLine("# Pluggable transport clients")
-                pluginLines.forEach { appendLine(it) }
-                appendLine()
-                if (bridgeLines.isNotEmpty()) {
-                    appendLine("# Bridges (${bridgeLines.size})")
-                    bridgeLines.forEach { appendLine("Bridge $it") }
-                    appendLine("UseBridges 1")
-                    appendLine()
-                    Log.i(tag, "torrc: ${bridgeLines.size} bridge line(s), ${pluginLines.size} plugin(s), UseBridges 1")
-                }
-            }
         }
 
         val torrcFile = File(appDataDir, Constants.TORRC_FILENAME)

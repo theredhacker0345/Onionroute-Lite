@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * A single Tor circuit parsed from the control port's
@@ -86,50 +87,64 @@ data class TorCircuit(
         }
 
         /**
-         * Parses tor's `TIME_CREATED` value into epoch milliseconds.
+         * Parses tor's `TIME_CREATED` value into epoch **seconds** × 1000.
          *
-         * The control port emits local wall-clock time with no zone suffix and
-         * no fractional part, e.g. `2026-07-13T16:09:14`. A trailing `Z` or
-         * numeric offset is tolerated in case a future tor adds one; it is
-         * stripped and the value is interpreted in the device's default time
-         * zone, matching what tor itself means by a zone-less timestamp.
+         * Format confirmed against the vendored tor 0.4.9.8 source:
+         * `control_fmt.c:135-138` emits `TIME_CREATED=<buf>` where the buffer
+         * comes from `format_iso_time_nospace_usec()`, i.e.
+         * `format_iso_time_nospace()` + `snprintf(".%06d", tv_usec)`.
+         * `format_iso_time()` is
+         * `strftime("%Y-%m-%d %H:%M:%S", tor_gmtime_r(&t, &tm))`, so the value
+         * is **UTC** in the form `2026-07-13T16:09:14.123456` — always with a
+         * 6-digit microsecond fraction.
          *
-         * LOW-RAM / API-23: java.time is API 26+, and this app's minSdk is 23
-         * (its primary target is a 1.5GB Android 6.0 device). Core-library
+         * Two subtleties that are easy to get wrong, and were:
+         *
+         *  1. The zone is UTC, not device-local. Parsing it as local time
+         *     shifts every timestamp by the device's UTC offset, so
+         *     CircuitScreen's `now - created` goes negative east of UTC, gets
+         *     clamped by coerceAtLeast(0), and every circuit permanently reads
+         *     "0s ago"; west of UTC every age is inflated by the offset. So the
+         *     formatter pins UTC below.
+         *
+         *  2. The microsecond fraction is truncated rather than parsed. A
+         *     3-digit `SSS` field cannot accept 6 digits when isLenient is
+         *     false, so trying to keep milliseconds silently falls back to a
+         *     fraction-less pattern anyway and loses them. Dropping them
+         *     explicitly is honest and exact: CircuitScreen renders ages in
+         *     whole seconds/minutes/hours, so sub-second precision is unused.
+         *
+         * API-23 COMPAT: java.time is API 26+ and this app's minSdk is 23 (its
+         * primary target is a 1.5GB Android 6.0 device). Core-library
          * desugaring would pull in an extra artifact, so we format directly.
          *
          * SimpleDateFormat is not thread-safe, so a fresh instance is used per
          * call; parsing runs once per circuit per refresh, not per frame.
          *
-         * @return epoch millis, or 0L if the value is blank or unparsable.
+         * @return epoch millis, floored to the second, or 0L if unparsable.
          */
         private fun parseTorTimestamp(raw: String): Long {
             val value = raw.trim()
             if (value.isEmpty()) return 0L
-            // Split on the date/time separator, then drop any zone designator
-            // from the time half ("16:09:14Z" / "16:09:14+02:00" -> "16:09:14").
-            val separator = value.indexOf('T')
-            if (separator <= 0) return 0L
-            val datePart = value.substring(0, separator)
-            val timePart = value.substring(separator + 1).substringBefore('+')
-                .substringBefore('-').removeSuffix("Z")
-            val candidate = "${datePart}T$timePart"
-            for (pattern in TIMESTAMP_PATTERNS) {
-                try {
-                    val fmt = SimpleDateFormat(pattern, Locale.US)
-                    fmt.isLenient = false
-                    return fmt.parse(candidate)?.time ?: 0L
-                } catch (_: Exception) {
-                    // Try the next pattern.
-                }
+            // Keep only the whole-second part: YYYY-MM-DDTHH:MM:SS.
+            val wholeSeconds = value.substringBefore('.').trim()
+            if (wholeSeconds.length != TIMESTAMP_PATTERN_LENGTH) return 0L
+            return try {
+                val fmt = SimpleDateFormat(TIMESTAMP_PATTERN, Locale.US)
+                fmt.isLenient = false
+                // tor emits GMT. Without this the parse is device-local and every
+                // circuit age is skewed by the device's UTC offset.
+                fmt.timeZone = UTC
+                fmt.parse(wholeSeconds)?.time ?: 0L
+            } catch (_: Exception) {
+                0L
             }
-            return 0L
         }
 
-        private val TIMESTAMP_PATTERNS = listOf(
-            "yyyy-MM-dd'T'HH:mm:ss",
-            "yyyy-MM-dd'T'HH:mm:ss.SSS"
-        )
+        /** `yyyy-MM-ddTHH:mm:ss` — always exactly 19 characters. */
+        private const val TIMESTAMP_PATTERN = "yyyy-MM-dd'T'HH:mm:ss"
+        private const val TIMESTAMP_PATTERN_LENGTH = 19
+        private val UTC: TimeZone = TimeZone.getTimeZone("UTC")
 
         // ── Broadcast JSON round-trip ─────────────────────────────
         // TorService owns the control connection; circuits cross the process

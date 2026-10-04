@@ -40,35 +40,58 @@ set -euo pipefail
 ABI="${1:-armeabi-v7a}"
 NDK_PATH="${2:-${ANDROID_NDK_HOME:-/opt/android-ndk}}"
 OUTPUT_DIR="${3:-./app/src/main/jniLibs/${ABI}}"
-# NOTE: upstream has never released a 3.x; the current 2.x line tops out at
-# 2.18.0. This stays pinned to 2.15.0 for a reproducible build, but be aware
-# that is NOT the newest release.
-HEV_VERSION="2.15.0"
 
+# Resolve OUTPUT_DIR (and NDK_PATH) to absolute paths NOW, before the build
+# steps `cd` into the temporary ndk-build project directory below.
+#
+# Without this, a relative OUTPUT_DIR silently resolves against NDK_TMPDIR
+# instead of the project root: `cp` writes to
+# <tmpdir>/app/src/main/jniLibs/<abi>/libtun2socks.so and the real
+# jniLibs/ keeps a STALE library from a previous run. The build prints
+# "Built: ./app/src/main/jniLibs/..." either way, so nothing looks wrong.
+# build-all.sh passes an absolute path so CI never hit this, which is why it
+# went unnoticed.
+mkdir -p "${OUTPUT_DIR}"
+OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
+NDK_PATH="$(cd "${NDK_PATH}" && pwd)"
 # ─────────────────────────────────────────────────────────────
-# KNOWN BLOCKER — VPN mode cannot work as currently wired.
+# JNI BRIDGE — how this library is actually consumed.
 #
-# This script produces libhev-socks5-tunnel.so via upstream's Android.mk,
-# which ends in `include $(BUILD_SHARED_LIBRARY)`. That yields an ELF
-# DYN with no PT_INTERP, so execve() fails with ENOEXEC. TorVpnService
-# launches it with ProcessBuilder(libtun2socksPath, ...), which requires an
-# interpreter — VPN mode therefore never establishes a forwarder.
+# This library is NOT exec'd; it is loaded by System.loadLibrary("tun2socks").
+# Upstream ships a complete JNI bridge in src/hev-jni.c (guarded by
+# #ifdef ANDROID, and already picked up by the src/**/*.c wildcard in its
+# Android.mk). JNI_OnLoad binds three methods onto a class it locates by name:
 #
-# Fixing it is not a build-flag change: hev-socks5-tunnel has no CLI option
-# for an existing TUN descriptor. Its only fd-aware entry points are C APIs
+#     FindClass(PKGNAME "/" CLSNAME) then RegisterNatives(...)
+#       TProxyStartService(Ljava/lang/String;I)V
+#       TProxyStopService()V
+#       TProxyGetStats()[J
 #
-#     int  hev_socks5_tunnel_main_from_str(const unsigned char *cfg,
-#                                          unsigned int len, int tun_fd);
-#     void hev_socks5_tunnel_quit(void);
+# Upstream's defaults are PKGNAME=hev/htproxy, CLSNAME=TProxyService, which
+# only exist in its own demo app. We override both below so the bindings land
+# on org.onionroute.lite.tor.Tun2SocksNative instead. Both are #ifndef-guarded
+# in hev-jni.c, so -D wins.
 #
-# (main() always passes tun_fd = -1, i.e. "create my own TUN", which needs
-# root and is unavailable to an unprivileged app.) Reaching them requires a
-# JNI bridge that runs this function on a native thread with the
-# VpnService ParcelFileDescriptor — the approach Orbot uses. Until that
-# exists, VPN mode should be treated as non-functional rather than merely
-# untested, and the graceful-degradation path matters: TorService already
-# keeps the TUN up when the kill switch is enabled so traffic fails closed.
+# Note the first argument is a CONFIG FILE PATH, not the YAML itself:
+# native_start_service does strdup(GetStringUTFChars(...)) and passes it to
+# hev_socks5_tunnel_main(path, fd), which reads it from disk via
+# hev_config_init_from_file.
+#
+# The TUN fd is injected through that second argument. hev's tunnel_init()
+# branches on it:
+#     if (extern_tun_fd >= 0) { ioctl(fd, FIONBIO, ...); tun_fd = fd; return 0; }
+# That early return is the entire point — it skips opening and configuring a
+# TUN device, leaving VpnService in sole control of the interface. With
+# tun_fd = -1 (what upstream's own main() passes) hev would try to create its
+# own TUN, which an unprivileged app cannot do.
+#
+# Why an in-process library rather than a child process: hev has never exposed
+# a CLI flag for an existing TUN descriptor in any release (2.15.0, 2.16.0 and
+# 2.18.0 all take argv[1] as a config path and hardcode tun_fd = -1). The C API
+# is the only fd-aware entry point, so reaching it requires JNI.
 # ─────────────────────────────────────────────────────────────
+
+HEV_VERSION="2.15.0"
 
 # ── Validate ABI ─────────────────────────────────────────────
 case "${ABI}" in
@@ -147,6 +170,15 @@ ln -s "${HEV_DIR}" "${NDK_TMPDIR}/jni/hev-socks5-tunnel"
 echo "Building for ${ABI} with ndk-build..."
 cd "${NDK_TMPDIR}"
 
+# -DPKGNAME/-DCLSNAME retarget the JNI bridge in src/hev-jni.c from upstream's
+# demo class (hev/htproxy.TProxyService) onto our Kotlin class
+# (org.onionroute.lite.tor.Tun2SocksNative). Without this, JNI_OnLoad's
+# FindClass fails at System.loadLibrary time and RegisterNatives is handed a
+# null jclass.
+# See the JNI BRIDGE note above for the full contract.
+JNI_PKGNAME="org/onionroute/lite/tor"
+JNI_CLSNAME="Tun2SocksNative"
+
 "${NDK_BUILD}" \
     NDK_PROJECT_PATH="${NDK_TMPDIR}" \
     APP_BUILD_SCRIPT="${NDK_TMPDIR}/jni/Android.mk" \
@@ -155,8 +187,30 @@ cd "${NDK_TMPDIR}"
     NDK_LIBS_OUT="${NDK_TMPDIR}/libs" \
     NDK_OUT="${NDK_TMPDIR}/obj" \
     APP_OPTIM=release \
-    APP_CFLAGS="-O3" \
+    APP_CFLAGS="-O3 -DPKGNAME=${JNI_PKGNAME} -DCLSNAME=${JNI_CLSNAME}" \
     -j$(nproc)
+
+# ── Verify the JNI bridge is actually wired for this ABI ──────
+# A silent regression here (e.g. someone drops -D, or upstream renames the
+# macro guards) would produce a library that loads but immediately fails to
+# bind its methods — a native crash with no useful stack. Check the string
+# that JNI_OnLoad will look up.
+#
+# `grep -a` reads the ELF directly rather than piping `strings` into `grep`.
+# Under `set -o pipefail`, `strings | grep -q` is a footgun: grep -q exits on
+# the first match, `strings` dies with SIGPIPE (141), and the pipeline reports
+# failure even though the string IS present. -a makes grep treat the binary as
+# text, and the target lives in .rodata so it is found verbatim.
+SO_PATH="${NDK_TMPDIR}/libs/${ABI}/libhev-socks5-tunnel.so"
+if [ -f "${SO_PATH}" ]; then
+    if grep -qaF "${JNI_PKGNAME}/${JNI_CLSNAME}" "${SO_PATH}"; then
+        echo "JNI binding target OK: ${JNI_PKGNAME}/${JNI_CLSNAME}"
+    else
+        echo "ERROR: libhev-socks5-tunnel.so does not reference ${JNI_PKGNAME}/${JNI_CLSNAME}."
+        echo "       JNI_OnLoad will not be able to bind its methods."
+        exit 1
+    fi
+fi
 
 # ── Copy from ndk-build output ───────────────────────────────
 # ndk-build produces: libs/{abi}/libhev-socks5-tunnel.so
