@@ -198,7 +198,25 @@ The TUN interface routes **both** `0.0.0.0/0` and `::/0`. On dual-stack (IPv4+IP
 
 ### Self-Healing Reconnect
 
-If the tor process dies unexpectedly (OOM killer, OEM battery manager, network switch), the service automatically restarts it with linear backoff (3s, 6s) while the UI shows "Connecting…". Only after repeated failures does the app surface an error. Combined with the one-time battery-optimization prompt on first connect, this addresses the most common real-world failure mode on aggressive Chinese-OEM ROMs (MIUI, EMUI, ColorOS).
+If the tor process dies unexpectedly (OOM killer, OEM battery manager, network switch), the service automatically restarts it with linear backoff (3s, 6s) while the UI shows "Connecting…". Only after repeated failures does the app surface an error. 
+
+**This does not cover Chinese-OEM background policies, and the earlier version
+of this document claimed it did. It did not, and that claim has been removed
+rather than softened.** `isIgnoringBatteryOptimizations()` reflects only the
+AOSP Doze / App-Standby exemption. Each vendor keeps its own separate switches,
+and the AOSP grant does nothing for any of them:
+
+| ROM | Setting to enable manually |
+| --- | --- |
+| MIUI / HyperOS | Battery saver OFF, "Ultra saver" OFF, Autostart ON |
+| EMUI / HarmonyOS | App launch: manual, Secondary launch / auto-manage OFF, Protected apps ON |
+| ColorOS / OxygenOS | App battery management: Allow background activity + Auto-launch + Run in background |
+| vivo / iQOO Funtouch | Background power consumption: allow + Autostart ON |
+| One UI (Samsung) | Sleeping apps: never put this app to sleep; Background usage limits: Never sleeping apps |
+
+Without the relevant switch the vendor kills the service regardless of its
+foreground status, and a Tor client needs an unbroken session to be useful. On
+those ROMs, set the row above or VPN/Tor will drop silently. See BUGS.md.
 
 ### UDP Blocking
 

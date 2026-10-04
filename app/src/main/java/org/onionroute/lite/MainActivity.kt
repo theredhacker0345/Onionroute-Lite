@@ -11,6 +11,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
+import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -53,6 +54,36 @@ class MainActivity : ComponentActivity() {
      * SupervisorJob so one failed child doesn't cancel siblings.
      */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * POST_NOTIFICATIONS runtime request (API 33+).
+     *
+     * The permission is declared in the manifest but was NEVER requested, so on
+     * Android 13 and newer — which is essentially every phone shipped in the
+     * target markets — it is denied by default. A denied POST_NOTIFICATIONS does
+     * not stop the foreground service, but it does silently drop every
+     * notification, which costs this app specifically:
+     *   - the ongoing "Connected" indicator,
+     *   - the "Disconnect" action, which exists ONLY in that notification, so
+     *     the user cannot stop Tor from the shade at all,
+     *   - "Reconnecting…", "VPN unavailable (reason)" and "VPN stopped" — the
+     *     only user-visible signal that anything went wrong.
+     * Several OEM ROMs also treat an absent notification as grounds for
+     * stricter background handling, so this is not purely cosmetic.
+     */
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            appState.updateNotificationsBlocked(false)
+        } else {
+            // Not fatal, and NOT worth nagging about repeatedly: record it so
+            // Settings can show an honest warning that the Disconnect button and
+            // the connection indicator are unavailable.
+            Log.w(tag, "POST_NOTIFICATIONS denied — no notification, no shade Disconnect action")
+            appState.updateNotificationsBlocked(true)
+        }
+    }
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -252,6 +283,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun startTor() {
+        maybeRequestNotificationPermission()
         maybeRequestBatteryExemption()
         appState.updateConnectionState(ConnectionState.Connecting(progress = 0))
         sendCommandToService(Constants.ACTION_START_TOR)
@@ -268,6 +300,26 @@ class MainActivity : ComponentActivity() {
      * dialog, exactly once, on the user's first manual connect (never during
      * boot/auto-start so we don't fight the OS from the background).
      */
+    /**
+     * Asks for POST_NOTIFICATIONS on API 33+, once, on a manual connect.
+     *
+     * Deliberately NOT requested on the boot or QS-tile paths: those run in the
+     * background, where an activity result would never be delivered.
+     */
+    private fun maybeRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this, android.Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            appState.updateNotificationsBlocked(false)
+            return
+        }
+        // Re-requesting after a denial is a no-op on Android, so the flag only
+        // gates our own nagging, not the system dialog.
+        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     private fun maybeRequestBatteryExemption() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -285,9 +337,12 @@ class MainActivity : ComponentActivity() {
                 )
             )
         } catch (e: Exception) {
-            // Some OEM ROMs strip the settings activity — fall back silently;
-            // auto-reconnect + foreground service still cover most cases.
+            // Some OEM ROMs strip the settings activity. Fall back silently, but
+            // clear the latch so the prompt is offered again later — it was set
+            // BEFORE startActivity, so a stripped activity (or a user dismissal)
+            // would otherwise suppress it for the life of the install.
             Log.w(tag, "Battery exemption dialog unavailable: ${e.message}")
+            prefs.edit().putBoolean(Constants.PREF_BATTERY_PROMPT_SHOWN, false).apply()
         }
     }
 
@@ -345,7 +400,26 @@ class MainActivity : ComponentActivity() {
         sendCommandToService(Constants.ACTION_STOP_VPN)
     }
 
-    private fun handleStatusUpdate(intent: Intent) {
+    private fun handleStatusUpdate(intent: Intent) {        // VPN state arrives on its OWN extra. EXTRA_VPN_STATUS previously had no
+        // reader, so a revocation or a failed start surfaced as a generic
+        // DISCONNECTED and the VPN toggle kept claiming to be on.
+        intent.getStringExtra(Constants.EXTRA_VPN_STATUS)?.let { vpnStatus ->
+            when (vpnStatus) {
+                "ACTIVE" -> appState.updateVpnMode(true)
+                "STARTING", "FAILED", "REVOKED" -> {
+                    appState.updateVpnMode(false)
+                    if (vpnStatus != "STARTING") {
+                        Toast.makeText(
+                            this,
+                            if (vpnStatus == "REVOKED") "VPN permission revoked"
+                            else "VPN failed to start",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        }
+
         val torStatus = intent.getStringExtra(Constants.EXTRA_TOR_STATUS) ?: "UNKNOWN"
         runOnUiThread {
             when (torStatus) {

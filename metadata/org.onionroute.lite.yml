@@ -47,8 +47,13 @@ Description: |
   * Auto-start on boot (optional)
 
   Designed for low-end Android devices with minimal RAM and storage.
-  Optimized for Android 6.0 (Marshmallow) and above. Supports
-  armeabi-v7a, arm64-v8a, x86, and x86_64 devices.
+  Optimized for Android 6.0 (Marshmallow) and above.
+
+  ARM ONLY: armeabi-v7a (32-bit) and arm64-v8a. The published builds contain
+  no x86 or x86_64 native libraries, because the tor binary must be exec'd and
+  there is no 32-bit x86 Android device in this app's target market. Installing
+  on an Intel device will fail at first connect with a missing-native-library
+  error.
 
   This app does NOT include:
   - Built-in browser (use Firefox with your Tor connection)

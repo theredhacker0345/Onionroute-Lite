@@ -85,7 +85,21 @@ class BridgeUpdater private constructor(private val context: Context) {
         return try {
             Log.i(tag, "Fetching alive bridges from GitLab...")
             val url = URL(BRIDGES_URL)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
+            // Route through Tor's SOCKS5 port.
+            //
+            // TorVpnService excludes our own package from the TUN in ALL mode
+            // (addDisallowedApplication) to avoid VPN recursion, so this fetch
+            // went straight out over the physical interface in CLEARTEXT —
+            // revealing the user's real IP to GitLab and to their ISP, every
+            // time the 24h cache expired. In a country where the app is illegal
+            // that is a serious leak from a Tor client.
+            //
+            // The exit-IP probe in TorService already does this; this brings the
+            // bridge fetch in line.
+            val conn = (url.openConnection(java.net.Proxy(
+                java.net.Proxy.Type.SOCKS,
+                java.net.InetSocketAddress("127.0.0.1", Constants.TOR_SOCKS_PORT)
+            )) as HttpURLConnection).apply {
                 connectTimeout = 10_000
                 readTimeout = 10_000
                 requestMethod = "GET"

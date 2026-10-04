@@ -170,10 +170,25 @@
                 android:value="Snowflake proxy service for helping censored users" />
         </service>
 
+        <!--
+            exported="true" is REQUIRED here, not a mistake.
+
+            Always-on / Lockdown-mode VPN is started BY THE SYSTEM: AOSP's
+            Vpn.startAlwaysOnVpn() sends a service intent from system_server,
+            and Vpn.prepareInterface() binds from there too. system_server is
+            uid 1000, so a service with exported="false" cannot be started or
+            bound by it — the always-on path was therefore dead on every Android
+            version, despite the whole ACTION_VPN_ALWAYS_ON code path existing.
+
+            This stays protected by android:permission="BIND_VPN_SERVICE",
+            which is a signature-level system permission, so only the platform
+            can bind it. exported="true" plus that permission is Google's own
+            documented pattern for VpnService (Orbot declares it the same way).
+        -->
         <service
             android:name=".service.TorVpnService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>
@@ -194,6 +209,16 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+            <!--
+                ACTIVE_TILE makes this an ACTIVE tile: SystemUI calls
+                requestListeningState() and keeps the tile live instead of
+                rendering whatever was last persisted. Without it, ROMs that
+                cache the QS panel (MIUI/HyperOS, ColorOS, EMUI) can show
+                "Connected" long after the app has been killed.
+            -->
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
         </service>
 
         <service
@@ -206,6 +231,16 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+            <!--
+                ACTIVE_TILE makes this an ACTIVE tile: SystemUI calls
+                requestListeningState() and keeps the tile live instead of
+                rendering whatever was last persisted. Without it, ROMs that
+                cache the QS panel (MIUI/HyperOS, ColorOS, EMUI) can show
+                "Connected" long after the app has been killed.
+            -->
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
         </service>
 
         <receiver

@@ -125,13 +125,22 @@ class KindnessService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        // UNCONDITIONALLY promote to the foreground — see TorService for the
+        // full reasoning. Briefly: the previous version called startForeground
+        // only on API 26+, so on Android 6.0-7.1 (this app's primary target is
+        // Android 6.0) the snowflake proxy ran as an ordinary killable
+        // background service. A notify() with setOngoing(true) does not protect
+        // a service; only startForeground() does. The 2-arg overload is valid
+        // from API 1 and needs no channel, so it is correct at minSdk 23.
+        //
+        // Only the service TYPE argument is version-gated (API 29+).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 Constants.KINDNESS_NOTIFICATION_ID,
-                buildNotification("Starting Snowflake proxy…"),
+                buildNotification("Starting Snowflake proxy\u2026"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        } else {
             startForeground(
                 Constants.KINDNESS_NOTIFICATION_ID,
                 buildNotification("Starting Snowflake proxy\u2026")

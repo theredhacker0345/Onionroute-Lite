@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.PowerManager
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -54,6 +55,16 @@ import org.onionroute.lite.tor.TorProcessManager
  *   and StrictMode violations. The main thread is only used for UI broadcasts
  *   and notification updates.
  */
+/**
+ * Hard ceiling on TorService's partial wake lock, so a missed release cannot
+ * pin the CPU awake for the life of the install. 6h is far beyond any real
+ * bootstrap, and is only ever reached if every release path fails.
+ */
+/** Wake-lock tag, visible in battery stats and dumpsys. */
+private const val WAKE_LOCK_TAG = "onionroute:tor"
+
+private const val WAKE_LOCK_TIMEOUT_MS = 6L * 60L * 60L * 1000L
+
 class TorService : Service() {
 
     private val tag = "TorService"
@@ -99,6 +110,84 @@ class TorService : Service() {
      * the existing stopRequested checkpoint takes over. Guarded by its own lock
      * because stopTor runs on the main thread while the wait is set up on IO.
      */
+    /** Tag for the partial wake lock, visible in battery stats and dumpsys. */
+    private val WAKE_LOCK_TAG = "onionroute:tor"
+
+    /**
+     * Hard ceiling on the wake lock, so a missed release cannot pin the CPU
+     * awake for the life of the install. 6h is far beyond any real bootstrap.
+     */
+    /**
+     * Keeps the CPU awake for the lifetime of a tor session.
+     *
+     * WHY THIS IS ESSENTIAL AND WAS MISSING
+     * -------------------------------------
+     * WAKE_LOCK has been declared in the manifest since the beginning, but
+     * nothing in the app ever called PowerManager.newWakeLock(). Without a
+     * PARTIAL_WAKE_LOCK the CPU sleeps between wakeups, so tor's event loop
+     * stops. Worse, Doze's *network suspend* cuts the app's network access once
+     * the screen is off and the device is stationary: tor's TCP to guards and
+     * relays dies, circuits drop, and the foreground service — which Doze does
+     * not touch — keeps reporting "Connected".
+     *
+     * A bootstrap also blocks this thread in CountDownLatch.await for up to
+     * 120s. The project's own README concedes first connect takes 30-60s on
+     * its reference device; that cannot complete on a device allowed to sleep,
+     * let alone one with an aggressive vendor sleep policy.
+     *
+     * Leak risk is what to watch: stopTorInternal is reached from seven call
+     * sites, several of which can run concurrently, so the lock is
+     * non-reference-counted and guarded for idempotence, released first thing in
+     * teardown, and bounded by WAKE_LOCK_TIMEOUT_MS as a final backstop.
+     */
+    @Volatile
+    private var wakeLockHeld = false
+    private var wakeLock: PowerManager.WakeLock? = null
+    private val wakeLockLock = Any()
+
+    /** Acquires the wake lock. Idempotent. */
+    private fun acquireWakeLock() {
+        synchronized(wakeLockLock) {
+            if (wakeLockHeld) return
+            try {
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
+                // Not reference-counted: several call sites can start or stop
+                // teardown, and a counted lock needs one acquire per release and
+                // would stay held forever if a single release were missed.
+                lock.setReferenceCounted(false)
+                lock.acquire(WAKE_LOCK_TIMEOUT_MS)
+                wakeLock = lock
+                wakeLockHeld = true
+                Log.d(tag, "Wake lock acquired ($WAKE_LOCK_TAG)")
+            } catch (e: Exception) {
+                // SecurityException if WAKE_LOCK were somehow not granted.
+                // Not fatal: the app still works, it just leans on the vendor's
+                // own keep-alive, so log rather than crash.
+                Log.w(tag, "Could not acquire wake lock: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Releases the wake lock. Idempotent, and called first thing in
+     * stopTorInternal so no teardown path can leave the CPU pinned awake.
+     */
+    private fun releaseWakeLock() {
+        synchronized(wakeLockLock) {
+            if (!wakeLockHeld) return
+            try {
+                wakeLock?.takeIf { it.isHeld }?.release()
+                Log.d(tag, "Wake lock released")
+            } catch (e: Exception) {
+                Log.w(tag, "Error releasing wake lock: ${e.message}")
+            } finally {
+                wakeLock = null
+                wakeLockHeld = false
+            }
+        }
+    }
+
     private val bootstrapLatchLock = Any()
     @Volatile
     private var bootstrapLatch: CountDownLatch? = null
@@ -199,10 +288,29 @@ class TorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        // UNCONDITIONALLY promote to the foreground.
+        //
+        // This used to branch: the 3-arg form on API 34+, the 2-arg form on
+        // API 26+, and NOTHING below 26. So on Android 6.0-7.1 — which includes
+        // this app's primary target, the Galaxy Grand Prime Plus — all three
+        // services ran as ordinary background services started with
+        // startService(). A plain notify() with setOngoing(true) does NOT
+        // protect a service; only startForeground() does.
+        //
+        // That matters far more here than for a typical app: tor is a SEPARATE
+        // process, pinned to this app's pid by __OwningControllerProcess in the
+        // generated torrc. Any low-memory reclaim of the app therefore killed
+        // tor immediately and permanently, and the auto-restart logic that
+        // might have recovered lived in the process that had just died. On a
+        // 1.5GB device, low-memory kills are routine, not exceptional.
+        //
+        // The 2-arg overload has existed since API 1 and needs no notification
+        // channel, so it is correct on every level from minSdk 23 up. Only the
+        // service TYPE argument is version-gated, because it is API 29+.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(Constants.NOTIFICATION_ID, buildNotification("Starting Tor…"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        } else {
             startForeground(Constants.NOTIFICATION_ID, buildNotification("Starting Tor…"))
         }
 
@@ -492,6 +600,14 @@ class TorService : Service() {
             }
 
             isTorRunning = true
+            // Hold the CPU for the whole session, not just the bootstrap.
+            //
+            // Acquiring only around the await would fix the bootstrap but leave
+            // the steady state at the mercy of the vendor sleep policy: tor's
+            // event loop would stop between wakeups and Doze network suspend
+            // would cut its TCP to guards and relays while this foreground
+            // service kept reporting "Connected".
+            acquireWakeLock()
             autoRestartAttempts.set(0)
             killSwitch?.setVpnMode(isVpnActive())
             killSwitch?.setEnabled(KillSwitch.isEnabledInPrefs(this))
@@ -646,6 +762,11 @@ class TorService : Service() {
      *   failure was unexpected, so the error is raised when it means something.
      */
     private fun stopTorInternal(unexpectedDisconnect: Boolean = false) {
+        // Release the wake lock FIRST, in its own statement, so it happens even
+        // if anything below throws. A held PARTIAL_WAKE_LOCK keeps the CPU
+        // awake indefinitely — the worst possible leak on a device whose
+        // battery is already the binding constraint.
+        releaseWakeLock()
         if (!isTorRunning) {
             // Even if Tor wasn't fully running, we may have a half-started
             // process + control connection to clean up. Also: this is called

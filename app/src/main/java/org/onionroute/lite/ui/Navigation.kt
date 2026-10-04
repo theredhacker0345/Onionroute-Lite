@@ -92,6 +92,16 @@ class OnionRouteAppState {
         internal set
 
     var isVpnMode by mutableStateOf(false)
+
+    /**
+     * True when POST_NOTIFICATIONS is denied on API 33+.
+     *
+     * Worth surfacing: with the permission denied the foreground service
+     * still runs, but every notification is dropped — including the only
+     * "Disconnect" action the app has — so the user cannot stop Tor from
+     * the shade and gets no indication of connection state at all.
+     */
+    var notificationsBlocked by mutableStateOf(false)
         internal set
 
     var isKillSwitchEnabled by mutableStateOf(true)
@@ -233,6 +243,17 @@ class OnionRouteAppState {
     /** Called by MainActivity when ACTION_EXIT_IP_UPDATE broadcast is received. */
     fun updateExitIp(ip: String) {
         exitIp = ip
+    }
+
+    /**
+     * Plain state update for the notification-permission warning.
+     *
+     * Deliberately does NOT go through the updateX() + callback pattern the
+     * user-facing toggles use: this is reported by the system, not chosen by
+     * the user, so there is nothing to send to a service.
+     */
+    fun updateNotificationsBlocked(blocked: Boolean) {
+        notificationsBlocked = blocked
     }
 
     fun updateVpnMode(enabled: Boolean) {

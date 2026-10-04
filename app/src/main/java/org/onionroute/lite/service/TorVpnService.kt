@@ -73,6 +73,27 @@ class TorVpnService : VpnService() {
     @Volatile
     private var forwarderPermanentlyUnavailable = false
 
+    /**
+     * Set when the tunnel cannot currently be established — VPN consent missing
+     * (establish() returned null) or SELECTED_ONLY with nothing selected.
+     *
+     * `forwarderPermanentlyUnavailable` only covers the missing-native-library
+     * case, and it is latched from a single check. Always-on VPN is
+     * SYSTEM-initiated: Android relaunches the service immediately after it
+     * stops, so a refusal that ends in stopSelf() became a spin —
+     * startForeground, establish() (or the SELECTED_ONLY refusal), failAndStop,
+     * stopSelf, repeat — once per redelivery, forever, with no progress. That is
+     * reachable in exactly the reboot case: BootReceiver starts
+     * ACTION_VPN_ALWAYS_ON whenever PREF_VPN_ENABLED was set, including after
+     * the reboot that revoked consent, and consent cannot be re-requested from a
+     * receiver.
+     *
+     * Cleared by an explicit user action (restartVpn) so the user can retry
+     * after granting consent.
+     */
+    @Volatile
+    private var tunnelUnavailable = false
+
     private val notificationManager by lazy {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
@@ -99,10 +120,19 @@ class TorVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        // UNCONDITIONALLY promote to the foreground — see TorService for the
+        // full reasoning. Briefly: the previous version called startForeground
+        // only on API 26+, so on Android 6.0-7.1 (this app's primary target is
+        // Android 6.0) the VPN service ran as an ordinary killable background service.
+        // A notify() with setOngoing(true) does not protect a service; only
+        // startForeground() does. The 2-arg overload is valid from API 1 and
+        // needs no channel, so it is correct at minSdk 23.
+        //
+        // Only the service TYPE argument is version-gated (API 29+).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(Constants.VPN_NOTIFICATION_ID, buildNotification("VPN active"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        } else {
             startForeground(Constants.VPN_NOTIFICATION_ID, buildNotification("VPN active"))
         }
 
@@ -125,16 +155,26 @@ class TorVpnService : VpnService() {
         Log.w(tag, "VPN permission revoked — always-on VPN disabled or permission withdrawn")
         stopVpn()
 
-        // Update preferences so the UI reflects the revoked state
+        // Update preferences so the UI reflects the revoked state.
+        //
+        // PREF_VPN_ENABLED only — deliberately NOT PREF_TOR_CONNECTED. That flag
+        // is TorService's, and TorService's daemon is still running: revoking a
+        // VPN says nothing about tor. Clearing it used to flip the UI to
+        // "Disconnected" and the QS tile to "Connect", and tapping Connect then
+        // got "Tor is already running" from startTorLocked, so the tile wedged.
         val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
         prefs.edit()
             .putBoolean(Constants.PREF_VPN_ENABLED, false)
-            .putBoolean(Constants.PREF_TOR_CONNECTED, false)
             .apply()
 
-        // Notify the UI that VPN was revoked
+        // Tell the UI the VPN is gone, as its OWN status — the Tor connection is
+        // untouched and must keep reporting as before. EXTRA_VPN_STATUS had no
+        // reader at all, so a revocation previously surfaced as a generic
+        // DISCONNECTED and the user could not tell that tor was still up.
+        broadcastVpnStatus("REVOKED")
+
         val revokeIntent = Intent(Constants.ACTION_STATUS_UPDATE).apply {
-            putExtra(Constants.EXTRA_TOR_STATUS, "DISCONNECTED")
+            putExtra(Constants.EXTRA_VPN_STATUS, "REVOKED")
             putExtra(Constants.EXTRA_VPN_STATUS, "REVOKED")
             setPackage(packageName)
         }
@@ -174,7 +214,7 @@ class TorVpnService : VpnService() {
             // stopSelf() and Lockdown mode immediately redelivers, so without
             // this the service spins, calling startForeground and establishing a
             // TUN it immediately throws away, once per redelivery.
-            if (forwarderPermanentlyUnavailable) {
+            if (forwarderPermanentlyUnavailable || tunnelUnavailable) {
                 Log.w(tag, "VPN start refused — tun2socks unavailable on this install")
                 stopSelf()
                 return
@@ -244,6 +284,7 @@ class TorVpnService : VpnService() {
                         // Refuse AND release the foreground promotion that
                         // onStartCommand already performed, so this does not
                         // leave a live FGS with no TUN behind it.
+                        tunnelUnavailable = true
                         failAndStop("No apps selected — choose apps in App Routing first")
                         return
                     }
@@ -269,6 +310,10 @@ class TorVpnService : VpnService() {
                     if (isAlwaysOn) " (always-on mode — user may need to re-grant VPN permission)" else "")
                 // Do not leave the service promoted to the foreground with a
                 // "VPN active" notification when there is no interface at all.
+                // Almost always "VPN consent was revoked" — most commonly by a
+                // reboot, and on some OEMs by their own battery manager. Latch it
+                // so always-on redelivery cannot spin; cleared by restartVpn().
+                tunnelUnavailable = true
                 failAndStop("Could not establish VPN interface")
                 return
             }
@@ -288,6 +333,9 @@ class TorVpnService : VpnService() {
             }
 
             isRunning = true
+            // Now that a TUN is up AND a forwarder is reading it, tell the UI
+            // the truth. Previously it was told "active" before either existed.
+            broadcastVpnStatus("ACTIVE")
 
             // Also ensure Tor is started when triggered by always-on VPN
             if (isAlwaysOn) {
@@ -354,6 +402,7 @@ class TorVpnService : VpnService() {
      */
     private fun failAndStop(reason: String) {
         Log.w(tag, "VPN start aborted: $reason")
+        broadcastVpnStatus("FAILED")
         teardownTunnel()
         // DETACH, not REMOVE. REMOVE (and stopForeground(true) on API 23) deleted
         // the notification posted one line above, so "VPN unavailable" was
@@ -462,6 +511,9 @@ class TorVpnService : VpnService() {
      * silently ignored until the user manually toggled the VPN off/on.
      */
     private fun restartVpn() {
+        // An explicit user action is the signal that whatever blocked us may have
+        // been fixed (consent granted, apps selected), so allow another attempt.
+        tunnelUnavailable = false
         if (!isRunning) {
             Log.d(tag, "restartVpn: VPN not running — starting fresh")
             startVpn()
@@ -543,6 +595,32 @@ class TorVpnService : VpnService() {
      * `netmask` with inet_pton (dotted-quad) and `port`/`cache-size` with
      * strtoul (decimal) — see hev_config_parse_mapdns(), hev-config.c:296-306.
      */
+    /**
+     * Broadcasts a VPN lifecycle state so the UI can reflect it.
+     *
+     * The VPN's state previously reached the UI only optimistically:
+     * MainActivity.startVpn() set vpnMode = true, wrote PREF_VPN_ENABLED = true
+     * and toasted "VPN mode active" BEFORE any TUN existed. The failure paths
+     * (failAndStop) logged, posted a detached notification and called
+     * stopSelf() — nothing was broadcast, and EXTRA_VPN_STATUS had no reader at
+     * all. So a VPN that never started still looked started in the UI and in the
+     * persisted preference.
+     *
+     * Status values: STARTING, ACTIVE, REVOKED, FAILED.
+     */
+    private fun broadcastVpnStatus(status: String) {
+        try {
+            sendBroadcast(Intent(Constants.ACTION_STATUS_UPDATE).apply {
+                putExtra(Constants.EXTRA_VPN_STATUS, status)
+                // Explicit component: the broadcast is app-internal and the
+                // receiver is registered NOT_EXPORTED, so this keeps it that way.
+                setPackage(packageName)
+            })
+        } catch (e: Exception) {
+            Log.w(tag, "Failed to broadcast VPN status $status: ${e.message}")
+        }
+    }
+
     private fun buildTun2SocksConfig(): String = buildString {
         appendLine("# Generated by OnionRoute Lite. Rewritten on every VPN start.")
         appendLine("# Do not edit: this file is owned by TorVpnService.")
