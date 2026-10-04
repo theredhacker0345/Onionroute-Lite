@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import org.onionroute.lite.service.KindnessService
 import org.onionroute.lite.service.TorService
 import org.onionroute.lite.service.TorVpnService
+import org.onionroute.lite.util.IconSwitcher
 import org.onionroute.lite.tor.BridgeConfig
 import org.onionroute.lite.tor.BridgeUpdater
 import org.onionroute.lite.tor.TorCircuit
@@ -124,6 +125,34 @@ class MainActivity : ComponentActivity() {
         // ── Restore camouflage icon preference ────────────────────
         val savedIconKey = prefs.getString(Constants.PREF_APP_ICON, "default") ?: "default"
         appState.updateCurrentIcon(savedIconKey)
+
+        // RE-APPLY the saved choice, not just mirror it into the UI state.
+        //
+        // The launcher entry is whichever activity-alias is currently enabled,
+        // and the manifest declares AliasDefault enabled with every camouflage
+        // alias disabled. So the component-enabled state is the real source of
+        // truth for what the launcher shows, while PREF_APP_ICON is only the
+        // user's recorded intent.
+        //
+        // Those two can diverge: PackageManager resets component enabled states
+        // on some OEMs after an app update, and a reinstall certainly clears
+        // them. Without this call the launcher silently reverts to the onion
+        // while Settings still shows "Quick Calc" selected — the camouflage
+        // reporting itself as active while not being active, which is the worst
+        // possible failure for the one feature whose entire purpose is not being
+        // noticed. Re-applying on every start makes the state self-healing.
+        //
+        // getCurrentIcon() deliberately reads component state FIRST and only
+        // then falls back to the preference, so guarding on that comparison
+        // keeps this a no-op in the common case where the two already agree.
+        val iconSwitcher = IconSwitcher(applicationContext)
+        val desiredIcon = IconSwitcher.AppIcon.entries.firstOrNull { it.key == savedIconKey }
+            ?: IconSwitcher.AppIcon.DEFAULT
+        if (iconSwitcher.getCurrentIcon() != desiredIcon) {
+            Log.i(tag, "Re-applying camouflage icon '${desiredIcon.key}' " +
+                "(launcher currently shows '${iconSwitcher.getCurrentIcon().key}')")
+            iconSwitcher.switchTo(desiredIcon)
+        }
 
         // ── Wire appState callbacks to service commands ────────────
         appState.onVpnToggle = { enabled ->
