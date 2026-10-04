@@ -142,14 +142,36 @@ private val OnionRouteDarkColorScheme = darkColorScheme(
     scrim = OnionRouteColors.Black,
 )
 
+/**
+ * Material typography, built ONCE at file scope.
+ *
+ * `Typography()` is @Composable and constructs a fresh data class holding 15
+ * TextStyles, each computing PlatformTextStyle, LineHeightStyle and lineHeight
+ * from sp. Constructing it inside [OnionRouteTheme] meant rebuilding all 15 on
+ * every recomposition of the theme — which is above every screen, so it
+ * re-ran for every state change in the app.
+ *
+ * Hoisted to a top-level val, matching how [OnionRouteDarkColorScheme] is
+ * already handled a few lines above.
+ *
+ * Note this is the stock Material scale, NOT the app's own design system: no
+ * screen reads `MaterialTheme.typography`, they all use
+ * [OnionRouteTypography] directly. It is kept because Material components
+ * (TextField, AlertDialog and friends) fall back to it internally, so it cannot
+ * simply be dropped without changing their appearance. Building it once means
+ * that fallback costs nothing per frame.
+ */
+private val MaterialTypography = androidx.compose.material3.Typography()
+
 @Composable
 fun OnionRouteTheme(
     content: @Composable () -> Unit
 ) {
-    val colorScheme = OnionRouteDarkColorScheme
+    // Already a top-level val; read directly rather than shadowing it in a local
+    // so the hoisting is visible at the call site.
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = androidx.compose.material3.Typography(),
+        colorScheme = OnionRouteDarkColorScheme,
+        typography = MaterialTypography,
         content = content
     )
 }

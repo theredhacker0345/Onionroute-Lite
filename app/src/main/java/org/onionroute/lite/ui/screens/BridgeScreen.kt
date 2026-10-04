@@ -32,10 +32,28 @@ import org.onionroute.lite.tor.BridgeConfig
 import org.onionroute.lite.ui.OnionRouteAppState
 import org.onionroute.lite.ui.theme.*
 
+
+/**
+ * Matches the `host:port` of a bridge line for display.
+ *
+ * File-level so it is compiled once. Constructing it inside the composable
+ * meant a native Pattern compilation per row per recomposition.
+ */
+private val IP_PORT_REGEX = Regex("""(\d+\.\d+\.\d+\.\d+:\d+)""")
+
 @Composable
 fun BridgeScreen(appState: OnionRouteAppState) {
     val context = LocalContext.current
-    val bridgeConfig = remember { BridgeConfig(context) }
+    // applicationContext, NOT the composable's Context.
+    //
+    // LocalContext.current is the Activity, and `remember { }` with no key is
+    // scoped to the composition slot — so across a configuration change or a
+    // process-death restore the OLD, DESTROYED Activity was retained, and every
+    // later bridgeConfig call went to a dead Activity's SharedPreferences.
+    // BridgeConfig only needs prefs and a package manager, so the application
+    // context is both leak-free and sufficient.
+    val appContext = remember(context) { context.applicationContext }
+    val bridgeConfig = remember(appContext) { BridgeConfig(appContext) }
 
     var customBridges by remember { mutableStateOf(bridgeConfig.getCustomBridges()) }
 
@@ -139,7 +157,11 @@ fun BridgeScreen(appState: OnionRouteAppState) {
 
         // ── obfs4 section ──────────────────────────────────────
         val obfs4Builtin = remember { Constants.DEFAULT_OBFS4_BRIDGES }
-        val obfs4Custom = customBridges.filter { it.startsWith("obfs4", ignoreCase = true) }
+        // remember() keyed on the source list: these were two full scans
+        // plus two ArrayLists per recomposition of the scrolling Column.
+        val obfs4Custom = remember(customBridges) {
+            customBridges.filter { it.startsWith("obfs4", ignoreCase = true) }
+        }
 
         BridgeTypeSection(
             title = "obfs4",
@@ -193,7 +215,9 @@ fun BridgeScreen(appState: OnionRouteAppState) {
 
         // ── WebTunnel section ──────────────────────────────────
         val webtunnelBuiltin = remember { Constants.DEFAULT_WEBTUNNEL_BRIDGES }
-        val webtunnelCustom = customBridges.filter { it.startsWith("webtunnel", ignoreCase = true) }
+        val webtunnelCustom = remember(customBridges) {
+            customBridges.filter { it.startsWith("webtunnel", ignoreCase = true) }
+        }
 
         BridgeTypeSection(
             title = "WebTunnel",
@@ -426,7 +450,10 @@ private fun BridgeLineItem(
     onDelete: () -> Unit
 ) {
     // Extract IP:port for display
-    val ipMatch = Regex("""(\d+\.\d+\.\d+\.\d+:\d+)""").find(bridgeLine)
+    // Precompiled at file scope: Regex() builds a java.util.regex.Pattern
+    // natively, and this ran once PER ROW PER RECOMPOSITION for every built-in
+    // and custom bridge on any toggle of the screen.
+    val ipMatch = IP_PORT_REGEX.find(bridgeLine)
     val displayId = ipMatch?.value ?: bridgeLine.take(30)
 
     Row(

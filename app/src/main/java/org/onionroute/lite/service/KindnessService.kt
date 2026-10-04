@@ -53,8 +53,53 @@ class KindnessService : Service() {
     // structure). The old code recompiled these on every single line.
     private val DATA_RELAYED_REGEX = Regex("""data\s+relayed:\s+(\d+)""")
 
+    // Word-boundary matchers for the proxy's client lifecycle lines.
+    //
+    // The previous `trimmed.contains("connected") && !contains("disconnected")`
+    // inflated the "PEOPLE HELPED" counter permanently: "reconnected" contains
+    // "connected" with no word boundary, as do "connecting", "connection
+    // established" and any diagnostic mentioning the word. \b requires a
+    // non-word character on both sides, so "reconnected" (word char before)
+    // and "connecting" (no literal "connected") both correctly fail to match.
+    private val CONNECTED_REGEX = Regex("""\bconnected\b""")
+    private val DISCONNECTED_REGEX = Regex("""\bdisconnected\b""")
+
+    /**
+     * Serializes proxy start/stop so they cannot interleave.
+     *
+     * Three racing paths used to exist: onStartCommand (main thread), the
+     * monitor thread's own restart after `Thread.sleep(backoff)`, and
+     * onDestroy. The dangerous interleaving was monitor-past-sleep →
+     * startProxy() running CONCURRENTLY with stopProxyInternal(): the stop
+     * nulls proxyProcess and returns, then the restart assigns a fresh
+     * Process to it. Nothing ever destroys that process, so the snowflake
+     * proxy keeps running — connected to the broker, relaying for peers —
+     * after the user turned Kindness Mode off, holding the service alive and
+     * its memory resident for as long as the process lived.
+     *
+     * startProxy and stopProxyInternal both take this lock, so a restart either
+     * completes before the stop begins (and is then destroyed) or observes the
+     * stopped state and declines to start.
+     */
+    private val proxyLifecycleLock = Any()
+
+    /**
+     * The running proxy, or null.
+     *
+     * @Volatile because it is written on the main thread (onStartCommand,
+     * onDestroy) and read on the monitor and stdout threads. Without it the
+     * monitor thread could observe a stale non-null value and act on a process
+     * that had already been destroyed, or miss the exit it was waiting on.
+     */
+    @Volatile
     private var proxyProcess: Process? = null
+
+    /** @Volatile for the same reason: read/written across the main, monitor
+     *  and stdout threads. */
+    @Volatile
     private var monitorThread: Thread? = null
+
+    @Volatile
     private var stdoutThread: Thread? = null
 
     private val dataDonated = AtomicLong(0L)
@@ -109,6 +154,7 @@ class KindnessService : Service() {
                     startProxy()
                 }
             }
+            null -> handleStickyRestart()
             else -> {
                 consecutiveFailures.set(0)
                 startProxy()
@@ -116,6 +162,40 @@ class KindnessService : Service() {
         }
 
         return START_STICKY
+    }
+
+    /**
+     * START_STICKY redelivery: Android restarted this service with a null
+     * intent after the process was killed.
+     *
+     * The previous `else -> startProxy()` branch also handled this case, which
+     * meant a sticky restart ignored PREF_KINDNESS_ENABLED entirely: if the user
+     * turned Kindness Mode off and the process was later killed (low-memory kill
+     * on this 1.5GB device is routine), the system would bring the service back
+     * and it would re-register with the Snowflake broker and relay for peers the
+     * user had chosen not to help.
+     *
+     * Honour the persisted intent instead: resume only if Kindness Mode was
+     * actually enabled, otherwise tear the foreground promotion down and stop.
+     */
+    private fun handleStickyRestart() {
+        val prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE)
+        val kindnessEnabled = prefs.getBoolean(Constants.PREF_KINDNESS_ENABLED, false)
+        if (kindnessEnabled) {
+            Log.i(tag, "Sticky restart \u2014 restoring previous Kindness session")
+            consecutiveFailures.set(0)
+            startProxy()
+        } else {
+            Log.i(tag, "Sticky restart \u2014 Kindness Mode was not enabled; stopping")
+            stopProxyInternal()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            stopSelf()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -135,6 +215,25 @@ class KindnessService : Service() {
      * discover this proxy via the broker and establish WebRTC connections.
      */
     private fun startProxy() {
+        // Serialize the whole start against stopProxyInternal(). Without this,
+        // a monitor-thread restart that had just woken from its backoff sleep
+        // could be mid-start when the user hit STOP: the stop would null
+        // proxyProcess and return, and this method would then assign a brand-new
+        // Process to it. Nothing would ever destroy that process — an orphaned
+        // snowflake proxy still connected to the broker and relaying for peers
+        // after Kindness Mode was switched off, holding its memory resident for
+        // as long as it lived.
+        synchronized(proxyLifecycleLock) { startProxyLocked() }
+    }
+
+    /**
+     * Body of [startProxy]. Must be called with [proxyLifecycleLock] held.
+     *
+     * The already-running check is repeated inside the lock because the caller's
+     * own check happens before it: another thread can start a proxy in the gap,
+     * and skipping that would leave two processes racing to bind the proxy.
+     */
+    private fun startProxyLocked() {
         if (proxyProcess != null) {
             Log.w(tag, "Snowflake proxy is already running")
             updateNotification("Snowflake proxy active")
@@ -244,23 +343,70 @@ class KindnessService : Service() {
     }
 
     private fun stopProxyInternal() {
-        try {
-            stdoutThread?.interrupt()
-            stdoutThread = null
-
-            monitorThread?.interrupt()
+        // Take the lifecycle lock so this cannot interleave with a startProxy()
+        // that a monitor-thread restart is already inside. See the note on
+        // proxyLifecycleLock for the orphaned-process failure this prevents.
+        //
+        // Also join the monitor thread before returning, so a caller that is
+        // about to start a replacement (ACTION_RESTART_KINDNESS_PROXY) cannot
+        // have the old monitor wake up afterwards and start a SECOND proxy on
+        // top of it.
+        val orphanedMonitor = synchronized(proxyLifecycleLock) {
+            val m = monitorThread
             monitorThread = null
-
-            proxyProcess?.destroy()
+            m
+        }
+        val orphanedStdout = synchronized(proxyLifecycleLock) {
+            val s = stdoutThread
+            stdoutThread = null
+            s
+        }
+        val orphanedProcess = synchronized(proxyLifecycleLock) {
+            val p = proxyProcess
             proxyProcess = null
+            p
+        }
 
-            // Reset active connection count since proxy is stopped
-            peopleHelpedNow.set(0)
+        // PER-STEP try/catch. These were one block, so an exception from the
+        // first interrupt skipped process destruction entirely — leaving the
+        // proxy running and unreachable. Each cleanup step is independent, and
+        // destroying the process is the one that must never be skipped.
+        try {
+            orphanedStdout?.interrupt()
+        } catch (e: Exception) {
+            Log.w(tag, "Error interrupting snowflake stdout reader", e)
+        }
 
+        try {
+            orphanedMonitor?.interrupt()
+        } catch (e: Exception) {
+            Log.w(tag, "Error interrupting snowflake monitor", e)
+        }
+
+        // Bounded join: the monitor is parked in Process.waitFor() or in the
+        // restart backoff, and interrupt only breaks the sleep. Give it a
+        // moment to notice so it cannot fire a restart after we return.
+        try {
+            orphanedMonitor?.join(MONITOR_JOIN_TIMEOUT_MS)
+            if (orphanedMonitor?.isAlive == true) {
+                Log.w(tag, "Snowflake monitor still alive after " +
+                    "${MONITOR_JOIN_TIMEOUT_MS}ms — not starting a replacement")
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } catch (e: Exception) {
+            Log.w(tag, "Error joining snowflake monitor", e)
+        }
+
+        try {
+            orphanedProcess?.destroy()
             Log.i(tag, "Snowflake proxy stopped")
         } catch (e: Exception) {
-            Log.e(tag, "Error stopping Snowflake proxy", e)
+            Log.e(tag, "Error destroying snowflake proxy", e)
         }
+
+        // Reset active connection count since proxy is stopped
+        peopleHelpedNow.set(0)
     }
 
     // ── Binary Installation ───────────────────────────────────────
@@ -352,15 +498,22 @@ class KindnessService : Service() {
             lastProxyError.set(line.take(200))
         }
 
+        // "disconnected" also matches \bconnected\b? No — "disconnected" has a
+        // word character before "connected", so CONNECTED_REGEX cannot match
+        // inside it. Still test disconnect first and let it win, so a line
+        // carrying both cannot be counted as a new client.
+        val isDisconnected = DISCONNECTED_REGEX.containsMatchIn(trimmed)
+        val isConnected = !isDisconnected && CONNECTED_REGEX.containsMatchIn(trimmed)
+
         // Client connected
-        if (trimmed.contains("connected") && !trimmed.contains("disconnected")) {
+        if (isConnected) {
             peopleHelpedNow.incrementAndGet()
             peopleHelpedTotal.incrementAndGet()
             broadcastKindnessStats()
         }
 
         // Client disconnected — look for data relayed
-        if (trimmed.contains("disconnected")) {
+        if (isDisconnected) {
             decrementClampedAtZero(peopleHelpedNow)
             // Extract bytes: "data relayed: 1234567 B" or "data relayed: 1234567 bytes"
             DATA_RELAYED_REGEX.find(trimmed)?.groupValues?.get(1)?.toLongOrNull()?.let { bytes ->
@@ -411,8 +564,37 @@ class KindnessService : Service() {
         }
     }
 
-    private fun broadcastKindnessStats() {
+    /**
+     * Wall-clock of the last successful [persistStatsThrottled] write.
+     * 0 means "never written", so the first event always persists.
+     */
+    private val lastPersistMs = AtomicLong(0L)
+
+    /**
+     * Persists stats at most once every [PERSIST_THROTTLE_MS].
+     *
+     * Broadcasting is cheap and stays per-event. Persisting is not:
+     * SharedPreferences.apply() rewrites the backing XML and fsyncs, so doing
+     * it on every client connect/disconnect meant a flash write per event for
+     * as long as the proxy ran. On an 8GB device with a busy relay that is real
+     * wear for data that is at most a few counters.
+     *
+     * The exact total is not worth a write per event — it is a "people helped"
+     * counter, not a ledger — and the value is always flushed exactly by
+     * stopProxy() before the process can end, so a crash can lose at most one
+     * throttle window.
+     */
+    private fun persistStatsThrottled() {
+        val now = System.currentTimeMillis()
+        val last = lastPersistMs.get()
+        if (last != 0L && now - last < PERSIST_THROTTLE_MS) return
+        // CAS so concurrent events cannot all decide to write.
+        if (!lastPersistMs.compareAndSet(last, now)) return
         persistStats()
+    }
+
+    private fun broadcastKindnessStats() {
+        persistStatsThrottled()
 
         val intent = Intent(Constants.ACTION_KINDNESS_STATS).apply {
             putExtra(Constants.EXTRA_KINDNESS_DATA_DONATED, dataDonated.get())
@@ -583,6 +765,28 @@ class KindnessService : Service() {
     companion object {
         private const val RESTART_DELAY_MS = 5000L
         private const val MAX_RESTART_DELAY_MS = 300_000L  // 5 minutes cap
+
+        /**
+         * How long stopProxyInternal() waits for the monitor thread to notice
+         * its interrupt before proceeding.
+         *
+         * The monitor is parked either in Process.waitFor() or in the restart
+         * backoff sleep; interrupt breaks the sleep but waitFor() returns only
+         * when the process actually dies. One second is ample for the sleep
+         * case and bounded for the waitFor case, because destroy() below is
+         * what unblocks it — the join happens before destroy() only to keep the
+         * window small, so an orphaned proxy is never left waiting on a
+         * thread that intends to restart it.
+         */
+        private const val MONITOR_JOIN_TIMEOUT_MS = 1000L
+
+        /**
+         * Minimum interval between SharedPreferences writes of the kindness
+         * counters. 30s bounds flash churn to two writes a minute while still
+         * losing at most 30s of totals on an unexpected kill — and
+         * stopProxy() always writes the exact figures before exiting.
+         */
+        private const val PERSIST_THROTTLE_MS = 30_000L
         private const val MAX_CONSECUTIVE_FAILURES = 10
 
         /**

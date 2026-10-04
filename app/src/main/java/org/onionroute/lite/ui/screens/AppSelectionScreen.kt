@@ -143,7 +143,15 @@ fun AppSelectionScreen(appState: OnionRouteAppState) {
 
             // ── App List ───────────────────────────────────────
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                // weight(1f), not fillMaxSize(): this is an unweighted child of
+                // a Column that already holds the mode selector and search bar,
+                // so fillMaxSize() claims the full parent height ON TOP of
+                // them. The last rows were pushed past the bottom edge, and
+                // every layout pass measured the list at more height than it
+                // could ever occupy.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Loading state — show a single placeholder row while

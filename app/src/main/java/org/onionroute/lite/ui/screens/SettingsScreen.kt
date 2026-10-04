@@ -25,6 +25,23 @@ import org.onionroute.lite.ui.Screen
 import org.onionroute.lite.ui.theme.*
 import org.onionroute.lite.util.IconSwitcher
 
+
+/**
+ * Exit-country options, pre-chunked into rows of three.
+ *
+ * Both this and [KINDNESS_CAPACITY_OPTIONS] are compile-time constants of
+ * immutable data. Building them inside the composable allocated an outer list
+ * of four inner lists plus a dozen boxed Pairs on every recomposition of the
+ * settings screen — which, before OnionRouteAppState was made @Stable, was
+ * every second that Tor moved data.
+ */
+private val EXIT_COUNTRY_ROWS = Constants.EXIT_COUNTRY_OPTIONS.chunked(3)
+
+/** Snowflake donation-level choices. Immutable; see [EXIT_COUNTRY_ROWS]. */
+private val KINDNESS_CAPACITY_OPTIONS = listOf(
+    0 to "Unlimited", 1 to "Low", 5 to "Balanced", 10 to "Generous"
+)
+
 @Composable
 fun SettingsScreen(appState: OnionRouteAppState) {
     Column(
@@ -119,7 +136,7 @@ fun SettingsScreen(appState: OnionRouteAppState) {
 
         // Country chips, 3 per row — plain chunked Rows keep this dependency
         // and API-version friendly (no experimental FlowRow).
-        Constants.EXIT_COUNTRY_OPTIONS.chunked(3).forEach { rowOptions ->
+        EXIT_COUNTRY_ROWS.forEach { rowOptions ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -202,7 +219,7 @@ fun SettingsScreen(appState: OnionRouteAppState) {
 
         // Donation level — caps concurrent snowflake clients (-capacity),
         // which effectively bounds donated bandwidth.
-        val capacityOptions = listOf(0 to "Unlimited", 1 to "Low", 5 to "Balanced", 10 to "Generous")
+        val capacityOptions = KINDNESS_CAPACITY_OPTIONS
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

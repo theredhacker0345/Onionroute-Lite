@@ -58,14 +58,26 @@ fun CircuitScreen(appState: OnionRouteAppState) {
         }
     }
 
-    // Ticking clock so "age" labels stay current between refreshes.
-    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    // Clock backing the per-card "age" labels.
+    //
+    // Bucketed to MINUTES_AGE_RESOLUTION rather than ticking every second.
+    // nowMs was passed to all MAX_SHOWN cards, so each tick recomposed and
+    // re-measured every visible card: ~20 layout passes plus per-card
+    // buildList/joinToString/TextStyle.copy allocations, once a second, for as
+    // long as the user watched the screen.
+    //
+    // Age is rendered in seconds below one minute, then minutes, then hours
+    // and days. Quantising the clock to 30s means a sub-minute age label is at
+    // most half a minute stale — imperceptible — while cutting the
+    // recomposition rate by 30x. Anything coarser would visibly lag.
+    var nowBucket by remember { mutableLongStateOf(System.currentTimeMillis() / AGE_BUCKET_MS) }
     LaunchedEffect(Unit) {
         while (true) {
-            nowMs = System.currentTimeMillis()
-            delay(1000L)
+            nowBucket = System.currentTimeMillis() / AGE_BUCKET_MS
+            delay(AGE_BUCKET_MS)
         }
     }
+    val nowMs = nowBucket * AGE_BUCKET_MS
 
     Column(
         modifier = Modifier
@@ -135,6 +147,16 @@ fun CircuitScreen(appState: OnionRouteAppState) {
 }
 
 private const val MAX_SHOWN = 20
+
+/**
+ * Resolution of the "age" clock, in ms.
+ *
+ * Bounds how stale an age label can be to 30s while cutting the per-card
+ * recomposition rate from 1Hz to once per 30s. Sub-minute ages are shown in
+ * whole seconds, so this is the trade between an imperceptible lag and 20
+ * avoided re-layouts every second.
+ */
+private const val AGE_BUCKET_MS = 30_000L
 
 /** Bottom scroll padding (kept as a helper for readability). */
 @Composable
