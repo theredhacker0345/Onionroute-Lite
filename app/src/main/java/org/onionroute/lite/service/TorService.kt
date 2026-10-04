@@ -63,6 +63,11 @@ class TorService : Service() {
     private val IS_TOR_REGEX = Regex("\"IsTor\"\\s*:\\s*(true|false)")
     private val IP_REGEX = Regex("\"IP\"\\s*:\\s*\"([^\"]+)\"")
 
+    /** Extracts progress from a `GETINFO status/bootstrap-phase` reply, which
+     *  reads `NOTICE BOOTSTRAP PROGRESS=100 TAG=done …`. Precompiled like the
+     *  two above rather than built inline on each connect. */
+    private val BOOTSTRAP_PROGRESS_REGEX = Regex("PROGRESS=(\\d+)")
+
     private var torProcessManager: TorProcessManager? = null
     private var torControlConnection: TorControlConnection? = null
     private var bandwidthTracker: BandwidthTracker? = null
@@ -78,6 +83,25 @@ class TorService : Service() {
      *  updates to the UI. Cancelled in stopTorInternal(). */
     private var exitIpUpdateJob: Job? = null
     private var lastExitIp: String = ""
+
+    /**
+     * Latch for the bootstrap wait of the in-flight startTor, if any.
+     *
+     * The wait is a blocking CountDownLatch.await on the service's IO
+     * dispatcher, so job cancellation cannot interrupt it — the coroutine is
+     * parked inside a non-cancellable call. Without a handle on the latch, a
+     * user-initiated disconnect during bootstrap left the thread blocked for
+     * the full 120s timeout and then emitted a spurious "bootstrap timed out"
+     * ERROR broadcast *after* DISCONNECTED, leaving the UI showing an error for
+     * a Tor session the user had simply cancelled.
+     *
+     * stopTorInternal() counts this down so the await returns immediately and
+     * the existing stopRequested checkpoint takes over. Guarded by its own lock
+     * because stopTor runs on the main thread while the wait is set up on IO.
+     */
+    private val bootstrapLatchLock = Any()
+    @Volatile
+    private var bootstrapLatch: CountDownLatch? = null
 
     /** Coroutine scope tied to this service's lifecycle. Uses SupervisorJob so
      *  one failed child coroutine doesn't cancel siblings. */
@@ -158,6 +182,12 @@ class TorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        // Mark the stop as initiated so an in-flight startTor() aborts quietly
+        // instead of broadcasting a spurious ERROR *after* the service is being
+        // destroyed. Otherwise the UI could be left showing "bootstrap timed
+        // out" for a session the user had ended, since the coroutine was already
+        // past its last checkpoint when the service died.
+        stopRequested = true
         stopTorInternal()
         serviceScope.cancel()
         super.onDestroy()
@@ -294,7 +324,7 @@ class TorService : Service() {
             // Premature "CONNECTED" was the previous behaviour — the UI would
             // show CONNECTED while Tor was actually still bootstrapping (or had
             // failed to bootstrap at all).
-            val bootstrapLatch = CountDownLatch(1)
+            val thisLatch = CountDownLatch(1)
             val lastProgress = AtomicInteger(0)
 
             bandwidthTracker?.start(controlConnection) { progress, bootstrapTag ->
@@ -303,7 +333,7 @@ class TorService : Service() {
                 // Broadcast intermediate progress so the UI shows "CONNECTING 45%"
                 broadcastBootstrapProgress(progress)
                 if (progress >= 100) {
-                    bootstrapLatch.countDown()
+                    thisLatch.countDown()
                 }
             }
 
@@ -317,12 +347,12 @@ class TorService : Service() {
                 val phase = controlConnection.getInfo("status/bootstrap-phase")
                 if (phase != null) {
                     // Response format: NOTICE BOOTSTRAP PROGRESS=100 TAG=done ...
-                    val progressMatch = Regex("PROGRESS=(\\d+)").find(phase)
+                    val progressMatch = BOOTSTRAP_PROGRESS_REGEX.find(phase)
                     val currentProgress = progressMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
                     if (currentProgress >= 100) {
                         Log.i(tag, "Tor already bootstrapped to 100% before subscription — counting down")
                         lastProgress.set(100)
-                        bootstrapLatch.countDown()
+                        thisLatch.countDown()
                     } else if (currentProgress > 0) {
                         Log.i(tag, "Tor is mid-bootstrap at $currentProgress% (caught up via GETINFO)")
                         lastProgress.set(currentProgress)
@@ -337,7 +367,22 @@ class TorService : Service() {
             // Wait up to 120 seconds for Tor to reach 100% bootstrap.
             // Tor on a clean connection typically bootstraps in 5–30s; 120s
             // gives headroom for slow networks or bridge connections.
-            val bootstrapped = bootstrapLatch.await(120, TimeUnit.SECONDS)
+            //
+            // Publish the latch so a concurrent stop can release this wait. The
+            // blocking await below is NOT cancellable — cancelling the job does
+            // not interrupt a thread parked in CountDownLatch.await — so without
+            // this handle a disconnect during bootstrap would keep the thread
+            // parked for the full 120s and then report a bogus timeout.
+            synchronized(bootstrapLatchLock) { bootstrapLatch = thisLatch }
+            val bootstrapped = try {
+                thisLatch.await(120, TimeUnit.SECONDS)
+            } finally {
+                // Never leave a stale latch behind: a later start would
+                // otherwise be able to release the wrong one.
+                synchronized(bootstrapLatchLock) {
+                    if (bootstrapLatch === thisLatch) bootstrapLatch = null
+                }
+            }
 
             // Abort quietly if the user stopped us mid-bootstrap:
             // stopTor()/stopTorInternal() already cleaned up and broadcast
@@ -439,6 +484,27 @@ class TorService : Service() {
         stopTorInternal()
         broadcastStatus("DISCONNECTED")
         updateNotification("OnionRoute Lite — Disconnected")
+
+        // Release the foreground promotion taken in onStartCommand.
+        //
+        // Without this, ACTION_STOP_TOR left the service in the foreground
+        // indefinitely with a "Disconnected" notification the user could not
+        // dismiss, still holding the service alive after Tor was gone. Reachable
+        // in normal use: the Home toggle, the QS tile, and TorService's own
+        // "stop if the VPN is off" path all end up here.
+        //
+        // stopTor() has exactly one caller (ACTION_STOP_TOR), so this only ever
+        // runs for a user/system-initiated stop — the internal failure paths
+        // call stopTorInternal() directly and keep the service alive so
+        // auto-restart can still use it. stopSelf() lets the system call
+        // onDestroy, which is where the scope is cancelled, so it goes last.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        stopSelf()
     }
 
     private fun stopTorInternal() {
@@ -451,6 +517,20 @@ class TorService : Service() {
         }
 
         Log.i(tag, "Stopping Tor daemon…")
+
+        // Release an in-flight bootstrap wait FIRST. That wait is a blocking
+        // CountDownLatch.await that job cancellation cannot interrupt, so
+        // without this the starting thread stays parked for up to 120s after a
+        // disconnect and then broadcasts a bogus "bootstrap timed out" ERROR
+        // over the DISCONNECTED the user just saw. Counting it down makes the
+        // await return at once and the existing stopRequested checkpoint abort
+        // quietly.
+        synchronized(bootstrapLatchLock) {
+            bootstrapLatch?.let {
+                Log.d(tag, "Releasing in-flight bootstrap wait")
+                it.countDown()
+            }
+        }
 
         // Stop the exit-IP polling job and clear the cached value so
         // the UI doesn't show a stale IP after disconnect.

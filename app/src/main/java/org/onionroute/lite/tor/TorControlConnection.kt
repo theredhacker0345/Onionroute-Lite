@@ -7,6 +7,7 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.Socket
+import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -50,6 +51,53 @@ class TorControlConnection(private val context: Context) {
     private val pendingResponses = ConcurrentHashMap<String, CountDownLatch>()
     private val responseValues = ConcurrentHashMap<String, String>()
 
+    /**
+     * Insertion order of the keys in [pendingResponses].
+     *
+     * The control port is strictly FIFO: replies come back in the order the
+     * commands were written. `ConcurrentHashMap.keys` is *hash-bucket* order, so
+     * `keys.firstOrNull()` — which the `250 ` handler used to pick the request
+     * to unblock — is arbitrary whenever more than one request is outstanding.
+     * A bare `250 OK` carries no keyword to match on, so it has to be attributed
+     * to *some* waiter; attributing it to a hash-order entry rather than the
+     * oldest one can hand a caller the reply belonging to a different command,
+     * which then consumes it and leaves the real waiter to time out.
+     *
+     * Tracks order explicitly so the attribution matches the protocol. In
+     * practice getInfo/signal are serialized by [requestLock], so this only
+     * matters when an entry has been left behind by a timeout — which is
+     * exactly when mis-attribution is hardest to diagnose.
+     */
+    private val pendingOrder = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+    private companion object {
+        /**
+         * TCP connect timeout for the control port.
+         *
+         * Bounded because connect() runs while the caller holds TorService's
+         * startMutex; an unbounded connect stalls every later start attempt.
+         */
+        const val CONNECT_TIMEOUT_MS = 3000
+
+        /**
+         * Read timeout for the AUTHENTICATE exchange only.
+         *
+         * Reset to 0 (infinite) once authenticated, before the listener thread
+         * starts, because the listener legitimately blocks for long stretches
+         * waiting for the next async event.
+         */
+        const val AUTH_TIMEOUT_MS = 5000
+
+        /**
+         * Length of tor's control authentication cookie (AUTHENTICATION_COOKIE_LEN).
+         *
+         * Checked because tor writes the cookie as it opens the control port; a
+         * read that lands mid-write yields a short or empty file, and tor
+         * rejects it with "Wrong length on authentication cookie".
+         */
+        const val CONTROL_COOKIE_LENGTH = 32
+    }
+
     // ── Public API ────────────────────────────────────────────────
 
     /**
@@ -68,7 +116,13 @@ class TorControlConnection(private val context: Context) {
         return try {
             Log.d(tag, "Connecting to Tor control port $port…")
 
-            controlSocket = Socket("127.0.0.1", port)
+            // Bounded connect, unlike Socket(host, port) which defers to the
+            // OS default (minutes on some devices). This runs while the caller
+            // holds TorService's startMutex, so an unbounded connect would stall
+            // every subsequent start/reconnect attempt.
+            controlSocket = Socket()
+            controlSocket?.connect(InetSocketAddress("127.0.0.1", port), CONNECT_TIMEOUT_MS)
+
             // IMPORTANT: soTimeout applies to ALL reads on this socket,
             // including the listener thread's blocking readLineFromStream().
             // The listener blocks indefinitely waiting for the next async
@@ -84,11 +138,15 @@ class TorControlConnection(private val context: Context) {
             // "timed out at 0%" even though Tor was actually still
             // bootstrapping successfully.
             //
-            // Set soTimeout = 0 (infinite) for the listener. The auth
-            // read in this method (readLineSync) is fast enough that it
-            // doesn't need a timeout — Tor responds to AUTHENTICATE
-            // within milliseconds on a localhost socket.
-            controlSocket?.soTimeout = 0
+            // So: a bounded timeout WHILE AUTHENTICATING (see below), then
+            // reset to infinite before the listener ever runs. The auth read
+            // is the one read on this socket that can block forever if the peer
+            // accepts the connection and then says nothing, and it is the read
+            // that gates the entire start sequence — an unbounded wait there
+            // would pin TorService's startMutex permanently and make every
+            // future start/reconnect tryLock()-fail with no way out short of
+            // killing the process.
+            controlSocket?.soTimeout = AUTH_TIMEOUT_MS
             // Keep alive so the connection isn't killed by NAT idle
             // timeouts on long-running sessions.
             controlSocket?.keepAlive = true
@@ -98,13 +156,25 @@ class TorControlConnection(private val context: Context) {
 
             // Authenticate using cookie — read response directly before listener starts
             val cookieFile = File(cookieFilePath)
+            // Length check, not just exists(). Tor writes the cookie as it opens
+            // the control port, so a read that lands mid-write (or on a
+            // zero-byte file) would otherwise produce `AUTHENTICATE \r\n`,
+            // which tor rejects with "Wrong length on authentication cookie".
+            // That turned a transient race into a failed connect and burned one
+            // of only six start attempts.
             if (!cookieFile.exists()) {
                 Log.e(tag, "Cookie file not found: $cookieFilePath")
                 disconnect()
                 return false
             }
-
-            val cookieHex = cookieFile.readBytes().joinToString("") { "%02x".format(it) }
+            val cookieBytes = cookieFile.readBytes()
+            if (cookieBytes.size != CONTROL_COOKIE_LENGTH) {
+                Log.e(tag, "Cookie file is ${cookieBytes.size} bytes, expected " +
+                    "$CONTROL_COOKIE_LENGTH — tor is probably still writing it")
+                disconnect()
+                return false
+            }
+            val cookieHex = cookieBytes.joinToString("") { "%02x".format(it) }
             synchronized(outputStream!!) {
                 outputStream!!.write("AUTHENTICATE $cookieHex\r\n".toByteArray())
                 outputStream!!.flush()
@@ -116,6 +186,12 @@ class TorControlConnection(private val context: Context) {
                 disconnect()
                 return false
             }
+
+            // Authenticated. The listener is about to start blocking on this
+            // socket waiting for async events, which is correct — it must not
+            // time out. Clear the auth-phase timeout now, or the listener would
+            // inherit it and die on the first quiet period.
+            controlSocket?.soTimeout = 0
 
             Log.i(tag, "Authenticated to Tor control port")
             isConnected = true
@@ -135,6 +211,22 @@ class TorControlConnection(private val context: Context) {
         try {
             listenerThread?.interrupt()
             listenerThread = null
+
+            // Release any waiter still blocked on a reply. Without this, a
+            // getInfo/signal issued just before a disconnect waits out its full
+            // 5-10s timeout instead of failing immediately, and its key stays
+            // queued to be misattributed to the NEXT connection's first reply.
+            //
+            // Snapshot the keys first, then remove AND count down, then clear
+            // the order queue and cached values. Clearing the map before
+            // counting down would drop the latches on the floor and leave the
+            // callers blocked for the full timeout anyway.
+            val orphaned = pendingResponses.keys.toList()
+            for (key in orphaned) {
+                pendingResponses.remove(key)?.countDown()
+            }
+            pendingOrder.clear()
+            responseValues.clear()
 
             // Don't send SIGNAL SHUTDOWN here — the caller (TorService) already
             // handles stopping the Tor process via Process.destroy(). Sending
@@ -194,7 +286,38 @@ class TorControlConnection(private val context: Context) {
         //
         // Fix: subscribe only to BW, CIRC, and STATUS_CLIENT. Bootstrap
         // progress is parsed from STATUS_CLIENT events in the listener.
-        sendCommand("SETEVENTS BW CIRC STATUS_CLIENT\r\n")
+        //
+        // Consume the SETEVENTS reply synchronously, BEFORE the listener
+        // exists. Previously this was a fire-and-forget write, leaving a
+        // dangling "250 OK" on the socket. The listener then started and handed
+        // that reply to whichever request happened to be pending — and
+        // TorService registers its GETINFO status/bootstrap-phase latch
+        // microseconds later, so the SETEVENTS ack was routinely delivered as
+        // the GETINFO response. The GETINFO waiter then saw no PROGRESS= and
+        // gave up, while the real GETINFO reply arrived with no waiter and was
+        // dropped: exactly the "timed out at 0% while Tor was actually
+        // bootstrapped" failure this code exists to prevent.
+        //
+        // Reading the ack here is safe because no listener thread is running,
+        // so this is the only reader on the socket.
+        val setEventsReply = try {
+            synchronized(outputStream!!) {
+                outputStream!!.write("SETEVENTS BW CIRC STATUS_CLIENT\r\n".toByteArray())
+                outputStream!!.flush()
+            }
+            readLineSync()
+        } catch (e: Exception) {
+            Log.e(tag, "SETEVENTS failed", e)
+            null
+        }
+        if (setEventsReply != null && !setEventsReply.startsWith("250")) {
+            // e.g. 552 Unrecognized event. Nothing is subscribed, so bootstrap
+            // progress can never arrive. Fail loudly instead of waiting out a
+            // 120s timeout that can no longer be satisfied.
+            Log.e(tag, "SETEVENTS rejected: $setEventsReply — no events subscribed")
+        } else if (setEventsReply != null) {
+            Log.i(tag, "Subscribed to BW, CIRC, STATUS_CLIENT events")
+        }
 
         // Start listener thread — this is the ONLY thread that reads from inputStream
         listenerThread = Thread({
@@ -220,6 +343,7 @@ class TorControlConnection(private val context: Context) {
         try {
             val latch = CountDownLatch(1)
             pendingResponses[keyword] = latch
+            pendingOrder.add(keyword)
 
             sendCommand("GETINFO $keyword\r\n")
 
@@ -254,6 +378,7 @@ class TorControlConnection(private val context: Context) {
             val key = "SIGNAL_$signal"
             val latch = CountDownLatch(1)
             pendingResponses[key] = latch
+            pendingOrder.add(key)
 
             sendCommand("SIGNAL $signal\r\n")
 
@@ -289,6 +414,7 @@ class TorControlConnection(private val context: Context) {
             val key = "SETCONF_ExitNodes"
             val latch = CountDownLatch(1)
             pendingResponses[key] = latch
+            pendingOrder.add(key)
 
             // Per control-spec: SETCONF with a value sets it; SETCONF with a
             // bare keyword resets that option to its compiled default, which
@@ -324,6 +450,36 @@ class TorControlConnection(private val context: Context) {
         } catch (e: Exception) {
             Log.e(tag, "Failed to send command: $command", e)
             isConnected = false
+        }
+    }
+
+    /**
+     * Attributes an unkeyed reply (bare `250 OK`, or any `5xx` error) to the
+     * OLDEST pending request and releases it.
+     *
+     * The tor control port is strictly FIFO, so the reply belongs to whichever
+     * command was written first. [pendingOrder] carries that insertion order;
+     * picking from `pendingResponses.keys` instead would use hash-bucket order
+     * and could hand a caller the reply for a different command.
+     *
+     * Entries whose latch has already been completed or timed out are skipped,
+     * so a stale key cannot swallow a live reply.
+     *
+     * @param value the reply line to record for the caller.
+     * @param onlyIfAbsent when true, keep any value already recorded (a `250 OK`
+     *   must not overwrite the keyword=value payload a GETINFO already stored).
+     * @return true if a waiter was released.
+     */
+    private fun completeOldestPending(value: String, onlyIfAbsent: Boolean): Boolean {
+        while (true) {
+            val candidate = pendingOrder.poll() ?: return false
+            if (!pendingResponses.containsKey(candidate)) continue // stale, skip
+            if (onlyIfAbsent && responseValues.containsKey(candidate)) {
+                // Payload already delivered by the keyword branch; just release.
+                return pendingResponses.remove(candidate)?.countDown() != null
+            }
+            responseValues[candidate] = value
+            return pendingResponses.remove(candidate)?.countDown() != null
         }
     }
 
@@ -419,32 +575,17 @@ class TorControlConnection(private val context: Context) {
                         }
                     }
                     line.startsWith("250 ") -> {
-                        // Final line of a response: 250 OK
-                        // Only unblock the SINGLE oldest pending request — never
-                        // all of them. Because getInfo/signal are serialized
-                        // via requestLock, there is at most ONE pending request
-                        // at a time. We pop it and store the 250 OK line so the
-                        // caller (signal()) can check the response code.
-                        //
-                        // This is SIGNAL's response path (GETINFO's response is
-                        // always the 250- line above; SIGNAL's response is just
-                        // 250 OK with no preceding data line).
-                        val firstKey = pendingResponses.keys.firstOrNull()
-                        if (firstKey != null) {
-                            if (!responseValues.containsKey(firstKey)) {
-                                responseValues[firstKey] = line
-                            }
-                            pendingResponses.remove(firstKey)?.countDown()
-                        }
+                        // Final line of a response: 250 OK. A bare `250 OK`
+                        // carries no keyword, so it must be attributed to the
+                        // OLDEST waiter — the control port is FIFO.
+                        // See pendingOrder for why hash order was wrong here.
+                        completeOldestPending(line, onlyIfAbsent = true)
                     }
                     line.startsWith("5") -> {
-                        // Error response — unblock the SINGLE oldest pending
-                        // request only (same reason as above).
-                        val firstKey = pendingResponses.keys.firstOrNull()
-                        if (firstKey != null) {
-                            responseValues[firstKey] = line  // store error so caller sees it
-                            pendingResponses.remove(firstKey)?.countDown()
-                        }
+                        // Error response — attribute to the same oldest waiter
+                        // and overwrite any stored value so the caller sees the
+                        // error rather than a stale success line.
+                        completeOldestPending(line, onlyIfAbsent = false)
                     }
                 }
             }
