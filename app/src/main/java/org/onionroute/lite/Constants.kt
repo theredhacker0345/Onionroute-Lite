@@ -211,7 +211,22 @@ object Constants {
     // scales with system RAM and can balloon under multi-app VPN load; an
     // explicit bound keeps the daemon predictable on the 1.5GB devices this
     // app targets (tor typically idles at ~20-40 MB regardless).
-    const val TOR_MAX_MEM_IN_QUEUE = "32 MBytes"
+    //
+    // Two corrections, both from running tor and reading what it said:
+    //
+    //  - The option is `MaxMemInQueues` (plural). `MaxMemInQueue` is a
+    //    deprecated abbreviation and tor logs a warning for it on every single
+    //    start. A deprecated spelling is one tor release away from being
+    //    ignored, which would silently remove the cap this is here to set.
+    //
+    //  - 32 MBytes was low enough that tor warned "MaxMemInQueues is set to a
+    //    low value; if your client doesn't work, this may be the reason why".
+    //    The same run logged "Error starting Tor", so the cap was a plausible
+    //    contributor rather than a theoretical one. 64 MB is still a hard
+    //    ceiling well under tor's RAM-scaled default (which reaches hundreds
+    //    of MB) and keeps the daemon predictable, but is above the point where
+    //    tor considers the queue starved.
+    const val TOR_MAX_MEM_IN_QUEUES = "64 MBytes"
     // STUN servers for Snowflake WebRTC NAT traversal.
     //
     // These were tested via UDP STUN Binding Request on 2026-06-21 and

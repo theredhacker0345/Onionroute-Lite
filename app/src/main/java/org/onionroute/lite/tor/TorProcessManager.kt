@@ -474,8 +474,10 @@ class TorProcessManager(
             // the adjacent comment wrongly implied it hardened ExitNodes too.
             // LOW-RAM: bound tor's in-memory queue buffers (default scales
             // with system RAM and can grow under heavy multi-app VPN load).
-            // See Constants.TOR_MAX_MEM_IN_QUEUE.
-            appendLine("MaxMemInQueue ${Constants.TOR_MAX_MEM_IN_QUEUE}")
+            // See Constants.TOR_MAX_MEM_IN_QUEUES.
+            // Plural spelling — the singular is deprecated and tor warns on
+            // every start. See TOR_MAX_MEM_IN_QUEUES for the value rationale.
+            appendLine("MaxMemInQueues ${Constants.TOR_MAX_MEM_IN_QUEUES}")
             // Exit-country restriction (Settings → EXIT NODE). Persisted here
             // so it survives restarts. Changes made while connected are applied
             // live via SETCONF — this line keeps the same choice for the NEXT

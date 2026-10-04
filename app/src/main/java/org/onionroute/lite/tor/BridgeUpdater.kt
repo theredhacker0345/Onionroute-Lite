@@ -75,6 +75,56 @@ class BridgeUpdater private constructor(private val context: Context) {
      * @return true if fetch succeeded (or cache is still valid), false if
      *   using hardcoded fallback
      */
+    /**
+     * Chooses whether this fetch goes through Tor's SOCKS5 port.
+     *
+     * WHY NOT ALWAYS
+     * --------------
+     * TorVpnService excludes our own package from the TUN in ALL mode
+     * (addDisallowedApplication) to avoid VPN recursion, so this fetch does NOT
+     * get captured by the tunnel. Always forcing it through SOCKS therefore
+     * looked like the fix for a real leak — the request was otherwise leaving
+     * in CLEARTEXT, exposing the user's real IP to GitLab and their ISP every
+     * time the 24h cache expired, which for a Tor client is serious.
+     *
+     * But it broke the feature outright, and this was caught on a real device:
+     * the very first fetch happens from `init` and on a bridge toggle, both of
+     * which can occur while Tor is stopped. Nothing listens on 9050 then, and
+     * the log showed "Malformed reply from SOCKS server" followed by "Fetch
+     * failed: ... using cache or hardcoded fallback". The bridge list is needed
+     * MOST when Tor is not yet working — that is the whole point of it.
+     *
+     * So: use Tor when it is connected, and fall back to a direct connection
+     * when it is not. The leak only ever mattered for a fetch made while
+     * connected, and that is exactly the case this routes through Tor.
+     *
+     * @return a SOCKS proxy when Tor is reachable, otherwise DIRECT.
+     */
+    private fun preferProxy(): java.net.Proxy {
+        if (!isTorReachable()) return java.net.Proxy.NO_PROXY
+        return java.net.Proxy(
+            java.net.Proxy.Type.SOCKS,
+            java.net.InetSocketAddress("127.0.0.1", Constants.TOR_SOCKS_PORT)
+        )
+    }
+
+    /**
+     * True when something accepts a TCP connection on Tor's SOCKS port.
+     *
+     * A cheap liveness probe rather than an assumption: tor's SocksPort can be
+     * bound while it is still bootstrapping and will refuse a SOCKS handshake,
+     * and it is torn down on stop. Probing costs one loopback connect and
+     * avoids both the "nothing listening" and "listening but not ready" cases.
+     */
+    private fun isTorReachable(): Boolean = try {
+        java.net.Socket().use { sock ->
+            sock.connect(java.net.InetSocketAddress("127.0.0.1", Constants.TOR_SOCKS_PORT), 800)
+            true
+        }
+    } catch (e: Exception) {
+        false
+    }
+
     fun fetchBridges(): Boolean {
         // If cache is still fresh (< 24h old), use it
         if (System.currentTimeMillis() - lastFetchTime < CACHE_MAX_AGE_MS && cachedBridges.isNotEmpty()) {
@@ -85,21 +135,8 @@ class BridgeUpdater private constructor(private val context: Context) {
         return try {
             Log.i(tag, "Fetching alive bridges from GitLab...")
             val url = URL(BRIDGES_URL)
-            // Route through Tor's SOCKS5 port.
-            //
-            // TorVpnService excludes our own package from the TUN in ALL mode
-            // (addDisallowedApplication) to avoid VPN recursion, so this fetch
-            // went straight out over the physical interface in CLEARTEXT —
-            // revealing the user's real IP to GitLab and to their ISP, every
-            // time the 24h cache expired. In a country where the app is illegal
-            // that is a serious leak from a Tor client.
-            //
-            // The exit-IP probe in TorService already does this; this brings the
-            // bridge fetch in line.
-            val conn = (url.openConnection(java.net.Proxy(
-                java.net.Proxy.Type.SOCKS,
-                java.net.InetSocketAddress("127.0.0.1", Constants.TOR_SOCKS_PORT)
-            )) as HttpURLConnection).apply {
+            // Proxy only when Tor is actually up — see preferProxy().
+            val conn = (url.openConnection(preferProxy()) as HttpURLConnection).apply {
                 connectTimeout = 10_000
                 readTimeout = 10_000
                 requestMethod = "GET"
